@@ -355,143 +355,85 @@ button:hover{background:#121a23;border-color:#303b49}
   .premiumCard{padding:20px;border-radius:20px}
 }
 
-/* Ash cinematic power-entry experience */
-.powerAuth{
-  --mx:0px;--my:0px;--mx2:0px;--my2:0px;
-  min-height:100vh;position:relative;overflow:hidden;background:#050505;color:#fff;isolation:isolate
+/* Ash login hero artwork — preserves original layout */
+:root{
+  --accent:#ff9a24;
+  --accent2:#ffc66a;
 }
-.ashScene{
-  position:absolute;inset:-4%;z-index:-4;overflow:hidden;
-  background:
-    linear-gradient(90deg,rgba(0,0,0,.94) 0%,rgba(0,0,0,.75) 30%,rgba(0,0,0,.18) 65%,rgba(0,0,0,.45) 100%),
-    radial-gradient(circle at 72% 38%,rgba(255,177,51,.2),transparent 20%),
-    linear-gradient(160deg,#050505 0 35%,#11100c 55%,#080706 100%);
-  transform:translate3d(var(--mx2),var(--my2),0) scale(1.045);
-  transition:transform .18s ease-out
+.mark.large{
+  background:linear-gradient(145deg,#ffbd54,#ff8a16);
+  border-color:#ffb54a;
+  color:#120b03;
+  box-shadow:0 8px 30px rgba(255,139,16,.18)
 }
-.authShade{position:absolute;inset:0;z-index:-2;background:linear-gradient(90deg,rgba(0,0,0,.52),transparent 52%,rgba(0,0,0,.12))}
-.sceneGlow{
-  position:absolute;width:80vw;height:80vw;right:-23vw;top:-34vw;border-radius:50%;
-  border:2px solid rgba(255,168,28,.65);
-  box-shadow:0 0 70px rgba(255,147,0,.25),inset 0 0 100px rgba(255,155,0,.08);
-  animation:scenePulse 6s ease-in-out infinite
+.premiumAuth{position:relative}
+.authBrand{position:relative;min-height:700px;overflow:visible}
+.authBrand h1 span{color:#ffad38}
+.authHero3d{
+  --hero-rx:0deg;--hero-ry:0deg;--hero-x:0px;--hero-y:0px;
+  position:absolute;
+  right:-68px;
+  bottom:-82px;
+  width:min(44vw,410px);
+  z-index:-1;
+  perspective:1200px;
+  transform-style:preserve-3d;
+  pointer-events:auto;
+  filter:drop-shadow(0 28px 55px rgba(0,0,0,.58));
 }
-.scenePlanet{
-  position:absolute;width:min(62vw,900px);aspect-ratio:1;right:-16vw;top:-25vh;border-radius:50%;
-  background:radial-gradient(circle at 32% 32%,#b9b2a5 0,#65625c 18%,#292929 48%,#090909 70%);
-  box-shadow:-35px 45px 100px rgba(0,0,0,.85),0 0 90px rgba(255,169,54,.14);
-  opacity:.88;transform:translate3d(calc(var(--mx)*.3),calc(var(--my)*.3),0)
+.authHeroImage{
+  display:block;
+  width:100%;
+  height:auto;
+  border-radius:28px;
+  opacity:.94;
+  transform:
+    translate3d(var(--hero-x),var(--hero-y),42px)
+    rotateX(var(--hero-rx))
+    rotateY(var(--hero-ry));
+  transform-origin:50% 55%;
+  transition:transform .18s ease-out,filter .25s ease;
+  animation:ashHeroFloat 6s ease-in-out infinite;
+  mask-image:linear-gradient(to bottom,transparent 0%,#000 8%,#000 86%,transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 8%,#000 86%,transparent 100%);
 }
-.sceneOrbit{
-  position:absolute;border:2px solid rgba(255,163,23,.86);border-radius:50%;
-  box-shadow:0 0 16px rgba(255,149,0,.9),0 0 42px rgba(255,133,0,.28);
-  transform-style:preserve-3d
+.authHeroGlow{
+  position:absolute;inset:16% -8% 9% 4%;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(255,146,28,.28),rgba(255,146,28,.08) 42%,transparent 72%);
+  filter:blur(30px);
+  transform:translateZ(-20px);
+  animation:ashHeroGlow 5s ease-in-out infinite
 }
-.orbitA{width:80vw;height:20vw;right:-24vw;top:28vh;transform:rotate(-17deg) translate3d(var(--mx),var(--my),0);animation:orbitFloat 8s ease-in-out infinite}
-.orbitB{width:62vw;height:13vw;right:-5vw;bottom:13vh;transform:rotate(6deg) translate3d(var(--mx2),var(--my2),0);animation:orbitFloat 10s ease-in-out infinite reverse}
-.orbitC{width:42vw;height:10vw;right:15vw;top:49vh;transform:rotate(-6deg);opacity:.5;animation:orbitFloat 7s ease-in-out infinite}
-.sceneSpire{
-  position:absolute;width:34px;background:linear-gradient(90deg,#080808,#34220d,#0c0b09);
-  border:1px solid rgba(255,176,60,.35);box-shadow:0 0 22px rgba(255,132,0,.18)
+.googleButton:hover{border-color:#ffad38}
+.authPrimary{
+  background:linear-gradient(135deg,#ffbe55,#ff8d18);
+  color:#130c04;border-color:#ffad38;
+  box-shadow:0 10px 30px rgba(255,139,20,.18)
 }
-.spireA{height:44vh;right:27%;top:4vh}
-.spireB{height:31vh;right:34%;top:19vh;width:20px}
-.spireC{height:24vh;right:18%;top:30vh;width:16px}
-.sceneRoad{
-  position:absolute;height:4px;background:linear-gradient(90deg,transparent,#ff9518 18%,#ffcc6a 50%,#ff8c00 82%,transparent);
-  box-shadow:0 0 13px #ff8a00,0 0 34px rgba(255,128,0,.45);border-radius:999px
+.authPrimary:hover{background:linear-gradient(135deg,#ffca6e,#ff9a28)}
+.authSwitch button{color:#ffad38}
+@keyframes ashHeroFloat{
+  0%,100%{margin-bottom:0}
+  50%{margin-bottom:10px}
 }
-.roadA{width:72vw;right:-10vw;bottom:10vh;transform:rotate(-4deg)}
-.roadB{width:55vw;right:0;bottom:20vh;transform:rotate(8deg);opacity:.72}
-.sceneFigure{
-  position:absolute;right:48%;bottom:7vh;width:58px;height:180px;transform:translate3d(calc(var(--mx)*.5),calc(var(--my)*.5),0)
+@keyframes ashHeroGlow{
+  0%,100%{opacity:.72;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.06)}
 }
-.sceneFigure:before{content:"";position:absolute;left:18px;top:0;width:27px;height:27px;border-radius:50%;background:#090909;box-shadow:6px 0 10px rgba(255,133,0,.16)}
-.sceneFigure:after{content:"";position:absolute;left:5px;top:24px;width:52px;height:154px;background:linear-gradient(120deg,#060606,#15110c);clip-path:polygon(34% 0,70% 3%,100% 96%,58% 100%,0 96%,20% 30%);filter:drop-shadow(5px 2px 7px rgba(255,126,0,.2))}
-.sceneParticle{position:absolute;width:3px;height:3px;border-radius:50%;background:#ffae38;left:calc(48% + (var(--i) * 3.6%));top:calc(14% + (var(--i) * 4.7%));opacity:.35;box-shadow:0 0 10px #ff9700;animation:particleDrift calc(5s + var(--i)*.22s) ease-in-out infinite alternate}
-
-.powerLayout{
-  width:min(1440px,calc(100% - 72px));min-height:100vh;margin:auto;
-  display:grid;grid-template-columns:minmax(0,1.08fr) minmax(390px,.6fr);
-  gap:54px;align-items:center;padding:38px 0;position:relative
+@media(max-width:900px){
+  .authBrand{min-height:0}
+  .authHero3d{
+    position:relative;right:auto;bottom:auto;
+    width:min(78vw,360px);
+    margin:22px auto -8px;
+    z-index:0
+  }
 }
-.powerCopy{max-width:760px;transform:translate3d(var(--mx2),var(--my2),0);transition:transform .2s ease-out}
-.powerBrand{margin:0 0 70px}
-.powerBrand .mark{background:linear-gradient(145deg,#ffcf70,#ff8a00);border:0;color:#111;box-shadow:0 0 26px rgba(255,151,13,.45)}
-.powerEyebrow{display:flex;align-items:center;gap:13px;color:#b7bbc2;letter-spacing:.25em;font-size:.64rem;font-weight:700;margin-bottom:22px}
-.powerEyebrow span{width:48px;height:2px;background:linear-gradient(90deg,#ff9b18,transparent)}
-.powerCopy h1{font-size:clamp(3.5rem,6.4vw,6.9rem);line-height:.93;letter-spacing:-.065em;margin:0 0 24px;font-weight:720}
-.powerCopy h1 em{font-style:normal;background:linear-gradient(90deg,#ffd078,#ff8d12);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 40px rgba(255,152,23,.12)}
-.powerLead{font-size:1rem;line-height:1.6;color:#c5c6c8;max-width:600px;margin:0 0 34px}
-.powerCapabilities{display:flex;gap:0;margin:12px 0 30px}
-.powerCapabilities>div{min-width:130px;padding:0 24px 0 0;margin-right:24px;border-right:1px solid rgba(255,255,255,.14);display:grid;gap:6px}
-.powerCapabilities>div:last-child{border-right:0}
-.powerCapabilities b{font-size:1.4rem;color:#ffad33;text-shadow:0 0 18px rgba(255,147,0,.35)}
-.powerCapabilities span{font-size:.73rem;color:#dedfe1;line-height:1.25}
-.powerCta{min-width:210px;background:linear-gradient(135deg,#ffcf65,#ff8e13);border:0;color:#140d05;font-weight:850;padding:15px 21px;border-radius:999px;box-shadow:0 9px 34px rgba(255,139,0,.28),0 0 0 1px rgba(255,255,255,.18) inset}
-.powerCta:hover{transform:translateY(-2px) scale(1.01);box-shadow:0 13px 40px rgba(255,139,0,.4)}
-.powerCta span{margin-left:22px}
-
-.powerCard{
-  position:relative;overflow:hidden;padding:30px;border-radius:28px;
-  background:linear-gradient(160deg,rgba(35,29,22,.83),rgba(10,10,10,.88));
-  border:1px solid rgba(255,193,108,.45);
-  box-shadow:0 40px 100px rgba(0,0,0,.54),0 0 54px rgba(255,139,0,.11),inset 0 1px 0 rgba(255,255,255,.11);
-  backdrop-filter:blur(28px) saturate(1.3);
-  transform-style:preserve-3d;transition:transform .16s ease-out,box-shadow .25s ease
-}
-.powerCard:before{
-  content:"";position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(circle at var(--glowX,72%) var(--glowY,18%),rgba(255,191,82,.24),transparent 29%);
-  opacity:.7
-}
-.cardAura{position:absolute;width:190px;height:190px;border-radius:50%;right:-80px;top:-70px;background:#ff9818;filter:blur(80px);opacity:.17;animation:auraFloat 5s ease-in-out infinite}
-.powerCardBrand{position:relative;display:flex;justify-content:center;align-items:center;gap:10px;margin:0 0 14px}
-.miniAshMark{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(145deg,#ffc24f,#ff8700);color:#15100a;font-weight:900;box-shadow:0 0 24px rgba(255,137,0,.34)}
-.powerCardBrand strong{font-size:2rem;letter-spacing:-.04em}
-.powerCard h2{position:relative;text-align:center;font-size:1.5rem;margin:0 0 5px}
-.powerCard>p{position:relative;text-align:center;color:#aaa7a2;font-size:.79rem;margin:0 0 20px}
-.powerGoogle{background:rgba(2,2,2,.65)!important;color:#fff!important;border-color:rgba(255,255,255,.16)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)!important}
-.powerGoogle:hover{background:rgba(15,15,15,.86)!important;border-color:rgba(255,178,53,.42)!important}
-.powerCard .authDivider span{background:#15110d;color:#777}
-.powerField{display:grid;gap:6px;margin-bottom:12px;position:relative}
-.powerField>span{font-size:.65rem;color:#85817c;padding-left:3px}
-.powerField input{height:48px;background:rgba(0,0,0,.46);border-color:rgba(255,255,255,.13);border-radius:12px}
-.powerField input:focus{border-color:#ffae3d;box-shadow:0 0 0 3px rgba(255,160,35,.09),0 0 25px rgba(255,140,0,.06)}
-.powerSignIn{width:100%;height:51px;border-radius:999px;border:0;background:linear-gradient(135deg,#ffd16d,#ff9215);color:#130c04;font-weight:900;box-shadow:0 8px 30px rgba(255,139,0,.3);margin-top:5px}
-.powerSignIn:hover{transform:translateY(-2px);box-shadow:0 12px 38px rgba(255,139,0,.44)}
-.powerSignIn span{margin-left:12px}
-.powerCard .authSwitch button{color:#ffb43d;text-decoration:underline;text-underline-offset:3px}
-.powerCard .authFine{color:#5e5b57!important}
-
-@keyframes scenePulse{0%,100%{opacity:.78;transform:scale(1)}50%{opacity:1;transform:scale(1.025)}}
-@keyframes orbitFloat{0%,100%{margin-top:0}50%{margin-top:-12px}}
-@keyframes particleDrift{from{transform:translate3d(0,0,0);opacity:.18}to{transform:translate3d(16px,-20px,0);opacity:.68}}
-@keyframes auraFloat{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-22px,18px,0)}}
-
-@media(max-width:1000px){
-  .powerLayout{grid-template-columns:1fr;gap:28px;width:min(760px,calc(100% - 34px));padding:26px 0 50px}
-  .powerCopy{text-align:center;padding-top:20px}
-  .powerBrand{justify-content:center;margin-bottom:35px}
-  .powerEyebrow{justify-content:center}
-  .powerLead{margin-left:auto;margin-right:auto}
-  .powerCapabilities{justify-content:center}
-  .powerCta{display:none}
-  .sceneFigure{right:60%;opacity:.5}
-  .powerCard{max-width:520px;width:100%;margin:auto}
-}
-@media(max-width:620px){
-  .powerLayout{width:calc(100% - 24px);padding-top:16px}
-  .powerBrand{margin-bottom:26px}
-  .powerCopy h1{font-size:3.3rem}
-  .powerLead{font-size:.88rem}
-  .powerCapabilities{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-  .powerCapabilities>div{border:1px solid rgba(255,255,255,.08);border-radius:12px;margin:0;padding:10px;min-width:0;background:rgba(5,5,5,.42)}
-  .powerCard{padding:20px;border-radius:22px}
-  .scenePlanet{width:105vw;right:-55vw;top:-10vh}
-  .orbitA{width:120vw;right:-60vw;top:34vh}
+@media(max-width:560px){
+  .authHero3d{width:min(86vw,330px)}
 }
 @media(prefers-reduced-motion:reduce){
-  .sceneGlow,.orbitA,.orbitB,.orbitC,.sceneParticle,.cardAura{animation:none!important}
-  .powerCard,.powerCopy,.ashScene{transform:none!important}
+  .authHeroImage,.authHeroGlow{animation:none!important}
+  .authHeroImage{transform:none!important}
 }
