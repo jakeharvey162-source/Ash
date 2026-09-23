@@ -70,57 +70,37 @@ function googleMark(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path 
 function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav">${[["home","Home"],["automation","Automate"],["connections","Connect"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
 function authView(){
   const signupMode=authMode==="signup";
-  const particles=Array.from({length:14},(_,i)=>`<i class="sceneParticle" style="--i:${i}"></i>`).join("");
-  return `<section class="powerAuth" id="powerAuth">
-    <div class="ashScene" aria-hidden="true">
-      <div class="sceneGlow"></div>
-      <div class="scenePlanet"></div>
-      <div class="sceneOrbit orbitA"></div>
-      <div class="sceneOrbit orbitB"></div>
-      <div class="sceneOrbit orbitC"></div>
-      <div class="sceneSpire spireA"></div>
-      <div class="sceneSpire spireB"></div>
-      <div class="sceneSpire spireC"></div>
-      <div class="sceneRoad roadA"></div>
-      <div class="sceneRoad roadB"></div>
-      <div class="sceneFigure"><span></span></div>
-      <div class="sceneParticles">${particles}</div>
+  return `<section class="authWrap premiumAuth">
+    <div class="authBrand">
+      <div class="brandLine"><span class="mark large">A</span><span>ASH</span></div>
+      <p class="authEyebrow">PERSONAL INTELLIGENCE, BUILT AROUND YOU</p>
+      <h1>Your work.<br><span>Your memory.</span><br>Your momentum.</h1>
+      <p class="lede">One private workspace for thinking, building, researching, automating and connecting the tools you already use.</p>
+      <div class="trustStrip">
+        <span><i></i>Private account</span>
+        <span><i></i>Action confirmations</span>
+        <span><i></i>Cross-device sync</span>
+      </div>
+      <div class="authHero3d" id="authHero3d" aria-hidden="true">
+        <div class="authHeroGlow"></div>
+        <img src="/images/ash-ai-human.webp" alt="" class="authHeroImage">
+      </div>
     </div>
-    <div class="authShade"></div>
-
-    <div class="powerLayout">
-      <div class="powerCopy">
-        <div class="brandLine powerBrand"><span class="mark large">A</span><span>ASH</span></div>
-        <div class="powerEyebrow"><span></span>A HIGHER INTELLIGENCE FOR A BRIGHTER YOU</div>
-        <h1>Think Deeper.<br>Move Faster.<br><em>With Ash.</em></h1>
-        <p class="powerLead">Ash is your AI operating system — reasoning, researching, creating and taking action across your work, knowledge and life.</p>
-        <div class="powerCapabilities">
-          <div><b>✦</b><span>Deep<br>Reasoning</span></div>
-          <div><b>↗</b><span>Real-World<br>Research</span></div>
-          <div><b>◇</b><span>Take<br>Action</span></div>
-          <div><b>⌘</b><span>Build<br>Software</span></div>
-        </div>
-        <button id="exploreAsh" class="powerCta">Explore Ash <span>→</span></button>
+    <div class="authCard premiumCard">
+      <div class="authCardHead">
+        <p class="kicker">${signupMode?"CREATE ACCOUNT":"WELCOME BACK"}</p>
+        <h2>${signupMode?"Start with Ash":"Sign in to Ash"}</h2>
+        <p>${signupMode?"Your workspace follows you across web, Android and desktop.":"Continue where you left off."}</p>
       </div>
-
-      <div class="authCard powerCard" id="powerCard">
-        <div class="cardAura"></div>
-        <div class="powerCardBrand"><span class="miniAshMark">A</span><strong>Ash</strong></div>
-        <h2>${signupMode?"Create your Ash account":"Welcome back."}</h2>
-        <p>${signupMode?"Build your private AI workspace.":"Same you. A more capable you."}</p>
-
-        <button id="googleSignin" class="googleButton powerGoogle"><span class="googleIcon">${googleMark()}</span><span>Continue with Google</span></button>
-        <div class="authDivider"><span>or</span></div>
-
-        ${signupMode?'<label class="powerField"><span>Name</span><input id="name" autocomplete="name" placeholder="Your name"></label>':""}
-        <label class="powerField"><span>Email</span><input id="email" type="email" autocomplete="email" placeholder="you@domain.com"></label>
-        <label class="powerField"><span>Password</span><input id="password" type="password" autocomplete="${signupMode?"new-password":"current-password"}" placeholder="••••••••"></label>
-
-        <button id="authSubmit" class="powerSignIn">${signupMode?"Create account":"Sign in"} <span>→</span></button>
-        <p id="authMsg" class="formMsg"></p>
-        <p class="authSwitch">${signupMode?"Already have an account?":"New to Ash?"} <button data-auth-mode="${signupMode?"signin":"signup"}">${signupMode?"Sign in":"Create an account"}</button></p>
-        <p class="authFine">Connected tools stay permissioned. Consequential actions stay confirmation-based.</p>
-      </div>
+      <button id="googleSignin" class="googleButton"><span class="googleIcon">${googleMark()}</span><span>Continue with Google</span></button>
+      <div class="authDivider"><span>or continue with email</span></div>
+      ${signupMode?'<input id="name" autocomplete="name" placeholder="Your name">':""}
+      <input id="email" type="email" autocomplete="email" placeholder="Email address">
+      <input id="password" type="password" autocomplete="${signupMode?"new-password":"current-password"}" placeholder="Password">
+      <button id="authSubmit" class="primary authPrimary">${signupMode?"Create account":"Sign in"}</button>
+      <p id="authMsg" class="formMsg"></p>
+      <p class="authSwitch">${signupMode?"Already have an account?":"New to Ash?"} <button data-auth-mode="${signupMode?"signin":"signup"}">${signupMode?"Sign in":"Create account"}</button></p>
+      <p class="authFine">By continuing, you keep control of connected tools and consequential actions stay confirmation-based.</p>
     </div>
   </section>`;
 }
@@ -214,7 +194,31 @@ function initAuthMotion(){
     document.querySelector("#email")?.focus();
   });
 }
-function render(){document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initAuthMotion()}
+function initHeroMotion(){
+  const hero=document.querySelector("#authHero3d");
+  if(!hero||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)return;
+  const img=hero.querySelector(".authHeroImage");
+  let raf=0;
+  hero.addEventListener("pointermove",e=>{
+    const r=hero.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width-.5;
+    const y=(e.clientY-r.top)/r.height-.5;
+    if(raf)cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(()=>{
+      hero.style.setProperty("--hero-rx",(-y*7).toFixed(2)+"deg");
+      hero.style.setProperty("--hero-ry",(x*9).toFixed(2)+"deg");
+      hero.style.setProperty("--hero-x",(x*10).toFixed(2)+"px");
+      hero.style.setProperty("--hero-y",(y*7).toFixed(2)+"px");
+    });
+  },{passive:true});
+  hero.addEventListener("pointerleave",()=>{
+    hero.style.setProperty("--hero-rx","0deg");
+    hero.style.setProperty("--hero-ry","0deg");
+    hero.style.setProperty("--hero-x","0px");
+    hero.style.setProperty("--hero-y","0px");
+  });
+}
+function render(){document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initHeroMotion()}
 function bind(){
   document.querySelector("#googleSignin")?.addEventListener("click",signInWithGoogle);
   document.querySelectorAll("[data-auth-mode]").forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;render()});
