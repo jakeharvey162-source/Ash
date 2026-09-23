@@ -1,0 +1,39 @@
+name: Ash Live Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/live-audit.mjs"
+      - ".github/workflows/live-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Audit live Ash
+        env:
+          ASH_LIVE_URL: https://ash-f4.vercel.app/
+        run: node scripts/live-audit.mjs
+      - name: Upload audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: ash-live-audit
+          path: |
+            live-audit.json
+            audit-desktop.png
+            audit-mobile.png
+          if-no-files-found: error
