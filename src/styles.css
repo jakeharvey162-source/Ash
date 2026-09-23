@@ -1,29 +1,34 @@
 :root{
   color-scheme:dark;
-  --bg:#07090d;
-  --surface:#0d1117;
-  --surface2:#11161d;
-  --surface3:#151b23;
-  --text:#f5f7fa;
-  --muted:#8b96a7;
-  --faint:#5f6978;
-  --line:#202733;
-  --line2:#2a3341;
-  --accent:#7fd8ff;
-  --accent2:#9ce8ff;
-  --success:#6fd3a2;
-  --warn:#f1c26d;
-  --danger:#ee7a7a;
-  --shadow:0 18px 60px rgba(0,0,0,.28);
+  --bg:#050608;
+  --surface:#0a0d11;
+  --surface2:#0f1318;
+  --surface3:#151a20;
+  --text:#f6f3ec;
+  --muted:#9aa3af;
+  --faint:#68717d;
+  --line:#1c232c;
+  --line2:#2a3440;
+  --accent:#7aa7ff;
+  --accent2:#a6c1ff;
+  --ivory:#f4efe5;
+  --success:#79d7a8;
+  --warn:#e9be72;
+  --danger:#ef8b8b;
+  --shadow:0 24px 80px rgba(0,0,0,.34);
   --radius:18px;
   --radius-sm:12px;
   font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:
-  radial-gradient(circle at 18% -10%,rgba(57,95,130,.14),transparent 28%),
-  linear-gradient(180deg,#080a0e 0%,#06080b 100%);
-  color:var(--text)}
+html,body{
+  margin:0;min-height:100%;
+  background:
+    radial-gradient(circle at 12% -10%,rgba(75,102,162,.16),transparent 30%),
+    radial-gradient(circle at 88% 8%,rgba(190,157,92,.07),transparent 26%),
+    linear-gradient(180deg,#06080b 0%,#040507 100%);
+  color:var(--text)
+}
 body{min-height:100vh}
 button,input,textarea,select{font:inherit}
 button{cursor:pointer}
@@ -259,3 +264,93 @@ button:hover{background:#121a23;border-color:#303b49}
 .bootFallback{min-height:100vh;display:grid;place-items:center;align-content:center;gap:12px;color:#8290a0}
 .bootFallback p{margin:0;font-size:.78rem;letter-spacing:.04em}
 .bootMark{width:48px;height:48px;border:1px solid #2a3542;border-radius:14px;display:grid;place-items:center;background:#0d1218;color:#eef8ff;font-weight:800}
+
+/* Premium Ash authentication */
+.premiumAuth{
+  width:min(1180px,100%);
+  min-height:calc(100vh - 56px);
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(390px,.72fr);
+  gap:88px;
+  align-items:center;
+}
+.authBrand{position:relative;padding:28px 0}
+.authBrand:before{
+  content:"";position:absolute;left:-80px;top:-90px;width:280px;height:280px;
+  border-radius:50%;background:radial-gradient(circle,rgba(78,111,181,.18),transparent 68%);
+  filter:blur(2px);pointer-events:none
+}
+.brandLine{display:flex;align-items:center;gap:12px;margin-bottom:52px}
+.brandLine>span:last-child{font-size:.82rem;letter-spacing:.26em;font-weight:800;color:#c9d0d8}
+.authEyebrow{font-size:.66rem!important;letter-spacing:.18em!important;color:#7e8a98!important;margin:0 0 18px!important}
+.authBrand h1{
+  font-size:clamp(3.3rem,7vw,6.7rem);line-height:.89;letter-spacing:-.072em;
+  margin:0 0 26px;max-width:760px;font-weight:690
+}
+.authBrand h1 span{color:#9dbbff}
+.lede{
+  max-width:600px;color:#8f99a6!important;font-size:1rem!important;
+  line-height:1.7!important;margin-top:0!important
+}
+.trustStrip{display:flex;flex-wrap:wrap;gap:18px;margin-top:30px;color:#7b8794;font-size:.69rem}
+.trustStrip span{display:flex;align-items:center;gap:7px}
+.trustStrip i{width:6px;height:6px;border-radius:50%;background:#6f86b9;box-shadow:0 0 0 3px rgba(111,134,185,.08)}
+
+.premiumCard{
+  position:relative;padding:28px;background:
+    linear-gradient(180deg,rgba(16,20,26,.97),rgba(9,12,16,.98));
+  border:1px solid #242c36;border-radius:24px;
+  box-shadow:0 30px 100px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.025)
+}
+.premiumCard:before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(135deg,rgba(122,167,255,.05),transparent 34%,rgba(230,198,135,.025))
+}
+.authCardHead{position:relative;z-index:1;margin-bottom:20px}
+.authCardHead h2{font-size:1.5rem;letter-spacing:-.025em;margin:5px 0 6px}
+.authCardHead>p:last-child{color:#7f8996;margin:0;font-size:.8rem}
+.googleButton{
+  position:relative;z-index:1;width:100%;height:46px;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:#f7f7f5;color:#17191d;border-color:#f7f7f5;font-weight:650;
+  box-shadow:0 4px 16px rgba(0,0,0,.18)
+}
+.googleButton:hover{background:#fff;border-color:#fff;transform:translateY(-1px)}
+.googleIcon{width:18px;height:18px;display:grid;place-items:center}
+.googleIcon svg{width:18px;height:18px;display:block}
+.authDivider{position:relative;text-align:center;margin:18px 0}
+.authDivider:before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:#1d242d}
+.authDivider span{position:relative;background:#0c1015;padding:0 10px;color:#5f6975;font-size:.65rem}
+.premiumCard input{height:46px;margin:0 0 10px;background:#080c11;border-color:#202832}
+.premiumCard input::placeholder{color:#59636f}
+.authPrimary{
+  position:relative;z-index:1;width:100%;height:46px;margin-top:2px;
+  background:linear-gradient(180deg,#94b4ff,#789cf2);
+  color:#07101a;border-color:#91b2ff;font-weight:800;
+  box-shadow:0 8px 28px rgba(88,124,215,.18)
+}
+.authPrimary:hover{background:linear-gradient(180deg,#a7c2ff,#86a7f5);transform:translateY(-1px)}
+.authSwitch{text-align:center;color:#707b88;font-size:.72rem;margin:15px 0 0}
+.authSwitch button{border:0;background:transparent;color:#b8caff;padding:0 2px;font-size:.72rem}
+.authFine{color:#515b67!important;font-size:.62rem!important;line-height:1.5!important;text-align:center;margin:14px 4px 0!important}
+.formMsg{min-height:18px;margin:8px 0 0;color:#9aa9ba;font-size:.7rem}
+.mark.large{
+  width:44px;height:44px;border-radius:12px;background:linear-gradient(180deg,#151a21,#0b0f14);
+  border-color:#2a3440;color:#f5f1e9;font-size:1rem
+}
+.authShell{padding:28px 34px}
+
+@media(max-width:900px){
+  .premiumAuth{grid-template-columns:1fr;gap:30px;max-width:680px;padding:28px 0 12px}
+  .authBrand{padding-bottom:0}
+  .brandLine{margin-bottom:30px}
+  .authBrand h1{font-size:clamp(3rem,12vw,5.3rem)}
+  .trustStrip{margin-top:22px}
+}
+@media(max-width:560px){
+  .authShell{padding:16px}
+  .premiumAuth{min-height:auto;gap:24px;padding-top:10px}
+  .authBrand h1{font-size:3.25rem}
+  .authBrand .lede{font-size:.9rem!important}
+  .trustStrip{gap:10px 14px}
+  .premiumCard{padding:20px;border-radius:20px}
+}
