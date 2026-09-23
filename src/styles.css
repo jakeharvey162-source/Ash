@@ -255,3 +255,7 @@ button:hover{background:#121a23;border-color:#303b49}
 .confirmCard small{display:block!important;color:#6e7c8c!important;font-size:.58rem!important;letter-spacing:.12em}
 .confirmCard b{display:block;margin-top:3px;font-size:.73rem;font-weight:600;color:#dce6ee}
 .confirmCard button{padding:7px 10px;font-size:.7rem;white-space:nowrap}
+
+.bootFallback{min-height:100vh;display:grid;place-items:center;align-content:center;gap:12px;color:#8290a0}
+.bootFallback p{margin:0;font-size:.78rem;letter-spacing:.04em}
+.bootMark{width:48px;height:48px;border:1px solid #2a3542;border-radius:14px;display:grid;place-items:center;background:#0d1218;color:#eef8ff;font-weight:800}
