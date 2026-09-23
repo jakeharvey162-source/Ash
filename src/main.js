@@ -133,5 +133,19 @@ async function send(){if(sending)return;const box=document.querySelector("#promp
 function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
 async function speak(text){if(!text||profile.voice_config?.auto_speak===false)return;try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"speech",text:text.slice(0,5000),voice_id:profile.voice_config?.voice_id})});if(r.ok&&r.headers.get("content-type")?.includes("audio")){new Audio(URL.createObjectURL(await r.blob())).play();return}}catch{}if("speechSynthesis"in window){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(text.slice(0,1600)))}}
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
-nativeState.available=await nativeAvailable();nativeState.device=await getDeviceInfo();
-if(session){await Promise.all([loadProfile(),loadOps()])}render();
+render();
+
+(async function hydrateAsh(){
+  try{
+    nativeState.available=await nativeAvailable();
+    nativeState.device=await getDeviceInfo();
+  }catch{
+    nativeState={available:false,device:{platform:"web"}};
+  }
+
+  if(session){
+    try{await Promise.all([loadProfile(),loadOps()])}catch{}
+  }
+
+  render();
+})();
