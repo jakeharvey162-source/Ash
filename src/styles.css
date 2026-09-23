@@ -228,3 +228,25 @@ button:hover{background:#121a23;border-color:#303b49}
   .authActions{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+.connectionsIntro{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin:2px 0 18px}
+.connectionsIntro h2{font-size:1.45rem;letter-spacing:-.03em;margin:0 0 8px}
+.connectionsIntro p{max-width:720px;color:#7d8997;font-size:.84rem;line-height:1.55;margin:0}
+.platformPill{font-size:.68rem;color:#9aa8b8;border:1px solid var(--line);border-radius:999px;padding:6px 9px;white-space:nowrap}
+.connectorGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+.connector{padding:16px;display:flex;flex-direction:column;min-height:220px}
+.connectorTop{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center}
+.connectorGlyph{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--line2);border-radius:10px;background:#0b1117;color:#b9d8e8;font-size:.72rem;font-weight:800}
+.connectorTop b{display:block;font-size:.82rem}
+.connectorTop small{display:block;color:#647181;font-size:.66rem;text-transform:capitalize;margin-top:2px}
+.connector>p{color:#778493;font-size:.76rem;line-height:1.5;margin:13px 0 11px;min-height:46px}
+.scopeList{display:flex;flex-wrap:wrap;gap:5px}
+.scopeList span{font-size:.6rem;color:#7f8b98;border:1px solid #1d2631;border-radius:999px;padding:4px 6px;background:#0a0f14}
+.connectorActions{margin-top:auto;padding-top:15px}
+.connectorActions button{width:100%;font-size:.74rem}
+.connectorNote{padding:18px;margin-top:12px}
+.connectorNote h3{font-size:1rem;margin:4px 0 6px}
+.connectorNote p:last-child{color:#74808f;font-size:.8rem;line-height:1.55;margin-bottom:0}
+.badge.connected,.badge.available-on-android{color:#8fd7b2;border-color:#244538}
+.badge.disconnected,.badge.not-connected{color:#9ba6b3}
+@media(max-width:1100px){.connectorGrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.connectorGrid{grid-template-columns:1fr}.connectionsIntro{align-items:flex-start;flex-direction:column}.connector{min-height:auto}}
