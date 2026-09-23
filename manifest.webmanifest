@@ -1,0 +1,13 @@
+{
+  "name":"Ash",
+  "short_name":"Ash",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#050812",
+  "theme_color":"#07101f",
+  "description":"Personal AI organization",
+  "icons":[
+    {"src":"/icons/icon-192.svg","sizes":"192x192","type":"image/svg+xml","purpose":"any maskable"},
+    {"src":"/icons/icon-512.svg","sizes":"512x512","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
