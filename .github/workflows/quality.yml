@@ -1,0 +1,30 @@
+name: Ash Quality
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install web dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build web app
+        run: npm run build
+      - name: Compile Python specialist
+        run: python -m py_compile desktop_worker/ash_agent.py
+      - name: Check public config exists
+        run: test -f dist/config.js
