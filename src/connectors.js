@@ -1,3 +1,4 @@
+// Ash Android connector catalog v1.1
 export const CONNECTOR_CATALOG = [
   {
     key: 'android_share',
