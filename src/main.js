@@ -13,9 +13,25 @@ function saveSession(s){session={access_token:s.access_token,refresh_token:s.ref
 async function login(email,password){saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}))}
 async function signup(email,password,name){const d=await supa("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});if(d.access_token)saveSession(d);return d}
 async function signInWithGoogle(){
-  const redirectTo=location.origin+location.pathname;
-  const q=new URLSearchParams({provider:"google",redirect_to:redirectTo});
-  location.assign(BASE+"/auth/v1/authorize?"+q.toString());
+  const button=document.querySelector("#googleSignin");
+  const original=button?.innerHTML||"";
+  if(button){button.disabled=true;button.innerHTML='<span>Checking Google sign-in…</span>'}
+  try{
+    const settingsResponse=await fetch(BASE+"/auth/v1/settings",{headers:{apikey:KEY}});
+    const settings=await settingsResponse.json().catch(()=>({}));
+    if(!settingsResponse.ok)throw new Error("Could not check Google sign-in.");
+    if(settings?.external?.google!==true){
+      throw new Error("Google sign-in is not enabled on the Ash authentication backend yet.");
+    }
+    const redirectTo=location.origin+location.pathname;
+    const q=new URLSearchParams({provider:"google",redirect_to:redirectTo});
+    location.assign(BASE+"/auth/v1/authorize?"+q.toString());
+  }catch(e){
+    toast(e.message||"Google sign-in is unavailable right now.");
+    const m=document.querySelector("#authMsg");
+    if(m)m.textContent=e.message||"Google sign-in is unavailable right now.";
+    if(button){button.disabled=false;button.innerHTML=original}
+  }
 }
 async function consumeAuthRedirect(){
   const hash=new URLSearchParams(location.hash.replace(/^#/,""));
