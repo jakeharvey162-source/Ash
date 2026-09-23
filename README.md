@@ -1,19 +1,20 @@
 # Ash
 
-Ash is a customizable personal AI organization with a mobile/web companion and a desktop agent runtime.
+Ash is a customizable personal AI organization developed by Jake Harvey.
 
 ## Default identity
-
 Ash is the default assistant name until a user chooses another name.
 
-## Developer
-
-Developed by Jake Harvey.
+## Production architecture
+- **Vercel:** public Ash web/PWA frontend only.
+- **Supabase Auth:** accounts and sessions.
+- **Supabase Database:** profiles, personalization, memory, missions, devices and realtime sync.
+- **Supabase Edge Function:** private Ash AI gateway and provider routing.
+- **Provider secrets:** Supabase Edge Function Secrets only; never GitHub, browser code, APK, or Vercel frontend variables.
 
 ## Deployment
+Import this repository into Vercel. No private AI-provider keys are required in Vercel.
 
-The public mobile/web client is designed for Vercel. Provider API secrets must remain on the server-side gateway and must never be committed to this repository or exposed to browser code.
+Before live AI works, configure the provider keys in Supabase **Edge Function Secrets**. The deployed gateway reads them with `Deno.env.get(...)`.
 
-## Status
-
-This repository is being populated with the Ash release candidate source and deployment configuration.
+See `DEPLOY.md`.
