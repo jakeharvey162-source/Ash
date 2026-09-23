@@ -250,3 +250,8 @@ button:hover{background:#121a23;border-color:#303b49}
 .badge.disconnected,.badge.not-connected{color:#9ba6b3}
 @media(max-width:1100px){.connectorGrid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:640px){.connectorGrid{grid-template-columns:1fr}.connectionsIntro{align-items:flex-start;flex-direction:column}.connector{min-height:auto}}
+
+.confirmCard{margin-top:10px;padding:10px;border:1px solid #2c3b49;border-radius:11px;background:#0b1219;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.confirmCard small{display:block!important;color:#6e7c8c!important;font-size:.58rem!important;letter-spacing:.12em}
+.confirmCard b{display:block;margin-top:3px;font-size:.73rem;font-weight:600;color:#dce6ee}
+.confirmCard button{padding:7px 10px;font-size:.7rem;white-space:nowrap}
