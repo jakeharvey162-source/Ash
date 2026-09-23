@@ -50,9 +50,17 @@ async function inspect(viewport, name) {
   report[name].visible = {
     email: await page.locator("#email").isVisible().catch(()=>false),
     password: await page.locator("#password").isVisible().catch(()=>false),
-    signIn: await page.locator("#signin").isVisible().catch(()=>false),
-    createAccount: await page.locator("#signup").isVisible().catch(()=>false)
+    signIn: await page.locator("#authSubmit").isVisible().catch(()=>false),
+    createAccount: await page.locator("[data-auth-mode='signup']").isVisible().catch(()=>false),
+    google: await page.locator("#googleSignin").isVisible().catch(()=>false),
+    heroImage: await page.locator(".authHeroImage").isVisible().catch(()=>false)
   };
+  report[name].hero = await page.locator(".authHeroImage").evaluate(img=>({
+    src: img.getAttribute("src"),
+    naturalWidth: img.naturalWidth,
+    naturalHeight: img.naturalHeight,
+    complete: img.complete
+  })).catch(()=>null);
   report[name].config = await page.evaluate(() => {
     const c = window.JARVIS_CONFIG || null;
     return c ? {
