@@ -2,6 +2,16 @@ import { CONNECTOR_CATALOG } from './connectors.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition } from './native.js';
 const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations",DEVICE_LINK=BASE+"/functions/v1/ash-device-link";
+const VOICE_CATALOG=[
+  {id:"cjVigY5qzO86Huf0OWal",name:"Eric",label:"Smooth & trustworthy",meta:"American · warm male"},
+  {id:"CwhRBWXzGAHq8TQ4Fs17",name:"Roger",label:"Relaxed & resonant",meta:"American · laid-back male"},
+  {id:"onwK4e9ZLuTAKqWW03F9",name:"Daniel",label:"Steady & polished",meta:"British · broadcaster male"},
+  {id:"IKne3meq5aSn9XLyUdCD",name:"Charlie",label:"Deep & energetic",meta:"Australian · confident male"},
+  {id:"EXAVITQu4vr4xnSDxMaL",name:"Sarah",label:"Warm & confident",meta:"American · reassuring female"},
+  {id:"hpp4J3VqNfWAUOO0d1Us",name:"Bella",label:"Bright & professional",meta:"American · warm female"},
+  {id:"Xb7hH8MSUJpSbSDYk0k2",name:"Alice",label:"Clear & engaging",meta:"British · educator female"},
+  {id:"pFZP5JQG7iQjIQuC4Bku",name:"Lily",label:"Velvety & composed",meta:"British · confident female"}
+];
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
@@ -119,6 +129,39 @@ async function persistVoiceOutput(enabled){
   }
 }
 function toggleVoiceOutput(){persistVoiceOutput(!voiceEnabled())}
+function voiceCatalogOption(v){
+  const selected=(profile.voice_config?.voice_id||VOICE_CATALOG[0].id)===v.id?"selected":"";
+  return `<option value="${v.id}" ${selected}>${esc(v.name)} · ${esc(v.label)}</option>`;
+}
+function selectedVoiceMeta(id){
+  return VOICE_CATALOG.find(v=>v.id===id)||VOICE_CATALOG[0];
+}
+function updateVoiceDescription(){
+  const select=document.querySelector("#voice"),desc=document.querySelector("#voiceDescription");
+  if(!select||!desc)return;
+  const v=selectedVoiceMeta(select.value);
+  desc.textContent=v.label+" · "+v.meta;
+}
+async function previewSelectedVoice(){
+  const select=document.querySelector("#voice");if(!select)return;
+  const button=document.querySelector("#previewVoice");
+  button?.setAttribute("disabled","");
+  try{
+    stopVoicePlayback();
+    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      action:"speech",
+      text:"Hey, I'm Ash. Ready when you are.",
+      voice_id:select.value
+    })});
+    if(!r.ok||!r.headers.get("content-type")?.includes("audio"))throw new Error("Voice preview is unavailable.");
+    const blob=await r.blob(),url=URL.createObjectURL(blob),audio=new Audio(url);
+    activeAudio=audio;activeAudioUrl=url;speaking=true;
+    const cleanup=()=>{try{audio.pause()}catch{};if(activeAudio===audio)activeAudio=null;if(activeAudioUrl===url)activeAudioUrl="";URL.revokeObjectURL(url);speaking=false;button?.removeAttribute("disabled")};
+    audio.addEventListener("ended",cleanup,{once:true});audio.addEventListener("error",cleanup,{once:true});
+    await audio.play();
+  }catch(e){button?.removeAttribute("disabled");toast(e?.message||"Voice preview failed.")}
+}
+
 function handsFreeEnabled(){return profile.voice_config?.hands_free===true}
 function wakeAliases(){
   const wake=String(profile.wake_word||profile.assistant_name||"Ash").trim()||"Ash";
@@ -742,7 +785,7 @@ function settingsView(){
       <label>Wake word<input id="wakeWord" value="${esc(profile.wake_word)}"></label><label>Wake aliases<input id="wakeAliases" value="${esc((profile.voice_config?.wake_aliases||["hey ash","okay ash","ok ash","arise"]).join(", "))}" placeholder="hey ash, okay ash, arise"></label>
       <div class="formGrid"><label>Personality<select id="personality">${["adaptive","executive","companion","builder","analyst","coach"].map(x=>`<option ${profile.personality_preset===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Verbosity<select id="verbosity">${["concise","balanced","detailed"].map(x=>`<option ${profile.behavior_config?.verbosity===x?"selected":""}>${x}</option>`).join("")}</select></label></div>
       <div class="formGrid"><label>Proactivity<select id="proactivity">${["quiet","balanced","proactive"].map(x=>`<option ${profile.behavior_config?.proactivity===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Humor<input id="humor" type="range" min="0" max="100" value="${Number(profile.behavior_config?.humor??20)}"></label></div>
-      <label>Voice<select id="voice"><option value="cjVigY5qzO86Huf0OWal">Eric · smooth</option><option value="EXAVITQu4vr4xnSDxMaL">Sarah · confident</option></select></label>
+      <label>Voice<div class="voicePickerRow"><select id="voice">${VOICE_CATALOG.map(voiceCatalogOption).join("")}</select><button type="button" id="previewVoice" class="secondary">Preview</button></div><small id="voiceDescription" class="voiceDescription">${esc(selectedVoiceMeta(profile.voice_config?.voice_id).label+" · "+selectedVoiceMeta(profile.voice_config?.voice_id).meta)}</small></label>
       <label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label><label class="check"><input id="handsFree" type="checkbox" ${handsFreeEnabled()?"checked":""}> Hands-free wake listening</label><p class="quiet voicePrivacy">When enabled, Ash keeps the microphone listener armed while the app is open and in the foreground. Say your wake word, then speak naturally. Say “stop listening” any time.</p>
       <label>Custom instructions<textarea id="instructions" rows="5">${esc(profile.custom_instructions||"")}</textarea></label>
       <button id="save" class="primary wide">Save preferences</button>
@@ -950,6 +993,8 @@ function bind(){
   document.querySelector("#researchMode")?.addEventListener("click",()=>{const box=document.querySelector("#prompt");if(!box)return;box.dataset.forceResearch=box.dataset.forceResearch==="1"?"0":"1";document.querySelector("#researchMode")?.classList.toggle("active",box.dataset.forceResearch==="1");toast(box.dataset.forceResearch==="1"?"Live research enabled for this question.":"Automatic research mode restored.");box.focus()});
   document.querySelector("#save")?.addEventListener("click",saveProfile);
   document.querySelector("#speak")?.addEventListener("change",e=>persistVoiceOutput(e.target.checked));
+  document.querySelector("#voice")?.addEventListener("change",updateVoiceDescription);
+  document.querySelector("#previewVoice")?.addEventListener("click",previewSelectedVoice);
   document.querySelector("#handsFree")?.addEventListener("change",e=>persistHandsFree(e.target.checked,{requestPermission:e.target.checked}));
   document.querySelector("#linkDesktop")?.addEventListener("click",createDevicePairing);
   document.querySelector("#newPairCode")?.addEventListener("click",createDevicePairing);
@@ -1035,10 +1080,10 @@ function splitSpeechChunks(text){
   return out.filter(Boolean).slice(0,24);
 }
 
-async function fetchVoiceBlob(text,generation){
+async function fetchVoiceBlob(text,generation,previousText="",nextText=""){
   if(!voiceEnabled()||generation!==voiceGeneration)return null;
   try{
-    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text,voice_id:profile.voice_config?.voice_id})});
+    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text,voice_id:profile.voice_config?.voice_id,previous_text:previousText,next_text:nextText})});
     if(r.ok&&r.headers.get("content-type")?.includes("audio"))return await r.blob();
   }catch{}
   return null;
@@ -1129,12 +1174,14 @@ function queueSpeech(text){
   const started=new Promise(resolve=>{resolveStarted=resolve});
   voiceQueue=chunks.map((chunk,i)=>({
     text:chunk,
-    blobPromise:i<4?fetchVoiceBlob(chunk,generation):null
+    previousText:i>0?chunks[i-1]:"",
+    nextText:i<chunks.length-1?chunks[i+1]:"",
+    blobPromise:i<4?fetchVoiceBlob(chunk,generation,i>0?chunks[i-1]:"",i<chunks.length-1?chunks[i+1]:""):null
   }));
 
   for(let i=4;i<voiceQueue.length;i++){
     Object.defineProperty(voiceQueue[i],"blobPromise",{configurable:true,enumerable:true,get(){
-      const p=fetchVoiceBlob(this.text,generation);
+      const p=fetchVoiceBlob(this.text,generation,this.previousText,this.nextText);
       Object.defineProperty(this,"blobPromise",{value:p,writable:true,enumerable:true});
       return p;
     }});
