@@ -37,6 +37,18 @@ await page.route("**/rest/v1/jarvis_devices**", route => json(route, []));
 await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
 
 
+
+async function assertMouseWheelScroll(){
+  await page.setViewportSize({width:1366,height:768});
+  await page.reload({waitUntil:"networkidle"});
+  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.mouse.move(700,600);
+  await page.mouse.wheel(0,700);
+  await page.waitForTimeout(250);
+  const y=await page.evaluate(()=>window.scrollY);
+  if(y<20)throw new Error("Mouse wheel did not scroll the Ash public page.");
+}
+
 async function assertPublicViewport(width,height,label){
   await page.setViewportSize({width,height});
   await page.reload({waitUntil:"networkidle"});
@@ -98,6 +110,8 @@ for (const [w,h,label] of [
   [1366,768,"Laptop"],
   [1920,1080,"Desktop"]
 ]) await assertPublicViewport(w,h,label);
+
+await assertMouseWheelScroll();
 
 if(errors.length) throw new Error("Browser errors: "+errors.join(" | "));
 console.log("ASH AUTH UI SMOKE: PASS");
