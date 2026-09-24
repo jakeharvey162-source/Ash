@@ -139,6 +139,27 @@ button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
   backdrop-filter:blur(20px)
 }
 
+/* ----- Ash Core: reactive state visualizer ----- */
+.ashSphere canvas{position:absolute;inset:-44%;width:188%;height:188%;filter:drop-shadow(0 0 20px color-mix(in srgb,var(--accent) 36%,transparent));opacity:.94;pointer-events:none}
+.coreOrbit{position:absolute;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);pointer-events:none}
+.orbitA{inset:10px;transform:rotateX(68deg);animation:spin 12s linear infinite}
+.orbitB{inset:23px;transform:rotateY(69deg);animation:spinReverse 9s linear infinite}
+.orbitC{inset:4px;transform:rotate(32deg) scaleY(.48);animation:spin 16s linear infinite}
+.coreTelemetry{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}
+.coreTelemetry span{display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--line);border-radius:999px;color:var(--faint);font-size:.62rem;background:color-mix(in srgb,var(--surface-solid) 72%,transparent)}
+.coreTelemetry i{width:5px;height:5px;border-radius:50%;background:var(--success);box-shadow:0 0 8px color-mix(in srgb,var(--success) 58%,transparent)}
+.voiceCore[data-state="listening"] .reactorCore,.voiceCore[data-state="speaking"] .reactorCore{animation:corePulse .58s ease-in-out infinite alternate}
+.voiceCore[data-state="thinking"] .ring1,.voiceCore[data-state="building"] .ring1,.voiceCore[data-state="acting"] .ring1{animation-duration:4.5s}
+.voiceCore[data-state="thinking"] .ring2,.voiceCore[data-state="building"] .ring2,.voiceCore[data-state="acting"] .ring2{animation-duration:3.2s}
+.voiceCore[data-state="building"]{--core-state-accent:#36d399}
+.voiceCore[data-state="acting"]{--core-state-accent:#67e8f9}
+.voiceCore[data-state="offline"]{--core-state-accent:#a78bfa}
+.voiceCore[data-state="building"] .reactorRing,.voiceCore[data-state="building"] .coreOrbit{border-color:color-mix(in srgb,#36d399 46%,transparent)}
+.voiceCore[data-state="acting"] .reactorRing,.voiceCore[data-state="acting"] .coreOrbit{border-color:color-mix(in srgb,#67e8f9 46%,transparent)}
+.voiceCore[data-state="offline"] .reactorRing,.voiceCore[data-state="offline"] .coreOrbit{border-color:color-mix(in srgb,#a78bfa 46%,transparent)}
+.voiceState.listening,.voiceState.thinking,.voiceState.building,.voiceState.acting,.voiceState.speaking,.voiceState.offline{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 36%,var(--line))}
+.voiceState.listening span,.voiceState.thinking span,.voiceState.building span,.voiceState.acting span,.voiceState.speaking span,.voiceState.offline span{background:var(--accent);box-shadow:0 0 14px var(--accent)}
+
 /* ----- Voice core / Iron-Man-inspired original visualization ----- */
 .voiceCore{
   min-height:230px;padding:26px 28px;margin-bottom:14px;display:grid;
