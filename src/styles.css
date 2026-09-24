@@ -806,3 +806,14 @@ html,body{overflow-y:auto!important}
   .handsFreeToggle{padding:6px 8px}
   .wakeControlRow{justify-content:center}
 }
+
+
+/* ----- Premium voice picker ----- */
+.voicePickerRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.voicePickerRow select{min-width:0}
+.voicePickerRow .secondary{white-space:nowrap;padding:9px 12px}
+.voiceDescription{display:block;margin-top:6px;color:var(--muted);font-size:.65rem;line-height:1.35}
+@media(max-width:520px){
+  .voicePickerRow{grid-template-columns:1fr}
+  .voicePickerRow .secondary{width:100%}
+}
