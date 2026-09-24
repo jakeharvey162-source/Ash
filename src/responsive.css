@@ -201,3 +201,13 @@ button{min-height:40px}
   .coreTelemetry span:nth-child(3){display:none}
   .voiceState{display:none}
 }
+
+
+@media (max-width:900px){
+  .healthGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:520px){
+  .healthPanel{padding:12px}
+  .healthGrid{grid-template-columns:1fr 1fr;gap:6px}
+  .healthItem{padding:8px 9px}
+}
