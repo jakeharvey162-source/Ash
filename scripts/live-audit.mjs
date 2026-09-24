@@ -53,9 +53,10 @@ async function inspect(viewport, name) {
     signIn: await page.locator("#authSubmit").isVisible().catch(()=>false),
     createAccount: await page.locator("[data-auth-mode='signup']").isVisible().catch(()=>false),
     google: await page.locator("#googleSignin").isVisible().catch(()=>false),
-    heroImage: await page.locator(".authHeroImage").isVisible().catch(()=>false)
+    heroImage: await page.locator(".heroPortrait:visible").isVisible().catch(()=>false),
+    themeToggle: await page.locator("#themeToggle").isVisible().catch(()=>false)
   };
-  report[name].hero = await page.locator(".authHeroImage").evaluate(img=>({
+  report[name].hero = await page.locator(".heroPortrait:visible").evaluate(img=>({
     src: img.getAttribute("src"),
     naturalWidth: img.naturalWidth,
     naturalHeight: img.naturalHeight,
@@ -77,15 +78,12 @@ async function inspect(viewport, name) {
 
   if(name==="desktop"){
     try{
-      await page.locator("#googleSignin").click();
-      await page.waitForTimeout(900);
-      report[name].googleClick={
-        finalUrl:page.url(),
-        authMessage:await page.locator("#authMsg").innerText().catch(()=>null),
-        bodyPreview:(await page.locator("body").innerText().catch(()=>"")).slice(0,700)
-      };
+      report[name].googleRemoved=(await page.locator("#googleSignin").count())===0;
+      await page.locator("#themeToggle").click();
+      await page.waitForTimeout(350);
+      report[name].themeAfterToggle=await page.evaluate(()=>document.documentElement.dataset.theme||null);
     }catch(e){
-      report[name].googleClick={error:String(e)};
+      report[name].interactionAudit={error:String(e)};
     }
   }
   await page.screenshot({ path: `audit-${name}.png`, fullPage: true });
