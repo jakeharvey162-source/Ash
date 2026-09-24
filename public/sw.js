@@ -1,46 +1,13 @@
-const CACHE="ash-mobile-v4";
-const CORE=["/","/index.html","/manifest.webmanifest","/icons/icon-192.svg","/icons/icon-512.svg"];
-const STATIC_RE=/\.(?:js|css|webp|png|jpg|jpeg|svg|woff2?)$/i;
-
-self.addEventListener("install",event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting()));
-});
-
-self.addEventListener("activate",event=>{
-  event.waitUntil(
-    caches.keys()
-      .then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))
-      .then(()=>self.clients.claim())
-  );
-});
-
-self.addEventListener("fetch",event=>{
-  const request=event.request;
-  if(request.method!=="GET")return;
-  const url=new URL(request.url);
+const CACHE="ash-mobile-v3";
+const CORE=["/","/index.html","/config.js","/manifest.webmanifest","/icons/icon-192.svg","/icons/icon-512.svg"];
+self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
+self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener("fetch",e=>{
+  if(e.request.method!=="GET")return;
+  const url=new URL(e.request.url);
   if(url.origin!==self.location.origin)return;
-
-  if(STATIC_RE.test(url.pathname)){
-    event.respondWith((async()=>{
-      const cached=await caches.match(request);
-      const refresh=fetch(request).then(response=>{
-        if(response.ok)caches.open(CACHE).then(cache=>cache.put(request,response.clone())).catch(()=>{});
-        return response;
-      }).catch(()=>cached||Response.error());
-      return cached||refresh;
-    })());
-    return;
-  }
-
-  if(request.mode==="navigate"){
-    event.respondWith((async()=>{
-      try{
-        const response=await fetch(request);
-        if(response.ok)caches.open(CACHE).then(cache=>cache.put("/index.html",response.clone())).catch(()=>{});
-        return response;
-      }catch{
-        return (await caches.match("/index.html"))||Response.error();
-      }
-    })());
-  }
+  e.respondWith(fetch(e.request).then(r=>{
+    if(r&&r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy)).catch(()=>{});}
+    return r;
+  }).catch(()=>caches.match(e.request).then(r=>r||caches.match("/index.html"))));
 });
