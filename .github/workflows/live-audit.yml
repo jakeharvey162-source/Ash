@@ -42,6 +42,8 @@ jobs:
           done
           cat /tmp/ash-vite.log
           exit 1
+      - name: Test authentication UI
+        run: node scripts/auth-smoke.mjs
       - name: Test signed-in Ash UI
         run: node scripts/signed-in-smoke.mjs
       - name: Audit live Ash
