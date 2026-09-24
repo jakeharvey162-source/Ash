@@ -4,6 +4,7 @@ const url = process.env.ASH_LOCAL_URL || "http://127.0.0.1:4173/";
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 
+let refresh_token_hits = 0;
 const json = (route, body, status=200) => route.fulfill({
   status,
   contentType: "application/json",
@@ -20,6 +21,8 @@ await page.addInitScript(() => {
   localStorage.setItem("ash-theme", "dark");
 });
 
+await page.route("**/auth/v1/token?grant_type=refresh_token", route => { refresh_token_hits++; return json(route, { access_token: "refreshed-token", refresh_token: "test-refresh-token", user: { id: "00000000-0000-0000-0000-000000000001", email: "ash-test@example.invalid" } }); });
+
 await page.route("**/rest/v1/jarvis_profiles**", route => json(route, [{
   user_id: "00000000-0000-0000-0000-000000000001",
   assistant_name: "Ash",
@@ -33,7 +36,13 @@ await page.route("**/rest/v1/jarvis_profiles**", route => json(route, [{
 
 await page.route("**/rest/v1/jarvis_automations**", route => json(route, []));
 await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
-await page.route("**/functions/v1/jarvis-ai-gateway**", route => json(route, { answer: "Chat render test passed.", mode: "high", assistant_name: "Ash" }));
+let gateway_hits = 0;
+await page.route("**/functions/v1/jarvis-ai-gateway**", route => {
+  gateway_hits++;
+  const auth = route.request().headers()["authorization"] || "";
+  if (gateway_hits === 1 && !auth.includes("refreshed-token")) return json(route, { error: "unauthorized" }, 401);
+  return json(route, { answer: "Chat render test passed.", mode: "high", assistant_name: "Ash" });
+});
 
 await page.route("**/rest/v1/jarvis_devices**", route => json(route, [{
   id: "10000000-0000-0000-0000-000000000001",
@@ -74,6 +83,7 @@ await page.locator("#send").click();
 await page.getByText("Chat render test passed.", { exact: true }).waitFor({ state: "visible", timeout: 5000 });
 const persisted = await page.locator("#ashCoreCanvas").evaluate(el => el.dataset.persistToken || "");
 if (persisted !== "keep") throw new Error("Chat send rebuilt the Ash Core instead of updating in place.");
+if (refresh_token_hits < 1) throw new Error("Expired gateway session did not auto-refresh.");
 
 await page.getByText("Builder", { exact: true }).first().click();
 await page.waitForTimeout(150);
