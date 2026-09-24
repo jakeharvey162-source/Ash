@@ -9,6 +9,8 @@ type ChatBody = {
   history?: ChatMessage[];
   text?: string;
   voice_id?: string;
+  previous_text?: string;
+  next_text?: string;
 };
 
 const cors = {
@@ -752,12 +754,25 @@ async function callIntegration(ctx: { user: any; auth: string; url: string; anon
   return data;
 }
 
-async function speech(text: string, voiceId?: string) {
+const VOICE_PROFILES: Record<string, { stability: number; similarity_boost: number; style: number; speed: number }> = {
+  "cjVigY5qzO86Huf0OWal": { stability: 0.58, similarity_boost: 0.82, style: 0.02, speed: 1.08 },
+  "CwhRBWXzGAHq8TQ4Fs17": { stability: 0.56, similarity_boost: 0.80, style: 0.03, speed: 1.06 },
+  "onwK4e9ZLuTAKqWW03F9": { stability: 0.62, similarity_boost: 0.82, style: 0.01, speed: 1.06 },
+  "IKne3meq5aSn9XLyUdCD": { stability: 0.50, similarity_boost: 0.80, style: 0.05, speed: 1.10 },
+  "EXAVITQu4vr4xnSDxMaL": { stability: 0.58, similarity_boost: 0.82, style: 0.02, speed: 1.08 },
+  "hpp4J3VqNfWAUOO0d1Us": { stability: 0.60, similarity_boost: 0.82, style: 0.02, speed: 1.06 },
+  "Xb7hH8MSUJpSbSDYk0k2": { stability: 0.60, similarity_boost: 0.80, style: 0.01, speed: 1.07 },
+  "pFZP5JQG7iQjIQuC4Bku": { stability: 0.62, similarity_boost: 0.82, style: 0.02, speed: 1.05 }
+};
+const DEFAULT_VOICE_PROFILE = { stability: 0.58, similarity_boost: 0.80, style: 0.02, speed: 1.08 };
+
+async function speech(text: string, voiceId?: string, previousText = "", nextText = "") {
   const key = Deno.env.get("ELEVENLABS_API_KEY");
   if (!key) return null;
 
   const voice = voiceId || Deno.env.get("ELEVENLABS_VOICE_ID") || "cjVigY5qzO86Huf0OWal";
   const model = Deno.env.get("ELEVENLABS_MODEL") || "eleven_flash_v2_5";
+  const voiceProfile = VOICE_PROFILES[voice] || DEFAULT_VOICE_PROFILE;
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128`, {
     method: "POST",
     headers: {
@@ -768,7 +783,9 @@ async function speech(text: string, voiceId?: string) {
     body: JSON.stringify({
       text: text.slice(0, 5000),
       model_id: model,
-      voice_settings: { stability: 0.50, similarity_boost: 0.78, style: 0.08, use_speaker_boost: true, speed: 1.15 }
+      voice_settings: { ...voiceProfile, use_speaker_boost: true },
+      previous_text: previousText.slice(-1000) || undefined,
+      next_text: nextText.slice(0, 1000) || undefined
     })
   });
   if (!response.ok) return null;
@@ -842,7 +859,7 @@ Deno.serve(async (req: Request) => {
       const text = String(body.text || "").trim();
       if (!text) return json({ error: "text_required" }, 400);
       const configuredVoice = String(body.voice_id || profile?.voice_config?.voice_id || "");
-      const result = await speech(text, configuredVoice || undefined);
+      const result = await speech(text, configuredVoice || undefined, String(body.previous_text || ""), String(body.next_text || ""));
       return result || json({ error: "voice_not_configured" }, 503);
     }
 
