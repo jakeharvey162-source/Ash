@@ -5,7 +5,8 @@ const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
-let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0;\nlet handsFreeRunning=false,handsFreePaused=false,handsFreeStarting=false,handsFreeProcessing=false,handsFreeRecognition=null,handsFreeNativeSession=null,handsFreeRestartTimer=null,handsFreeConversationTimer=null,handsFreeConversationUntil=0,handsFreeWakeUntil=0,lastWakeTriggerAt=0,lastFinalTranscript="",lastFinalAt=0,nativePartialTranscript="",micStream=null,micAudioCtx=null,micAnalyser=null,micWaveRaf=0;
+let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0;
+let handsFreeRunning=false,handsFreePaused=false,handsFreeStarting=false,handsFreeProcessing=false,handsFreeRecognition=null,handsFreeNativeSession=null,handsFreeRestartTimer=null,handsFreeConversationTimer=null,handsFreeConversationUntil=0,handsFreeWakeUntil=0,lastWakeTriggerAt=0,lastFinalTranscript="",lastFinalAt=0,nativePartialTranscript="",micStream=null,micAudioCtx=null,micAnalyser=null,micWaveRaf=0;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -898,7 +899,8 @@ async function playVoiceBlob(blob){
 function render(){heroVisualCleanup?.();heroVisualCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session){initCinematicMotion();initHeroRobot()}else{initAshCore();refreshHandsFreeUi()}}
 function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
-  document.querySelectorAll("[data-voice-toggle]").forEach(b=>b.addEventListener("click",toggleVoiceOutput));\n  document.querySelectorAll("[data-handsfree-toggle]").forEach(b=>b.addEventListener("click",()=>persistHandsFree(!handsFreeEnabled(),{requestPermission:true})));
+  document.querySelectorAll("[data-voice-toggle]").forEach(b=>b.addEventListener("click",toggleVoiceOutput));
+  document.querySelectorAll("[data-handsfree-toggle]").forEach(b=>b.addEventListener("click",()=>persistHandsFree(!handsFreeEnabled(),{requestPermission:true})));
   document.querySelector("#meetAsh")?.addEventListener("click",()=>document.querySelector("#email")?.focus());
   document.querySelector("#watchVoice")?.addEventListener("click",()=>{toast("Sign in and ask Ash anything to hear the live voice visualization.")});
   document.querySelectorAll("[data-public-section]").forEach(b=>b.addEventListener("click",()=>{
@@ -942,7 +944,8 @@ function bind(){
   document.querySelector("#mic")?.addEventListener("click",talkNow);
   document.querySelector("#researchMode")?.addEventListener("click",()=>{const box=document.querySelector("#prompt");if(!box)return;box.dataset.forceResearch=box.dataset.forceResearch==="1"?"0":"1";document.querySelector("#researchMode")?.classList.toggle("active",box.dataset.forceResearch==="1");toast(box.dataset.forceResearch==="1"?"Live research enabled for this question.":"Automatic research mode restored.");box.focus()});
   document.querySelector("#save")?.addEventListener("click",saveProfile);
-  document.querySelector("#speak")?.addEventListener("change",e=>persistVoiceOutput(e.target.checked));\n  document.querySelector("#handsFree")?.addEventListener("change",e=>persistHandsFree(e.target.checked,{requestPermission:e.target.checked}));
+  document.querySelector("#speak")?.addEventListener("change",e=>persistVoiceOutput(e.target.checked));
+  document.querySelector("#handsFree")?.addEventListener("change",e=>persistHandsFree(e.target.checked,{requestPermission:e.target.checked}));
   document.querySelector("#linkDesktop")?.addEventListener("click",createDevicePairing);
   document.querySelector("#newPairCode")?.addEventListener("click",createDevicePairing);
   document.querySelector("#copyPairCode")?.addEventListener("click",async()=>{if(pairing?.code){await copyText(pairing.code);toast("Pairing code copied.")}});
