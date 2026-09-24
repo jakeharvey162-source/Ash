@@ -459,7 +459,7 @@ async function webResearch(system: string, message: string, mode: Mode) {
             generationConfig: { temperature: 0.12, maxOutputTokens: mode === "high" ? 2400 : 1500 }
           })
         },
-        8000
+        3500
       );
       if (!response.ok) throw new Error("gemini_search_failed_" + response.status);
       const data = await response.json();
@@ -495,14 +495,14 @@ async function webResearch(system: string, message: string, mode: Mode) {
               { role: "user", content: message }
             ],
             tools: [
-              { type: "openrouter:web_search", parameters: { max_results: mode === "high" ? 6 : 4, max_total_results: mode === "high" ? 10 : 6 } },
+              { type: "openrouter:web_search", parameters: { engine: "exa", max_results: mode === "high" ? 6 : 4, max_total_results: mode === "high" ? 10 : 6, max_characters: 2200 } },
               { type: "openrouter:datetime" }
             ],
             max_tokens: mode === "high" ? 2400 : mode === "instant" ? 900 : 1600,
             temperature: 0.12
           })
         },
-        8000
+        11000
       );
       if (!response.ok) throw new Error("openrouter_search_failed_" + response.status);
       const data = await response.json();

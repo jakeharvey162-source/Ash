@@ -5,7 +5,7 @@ const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
-let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0;
+let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -789,11 +789,12 @@ function stopVoicePlayback(){
   voiceGeneration++;
   voiceQueue=[];
   voiceQueueRunning=false;
-  if(activeAudio){
+  if(activeAudioCleanup){const cleanup=activeAudioCleanup;activeAudioCleanup=null;cleanup()}
+  else if(activeAudio){
     try{activeAudio.pause();activeAudio.currentTime=0}catch{}
     activeAudio=null;
+    if(activeAudioUrl){URL.revokeObjectURL(activeAudioUrl);activeAudioUrl=""}
   }
-  if(activeAudioUrl){URL.revokeObjectURL(activeAudioUrl);activeAudioUrl=""}
   if("speechSynthesis"in window)speechSynthesis.cancel();
   speaking=false;resetWave();
   if(coreState==="speaking")setCoreState("idle");
@@ -843,13 +844,18 @@ async function playVoiceBlobQueued(blob,generation){
     const url=URL.createObjectURL(blob),audio=new Audio(url);
     activeAudio=audio;activeAudioUrl=url;setVoiceState(true,false);
     let ctx=null;
+    let cleaned=false;
     const cleanup=()=>{
+      if(cleaned)return;cleaned=true;
+      try{audio.pause()}catch{}
       if(activeAudio===audio)activeAudio=null;
       if(activeAudioUrl===url)activeAudioUrl="";
+      if(activeAudioCleanup===cleanup)activeAudioCleanup=null;
       URL.revokeObjectURL(url);ctx?.close?.().catch(()=>{});
       if(generation===voiceGeneration)setVoiceState(false);
       resolve();
     };
+    activeAudioCleanup=cleanup;
     try{
       const AC=window.AudioContext||window.webkitAudioContext;
       if(AC){
