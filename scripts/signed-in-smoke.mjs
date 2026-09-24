@@ -12,6 +12,22 @@ const json = (route, body, status=200) => route.fulfill({
 });
 
 await page.addInitScript(() => {
+  class FakeSpeechRecognition {
+    static instances=[];
+    constructor(){this.continuous=false;this.interimResults=false;this.maxAlternatives=1;this.lang="en-US";FakeSpeechRecognition.instances.push(this)}
+    start(){this.onstart?.()}
+    stop(){this.onend?.()}
+    emit(text,isFinal=true){
+      const result={0:{transcript:text},length:1,isFinal};
+      this.onresult?.({resultIndex:0,results:[result]});
+    }
+  }
+  window.SpeechRecognition=FakeSpeechRecognition;
+  window.webkitSpeechRecognition=FakeSpeechRecognition;
+  window.__fakeSpeechInstances=FakeSpeechRecognition.instances;
+  if(!navigator.mediaDevices)Object.defineProperty(navigator,"mediaDevices",{value:{},configurable:true});
+  navigator.mediaDevices.getUserMedia=async()=>({getTracks:()=>[{stop(){}}]});
+
   localStorage.setItem("ash-session", JSON.stringify({
     access_token: "test-access-token",
     refresh_token: "test-refresh-token",
@@ -33,7 +49,7 @@ await page.route("**/rest/v1/jarvis_profiles**", route => json(route, [{
   wake_word: "Ash",
   custom_instructions: "",
   behavior_config: { verbosity: "balanced", proactivity: "balanced", humor: 20, learn_style: true },
-  voice_config: { auto_speak: false, voice_id: "test" }
+  voice_config: { auto_speak: false, voice_id: "test", hands_free: false, wake_aliases: ["hey ash","arise"] }
 }]));
 
 await page.route("**/rest/v1/jarvis_automations**", route => json(route, []));
@@ -107,6 +123,18 @@ if (!(await page.getByText("Builder", { exact: true }).first().isVisible())) thr
 if (!(await page.locator("#voiceWave").isVisible())) throw new Error("Ash voice waveform missing.");
 if (!(await page.locator("[data-voice-toggle]").first().isVisible())) throw new Error("Voice toggle missing.");
 if (!(await page.locator("#researchMode").isVisible())) throw new Error("Research control missing.");
+if (!(await page.locator("[data-handsfree-toggle]").first().isVisible())) throw new Error("Hands-free toggle missing.");
+const handsFreeToggle=page.locator("[data-handsfree-toggle]").first();
+if((await handsFreeToggle.getAttribute("aria-pressed"))!=="false") throw new Error("Hands-free should default off.");
+await handsFreeToggle.click();
+await page.waitForTimeout(80);
+if((await page.locator("[data-handsfree-toggle]").first().getAttribute("aria-pressed"))!=="true") throw new Error("Hands-free did not turn on.");
+await page.evaluate(()=>window.__fakeSpeechInstances.at(-1)?.emit("Hey Ash test voice command",true));
+await page.getByText("Chat render test passed.", { exact: true }).waitFor({ state: "visible", timeout: 5000 });
+if(!(await page.locator("[data-handsfree-toggle]").first().getAttribute("class")||"").includes("active")) throw new Error("Hands-free lost its active state after a voice command.");
+await page.locator("[data-handsfree-toggle]").first().click();
+await page.waitForTimeout(60);
+if((await page.locator("[data-handsfree-toggle]").first().getAttribute("aria-pressed"))!=="false") throw new Error("Hands-free did not turn off.");
 const voiceToggle=page.locator("[data-voice-toggle]").first();
 if((await voiceToggle.getAttribute("aria-pressed"))!=="false") throw new Error("Mock profile should render voice off.");
 await voiceToggle.click();
