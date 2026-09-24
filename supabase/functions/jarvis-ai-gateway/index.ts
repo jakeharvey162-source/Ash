@@ -504,6 +504,84 @@ async function duckDuckGoResearch(system: string, message: string, mode: Mode, r
   }
 }
 
+async function serpApiResearch(system: string, message: string, mode: Mode, researchedAt: string) {
+  const key = Deno.env.get("SERPAPI_API_KEY");
+  if (!key) throw new Error("serpapi_unavailable");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    const endpoint = new URL("https://serpapi.com/search.json");
+    endpoint.searchParams.set("engine", "google");
+    endpoint.searchParams.set("q", message);
+    endpoint.searchParams.set("num", mode === "high" ? "8" : "5");
+    endpoint.searchParams.set("api_key", key);
+    const response = await fetch(endpoint, { signal: controller.signal });
+    if (!response.ok) throw new Error("serpapi_failed_" + response.status);
+    const data = await response.json();
+    const organic = Array.isArray(data?.organic_results) ? data.organic_results : [];
+    const evidence = organic.slice(0, 8).map((r: any) => ({
+      title: String(r?.title || ""),
+      url: cleanSourceUrl(r?.link),
+      snippet: String(r?.snippet || ""),
+      date: String(r?.date || "")
+    })).filter((r: any) => r.url);
+    const sources = uniqueSources(evidence);
+    if (!sources.length) throw new Error("serpapi_no_results");
+    const answer = await askGroq(
+      system + "\nYou are in live research mode. Use only the supplied current search evidence for time-sensitive factual claims. Never invent sources.",
+      message + "\n\nLIVE SEARCH EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 18000),
+      [],
+      mode
+    );
+    if (!answer) throw new Error("serpapi_synthesis_failed");
+    return { answer, sources, source: "serpapi", researched_at: researchedAt };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function openRouterLegacyResearch(system: string, message: string, mode: Mode, researchedAt: string) {
+  const key = Deno.env.get("OPENROUTER_API_KEY");
+  if (!key) throw new Error("openrouter_unavailable");
+  const response = await providerFetch(
+    "openrouter_search_legacy",
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "X-Title": "Ash Research"
+      },
+      body: JSON.stringify({
+        model: Deno.env.get("OPENROUTER_RESEARCH_MODEL") || Deno.env.get("OPENROUTER_MODEL") || "openrouter/free",
+        messages: [
+          { role: "system", content: system + "\nUse live web evidence. Do not invent citations or URLs." },
+          { role: "user", content: message }
+        ],
+        plugins: [{ id: "web", engine: "exa", max_results: mode === "high" ? 6 : 4 }],
+        max_tokens: mode === "high" ? 2200 : 1400,
+        temperature: 0.12
+      })
+    },
+    10000
+  );
+  if (!response.ok) throw new Error("openrouter_legacy_failed_" + response.status);
+  const data = await response.json();
+  const msg = data?.choices?.[0]?.message || {};
+  const answer = String(msg?.content || "").trim();
+  const annotations = Array.isArray(msg?.annotations) ? msg.annotations : [];
+  const citations = Array.isArray(msg?.citations) ? msg.citations : [];
+  const sources = uniqueSources([
+    ...annotations
+      .filter((a: any) => a?.type === "url_citation" && a?.url_citation?.url)
+      .map((a: any) => ({ title: a.url_citation.title || "", url: a.url_citation.url })),
+    ...citations.map((url: any) => ({ url }))
+  ]);
+  if (!answer || !sources.length) throw new Error("openrouter_legacy_ungrounded");
+  return { answer, sources, source: "openrouter_web_legacy", researched_at: researchedAt };
+}
+
 async function webResearch(system: string, message: string, mode: Mode) {
   const researchedAt = new Date().toISOString();
   const researchSystem = system + [
@@ -516,6 +594,8 @@ async function webResearch(system: string, message: string, mode: Mode) {
   ].join("\n");
 
   const routes: Promise<any>[] = [];
+  routes.push(serpApiResearch(researchSystem, message, mode, researchedAt));
+  routes.push(openRouterLegacyResearch(researchSystem, message, mode, researchedAt));
   routes.push(duckDuckGoResearch(researchSystem, message, mode, researchedAt));
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
@@ -735,7 +815,8 @@ Deno.serve(async (req: Request) => {
         Deno.env.get("NVIDIA_API_KEY") ||
         Deno.env.get("BYTEZ_API_KEY")
       ),
-      voice_ready: Boolean(Deno.env.get("ELEVENLABS_API_KEY"))
+      voice_ready: Boolean(Deno.env.get("ELEVENLABS_API_KEY")),
+      research_ready: Boolean(Deno.env.get("SERPAPI_API_KEY") || Deno.env.get("OPENROUTER_API_KEY") || Deno.env.get("GEMINI_API_KEY"))
     });
   }
   if (url.searchParams.get("action") === "transcribe") {
