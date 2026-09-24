@@ -172,3 +172,32 @@ button{min-height:40px}
   .mobileNav{grid-template-columns:repeat(5,1fr)}
   .builderHint{margin:12px 0 0;line-height:1.5}
 }
+
+
+/* Compact mobile performance profile */
+@media (max-width:900px){
+  .workspace{padding-top:max(14px,var(--safe-top));padding-bottom:calc(86px + var(--safe-bottom))}
+  .voiceCore{min-height:160px;padding:14px;gap:12px}
+  .reactor{width:104px;height:104px}
+  .coreTelemetry{gap:5px}.coreTelemetry span{font-size:.57rem;padding:4px 6px}
+  .feed{min-height:210px;max-height:44dvh}
+}
+@media (max-width:650px){
+  .workspace{padding-left:max(8px,var(--safe-left));padding-right:max(8px,var(--safe-right))}
+  .topbar{margin-bottom:8px}
+  .voiceCore{padding:12px}
+  .reactor{width:92px;height:92px}
+  .reactorCore{width:46px;height:46px}
+  .voiceCoreCopy h2{font-size:1.2rem}
+  .voiceCoreCopy p:not(.kicker){margin-bottom:8px;font-size:.75rem}
+  .coreTelemetry{justify-content:center}
+  .stats{gap:6px}.stat{min-width:132px;padding:10px}
+  .feed{padding:10px;min-height:190px;max-height:42dvh}
+  .feed article{max-width:94%;padding:9px 10px}
+  .composer{padding:6px}
+  .ashSphere canvas{filter:drop-shadow(0 0 12px color-mix(in srgb,var(--accent) 30%,transparent))}
+}
+@media (max-width:420px){
+  .coreTelemetry span:nth-child(3){display:none}
+  .voiceState{display:none}
+}
