@@ -98,9 +98,17 @@ function applyTheme(){document.documentElement.dataset.theme=theme;document.docu
 function toggleTheme(){theme=theme==="dark"?"light":"dark";localStorage.setItem("ash-theme",theme);applyTheme();render()}
 function nav(){
   const items=[["home","Overview"],["builder","Builder"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["team","Organization"],["settings","Preferences"]];
-  return `<aside class="rail"><div class="wordmark"><span class="mark">A</span><b>${esc(profile.assistant_name)}</b></div><div class="navgroup">${items.map(([k,l])=>`<button class="navitem ${view===k?"selected":""}" data-view="${k}"><span>${icon(k)}</span><em>${l}</em></button>`).join("")}</div><div class="railfoot"><span class="presence"></span><div><b>Cloud connected</b><small>${devices.length?devices.length+" device"+(devices.length>1?"s":""):"No desktop linked"}</small></div></div></aside>`;
+  const liveDevices=devices.filter(d=>d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<90000).length;
+  const cloudOk=healthState.gateway==="online"&&healthState.session==="healthy";
+  const cloudLabel=cloudOk?"Cloud connected":healthState.gateway==="degraded"?"Cloud degraded":"Checking cloud";
+  const deviceLabel=liveDevices?liveDevices+" desktop"+(liveDevices>1?"s":"")+" online":devices.length?devices.length+" linked · offline":"No desktop linked";
+  return `<aside class="rail"><div class="wordmark"><span class="mark">A</span><b>${esc(profile.assistant_name)}</b></div><div class="navgroup">${items.map(([k,l])=>`<button class="navitem ${view===k?"selected":""}" data-view="${k}"><span>${icon(k)}</span><em>${l}</em></button>`).join("")}</div><div class="railfoot"><span class="presence ${cloudOk?"on":""}"></span><div><b>${cloudLabel}</b><small>${deviceLabel}</small></div></div></aside>`;
 }
-function topbar(title,sub=""){return `<header class="topbar"><div><p class="kicker">${esc(sub)}</p><h1>${esc(title)}</h1></div><div class="topactions"><div class="modeSwitch">${["instant","medium","high"].map(x=>`<button data-mode="${x}" class="${mode===x?"active":""}">${x}</button>`).join("")}</div><button id="themeToggle" class="themeToggle" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button><span class="live"><i></i>Online</span></div></header>`}
+function topbar(title,sub=""){
+  const cloudOk=healthState.gateway==="online"&&healthState.session==="healthy";
+  const label=cloudOk?"Online":healthState.gateway==="degraded"?"Degraded":"Checking";
+  return `<header class="topbar"><div><p class="kicker">${esc(sub)}</p><h1>${esc(title)}</h1></div><div class="topactions"><div class="modeSwitch">${["instant","medium","high"].map(x=>`<button data-mode="${x}" class="${mode===x?"active":""}">${x}</button>`).join("")}</div><button id="themeToggle" class="themeToggle" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button><span class="live ${cloudOk?"ok":""}"><i></i>${label}</span></div></header>`;
+}
 function googleMark(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.24-.2-1.8H12v3.27h5.52c-.11.81-.71 2.03-2.05 2.85l-.02.11 2.98 2.31.21.02c1.95-1.8 3.07-4.45 3.07-7.76Z"/><path fill="#34A853" d="M12 22c2.78 0 5.11-.92 6.81-2.5l-3.24-2.51c-.87.59-2.02 1-3.57 1-2.73 0-5.05-1.8-5.88-4.29l-.1.01-3.1 2.4-.04.1C4.57 19.57 8.03 22 12 22Z"/><path fill="#FBBC05" d="M6.12 13.7A6.02 6.02 0 0 1 5.8 12c0-.59.11-1.16.3-1.7l-.01-.12-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.05 4.46l3.07-2.76Z"/><path fill="#EA4335" d="M12 6.01c1.94 0 3.25.84 4 1.53l2.88-2.81C17.11 3.08 14.78 2 12 2 8.03 2 4.57 4.43 2.88 7.79l3.22 2.51C6.95 7.81 9.27 6.01 12 6.01Z"/></svg>'}
 function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav">${[["home","Home"],["builder","Build"],["automation","Automate"],["connections","Connect"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
 function authView(){
@@ -132,9 +140,9 @@ function authView(){
         </div>
 
         <div class="heroStats">
-          <span><strong>10×</strong><small>Productivity mindset</small></span>
-          <span><strong>24/7</strong><small>Available workspace</small></span>
-          <span><strong>1</strong><small>Assistant, many specialists</small></span>
+          <span><strong>Cloud + Local</strong><small>Flexible execution</small></span>
+          <span><strong>Voice + Text</strong><small>Natural interaction</small></span>
+          <span><strong>Permissioned</strong><small>Tools & actions</small></span>
         </div>
       </div>
 
@@ -223,7 +231,7 @@ function voiceCore(){
       <h2>${esc(title)}</h2>
       <p>${esc(coreDetail||sub)}</p>
       <div class="voiceWave" id="voiceWave" aria-hidden="true">${bars}</div>
-      <div class="coreTelemetry"><span><i></i>${mode==="high"?"Multi-agent":"Adaptive"} intelligence</span><span><i></i>${localReady?"Local execution ready":"Cloud workspace"}</span><span><i></i>Confirmation guard active</span></div>
+      <div class="coreTelemetry"><span><i></i>${mode==="high"?"Multi-agent":"Adaptive"} intelligence</span><span><i></i>${localReady?"Local execution ready":"Cloud workspace"}</span><span><i></i>${profile.behavior_config?.confirm_external_actions===false?"Action confirmations off":"Confirmation guard active"}</span></div>
     </div>
     <div class="voiceState ${coreState}"><span></span>${esc(title)}</div>
   </section>`;
