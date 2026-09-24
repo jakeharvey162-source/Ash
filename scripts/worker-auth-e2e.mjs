@@ -61,6 +61,62 @@ try{
   report.checks.signIn=true;
   await shot("after-signin");
 
+  const pairContext=await page.evaluate(()=>({
+    base:(window.JARVIS_CONFIG?.SUPABASE_URL||"").replace(/\/$/,""),
+    key:window.JARVIS_CONFIG?.SUPABASE_PUBLISHABLE_KEY||"",
+    session:JSON.parse(localStorage.getItem("ash-session")||"null")
+  }));
+  const deviceLink=pairContext.base+"/functions/v1/ash-device-link";
+  const createPair=await page.request.post(deviceLink,{
+    headers:{Authorization:"Bearer "+pairContext.session.access_token,apikey:pairContext.key},
+    data:{action:"create_pairing"}
+  });
+  if(!createPair.ok())throw new Error("Could not create desktop pairing code: "+await createPair.text());
+  const pair=await createPair.json();
+  if(!pair.code)throw new Error("Pairing endpoint returned no code.");
+
+  const claimPair=await page.request.post(deviceLink,{data:{
+    action:"claim_pairing",code:pair.code,device_name:"Ash CI Desktop",platform:"test",
+    app_version:"ash-e2e",capabilities:{builder:true,local_ai:true,voice_runtime:true}
+  }});
+  if(!claimPair.ok())throw new Error("Could not claim desktop pairing code: "+await claimPair.text());
+  const device=await claimPair.json();
+  if(!device.device_id||!device.device_secret)throw new Error("Pairing did not issue a device credential.");
+
+  const deviceHeaders={"X-Ash-Device-ID":device.device_id,"X-Ash-Device-Secret":device.device_secret};
+  const heartbeat=await page.request.post(deviceLink,{headers:deviceHeaders,data:{action:"heartbeat"}});
+  if(!heartbeat.ok())throw new Error("Desktop heartbeat failed: "+await heartbeat.text());
+
+  const job=await page.evaluate(async ({base,key,deviceId})=>{
+    const s=JSON.parse(localStorage.getItem("ash-session")||"null");
+    const r=await fetch(base+"/rest/v1/jarvis_remote_jobs",{
+      method:"POST",
+      headers:{apikey:key,Authorization:"Bearer "+s.access_token,"Content-Type":"application/json",Prefer:"return=representation"},
+      body:JSON.stringify({user_id:s.user.id,target_device_id:deviceId,kind:"mission",mode:"instant",payload:{prompt:"pairing channel test"},status:"queued",requires_confirmation:false})
+    });
+    const d=await r.json();return {ok:r.ok,data:d};
+  },{base:pairContext.base,key:pairContext.key,deviceId:device.device_id});
+  if(!job.ok||!job.data?.[0]?.id)throw new Error("Could not queue desktop test job: "+JSON.stringify(job.data));
+  const jobId=job.data[0].id;
+
+  const jobsResp=await page.request.post(deviceLink,{headers:deviceHeaders,data:{action:"jobs"}});
+  const queued=await jobsResp.json();
+  if(!jobsResp.ok()||!queued.jobs?.some(j=>j.id===jobId))throw new Error("Paired desktop could not receive queued job.");
+
+  const claimJob=await page.request.post(deviceLink,{headers:deviceHeaders,data:{action:"claim_job",job_id:jobId}});
+  if(!claimJob.ok()||!(await claimJob.json()).job)throw new Error("Paired desktop could not claim job.");
+
+  const finishJob=await page.request.post(deviceLink,{headers:deviceHeaders,data:{action:"finish_job",job_id:jobId,ok:true,result:{summary:"pairing channel verified"}}});
+  if(!finishJob.ok())throw new Error("Paired desktop could not finish job.");
+
+  const disconnect=await page.request.post(deviceLink,{
+    headers:{Authorization:"Bearer "+pairContext.session.access_token,apikey:pairContext.key},
+    data:{action:"disconnect_device",device_id:device.device_id}
+  });
+  if(!disconnect.ok())throw new Error("Could not disconnect paired test device.");
+  report.checks.desktopPairing=true;
+  report.checks.desktopJobChannel=true;
+
   await page.locator("[data-view='settings']").first().click();
   await page.locator("#signout").click();
   await mustVisible("#authSubmit","Sign in form before wrong-password test");
