@@ -57,8 +57,8 @@ async function login(email,password){
     saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}));
   }catch(e){
     const raw=String(e?.message||"");
-    if(/invalid login credentials/i.test(raw))throw new Error("Email or password is incorrect. If you just signed up, confirm your email first; otherwise use Forgot password.");
-    if(/email not confirmed/i.test(raw))throw new Error("Confirm your email address before signing in. Check your inbox and spam folder.");
+    if(/invalid login credentials/i.test(raw))throw new Error("Email or password is incorrect. If you just created your account, try signing in again or use Forgot password.");
+    if(/email not confirmed/i.test(raw))throw new Error("Your account exists, but sign-in is waiting on the current authentication settings.");
     throw e;
   }
 }
@@ -517,9 +517,9 @@ function bind(){
         const d=await signup(email,password,name);
         if(!session){
           if(d.signup_state==="existing_or_obfuscated"){
-            m.textContent="If this email already has an account, sign in or use Forgot password. If it is new, check your inbox for a confirmation email.";
+            m.textContent="If this email already has an account, sign in or use Forgot password.";
           }else{
-            m.textContent="Check your email to confirm your Ash account before signing in. Check spam/junk if it does not arrive.";
+            m.textContent="Account created. You can sign in with the same email and password.";
           }
           return
         }
