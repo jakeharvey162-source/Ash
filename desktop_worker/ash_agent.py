@@ -126,6 +126,55 @@ class AshPythonAgent:
             raise ValueError("Command is not permitted by Ash builder.")
         return subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=timeout, shell=False)
 
+    def _repair_build(self, root: pathlib.Path, request: str, plan: dict[str, Any], evidence: list[dict[str, Any]], max_rounds: int = 3) -> list[str]:
+        repaired: list[str] = []
+        for round_no in range(1, max_rounds + 1):
+            last = evidence[-1] if evidence else {}
+            if last.get("code") == 0:
+                break
+            diagnosis = self.think(
+                """You are Ash's senior debugging engineer.
+A generated web application failed its build. Diagnose the failure and return ONLY JSON:
+{"files":[{"path":"relative/path","content":"complete replacement contents"}],"reason":"short explanation"}
+Rules:
+- Change the smallest number of files needed.
+- Never write secrets or .env files.
+- Use only relative paths inside the project.
+- Return complete file contents, not diffs.
+- Do not claim the build is fixed; the caller will verify it.
+
+PROJECT REQUEST:
+""" + request + "\n\nARCHITECTURE:\n" + json.dumps(plan, indent=2)[:12000] +
+                "\n\nBUILD EVIDENCE:\n" + json.dumps(evidence[-4:], indent=2)[:12000],
+                "high",
+            )
+            try:
+                patch = self._extract_json(diagnosis)
+            except Exception:
+                break
+            files = patch.get("files") if isinstance(patch, dict) else None
+            if not isinstance(files, list) or not files:
+                break
+            changed_this_round = 0
+            for item in files[:12]:
+                rel = str((item or {}).get("path") or "").strip().replace("\\", "/")
+                content = (item or {}).get("content")
+                if not rel or not isinstance(content, str) or rel.startswith(".env") or "/.env" in rel:
+                    continue
+                self._safe_write(root, rel, content)
+                repaired.append(rel)
+                changed_this_round += 1
+            if not changed_this_round:
+                break
+            build = self._run(root, ["npm", "run", "build"], 300)
+            evidence.append({
+                "command": f"npm run build (repair {round_no})",
+                "code": build.returncode,
+                "stdout": build.stdout[-2000:],
+                "stderr": build.stderr[-4000:],
+            })
+        return repaired
+
     def build_fullstack(self, request: str, workspace: str) -> AgentResult:
         root = self._safe_root(workspace)
         planner = self.think("""You are Ash's senior product architect. Design a production-minded full-stack web app.
@@ -167,14 +216,20 @@ PURPOSE: {purpose}
             evidence.append({"command": "npm install", "code": install.returncode, "stderr": install.stderr[-2000:]})
             if install.returncode == 0:
                 build = self._run(root, ["npm", "run", "build"], 300)
-                evidence.append({"command": "npm run build", "code": build.returncode, "stderr": build.stderr[-3000:]})
+                evidence.append({"command": "npm run build", "code": build.returncode, "stdout": build.stdout[-2000:], "stderr": build.stderr[-4000:]})
+                repaired = self._repair_build(root, request, plan, evidence) if build.returncode != 0 else []
+            else:
+                repaired = []
+        else:
+            repaired = []
+
         review = self.think("""You are Ash's QA lead. Review the evidence below.
 Never claim a test passed unless its exit code is 0. Return a concise release-readiness report.
 
 REQUEST:
 """ + request + "\n\nFILES:\n" + "\n".join(generated) + "\n\nEVIDENCE:\n" + json.dumps(evidence, indent=2), "medium")
         ok = all(item.get("code") == 0 for item in evidence) if evidence else True
-        return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "plan": plan, "evidence": evidence})
+        return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "repaired_files": repaired, "plan": plan, "evidence": evidence})
 
 
 def main() -> int:
