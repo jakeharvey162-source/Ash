@@ -36,6 +36,16 @@ await page.route("**/rest/v1/jarvis_remote_jobs**", route => json(route, []));
 await page.route("**/rest/v1/jarvis_devices**", route => json(route, []));
 await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
 
+
+async function assertPublicViewport(width,height,label){
+  await page.setViewportSize({width,height});
+  await page.reload({waitUntil:"networkidle"});
+  const dims=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,body:document.body.scrollWidth,viewport:window.innerWidth}));
+  if(Math.max(dims.doc,dims.body)>dims.viewport+2)throw new Error(label+" public page overflows horizontally: "+JSON.stringify(dims));
+  if(!(await page.locator("#authSubmit").isVisible()))throw new Error(label+" auth form missing.");
+  if(width<=650 && !(await page.locator(".authNav").isVisible()))throw new Error(label+" mobile public navigation missing.");
+}
+
 const errors=[];
 page.on("pageerror", e=>errors.push(String(e)));
 
@@ -79,6 +89,15 @@ await page.locator("#password").fill("Password123!");
 await page.locator("#authSubmit").click();
 await page.locator(".shell").waitFor({state:"visible",timeout:5000});
 if (!(await page.getByText("Overview",{exact:true}).isVisible())) throw new Error("Successful sign-in did not open Ash.");
+
+for (const [w,h,label] of [
+  [360,800,"Android narrow portrait"],
+  [390,844,"Android portrait"],
+  [844,390,"Android landscape"],
+  [768,1024,"Tablet portrait"],
+  [1366,768,"Laptop"],
+  [1920,1080,"Desktop"]
+]) await assertPublicViewport(w,h,label);
 
 if(errors.length) throw new Error("Browser errors: "+errors.join(" | "));
 console.log("ASH AUTH UI SMOKE: PASS");
