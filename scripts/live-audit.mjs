@@ -91,6 +91,19 @@ async function inspect(viewport, name) {
       report[name].interactionAudit={error:String(e)};
     }
   }
+  if(name==="desktop"){
+    try{
+      await page.locator("#email").fill("ash-live-invalid@example.invalid");
+      await page.locator("#password").fill("DefinitelyWrongPassword123!");
+      await page.locator("#authSubmit").click();
+      await page.waitForTimeout(900);
+      report[name].wrongLoginMessage=(await page.locator("#authMsg").textContent().catch(()=>""))?.trim()||"";
+      report[name].wrongLoginMentionsConfirmation=/confirm your email/i.test(report[name].wrongLoginMessage);
+      if(report[name].wrongLoginMentionsConfirmation) throw new Error("Live Ash still shows stale email-confirmation login copy.");
+    }catch(e){
+      report[name].authInteractionError=String(e);
+    }
+  }
   await page.screenshot({ path: `audit-${name}.png`, fullPage: true });
   await browser.close();
 }

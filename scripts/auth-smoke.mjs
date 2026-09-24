@@ -23,10 +23,12 @@ await page.route("**/auth/v1/token?grant_type=password", async route => {
   });
 });
 await page.route("**/auth/v1/signup", route => json(route, {
+  access_token: "signup-token",
+  refresh_token: "signup-refresh",
   user: {
     id: "00000000-0000-0000-0000-000000000002",
     email: "new@example.invalid",
-    identities: []
+    identities: [{ id:"identity-new" }]
   }
 }));
 await page.route("**/auth/v1/recover", route => json(route, {}));
@@ -90,10 +92,10 @@ await page.locator("#name").fill("Test User");
 await page.locator("#email").fill("new@example.invalid");
 await page.locator("#password").fill("Password123!");
 await page.locator("#authSubmit").click();
-await page.getByText("If this email already has an account", { exact: false }).waitFor({ state:"visible", timeout:3000 });
-if ((await page.locator("#authMsg").textContent()||"").toLowerCase().includes("account created")) throw new Error("Obfuscated signup falsely reported account creation.");
-
-await page.getByRole("button",{name:"Sign in"}).click();
+await page.locator(".shell").waitFor({state:"visible",timeout:5000});
+if (!(await page.getByText("Overview",{exact:true}).isVisible())) throw new Error("New signup did not enter Ash immediately.");
+await page.locator("#signout").click();
+await page.getByRole("button",{name:"Sign in",exact:true}).waitFor({state:"visible",timeout:3000});
 if (await page.locator("#name").count()) throw new Error("Sign-in mode still shows name field.");
 
 await page.locator("#email").fill("wrong@example.invalid");

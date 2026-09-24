@@ -57,7 +57,7 @@ async function login(email,password){
     saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}));
   }catch(e){
     const raw=String(e?.message||"");
-    if(/invalid login credentials/i.test(raw))throw new Error("Email or password is incorrect. If you just created your account, try signing in again or use Forgot password.");
+    if(/invalid login credentials/i.test(raw))throw new Error("Email or password is incorrect. If this account already existed, Create account does not change its password. Use Forgot password to set a new one.");
     if(/email not confirmed/i.test(raw))throw new Error("Your account exists, but sign-in is waiting on the current authentication settings.");
     throw e;
   }
@@ -528,7 +528,7 @@ function bind(){
       }
       await Promise.all([loadProfile(),loadOps()]);
       render();
-    }catch(e){m.textContent=e.message||"Authentication failed."}
+    }catch(e){const msg=String(e?.message||"");if(authMode==="signup"&&/already registered|already exists|user_already_exists/i.test(msg)){authMode="signin";m.textContent="This email already has an Ash account. Create account does not change its password. Sign in or use Forgot password.";setTimeout(render,1300);return}m.textContent=msg||"Authentication failed."}
   });
   document.querySelectorAll("[data-view]").forEach(b=>b.onclick=async()=>{view=b.dataset.view;if(["builder","automation","activity","connections","settings","home"].includes(view))await loadOps();render()});
   document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{mode=b.dataset.mode;localStorage.setItem("ash-mode",mode);render()});
