@@ -5,6 +5,7 @@ const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
+let hero3dCleanup=null;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -137,12 +138,9 @@ function authView(){
         </div>
       </div>
 
-      <div class="heroVisual" aria-hidden="true">
-        <div class="heroHalo"></div>
-        <img class="heroPortrait heroPortraitDark" src="/images/ash-hero-dark.webp" alt="">
-        <img class="heroPortrait heroPortraitLight" src="/images/ash-hero-light.webp" alt="">
-        <div class="heroArc arcOne"></div>
-        <div class="heroArc arcTwo"></div>
+      <div class="hero3d" id="hero3d" aria-hidden="true">
+        <canvas id="ash3dCanvas"></canvas>
+        <div class="hero3dStatus"><i></i><span>LIVE 3D</span></div>
       </div>
 
       <div class="authPanel" id="authPanel">
@@ -375,6 +373,20 @@ async function connectCloudConnector(key){
 }
 function teamView(){const names=[["Chief Orchestrator","Turns goals into coordinated work."],["Project Manager","Sequences tasks and tracks delivery."],["Business Analyst","Clarifies requirements and constraints."],["Research Analyst","Finds and verifies information."],["Software Architect","Shapes systems and technical decisions."],["Frontend Engineer","Builds product interfaces."],["Backend Engineer","Builds APIs, data and services."],["Desktop Engineer","Handles local computer workflows."],["Mobile Engineer","Builds mobile experiences."],["AI Engineer","Handles models, routing and prompts."],["Security Engineer","Reviews risk and permissions."],["QA Engineer","Tests behavior and catches regressions."]];return `${topbar("Organization","ASH / SPECIALISTS")}<section class="orgIntro"><h2>One assistant in front.<br>Specialists behind it.</h2><p>Ash chooses internal roles based on the task. You never have to manage the organization manually.</p></section><section class="orgGrid">${names.map(([n,d],i)=>`<div class="card specialist"><span>${String(i+1).padStart(2,"0")}</span><div><b>${n}</b><p>${d}</p></div></div>`).join("")}</section>`}
 function settingsView(){return `${topbar("Preferences","ASH / YOU")}<section class="settingsGrid"><div class="card settings"><p class="kicker">IDENTITY</p><label>Assistant name<input id="assistantName" value="${esc(profile.assistant_name)}"></label><label>Wake word<input id="wakeWord" value="${esc(profile.wake_word)}"></label><div class="formGrid"><label>Personality<select id="personality">${["adaptive","executive","companion","builder","analyst","coach"].map(x=>`<option ${profile.personality_preset===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Verbosity<select id="verbosity">${["concise","balanced","detailed"].map(x=>`<option ${profile.behavior_config?.verbosity===x?"selected":""}>${x}</option>`).join("")}</select></label></div><div class="formGrid"><label>Proactivity<select id="proactivity">${["quiet","balanced","proactive"].map(x=>`<option ${profile.behavior_config?.proactivity===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Humor<input id="humor" type="range" min="0" max="100" value="${Number(profile.behavior_config?.humor??20)}"></label></div><label>Voice<select id="voice"><option value="cjVigY5qzO86Huf0OWal">Eric · smooth</option><option value="EXAVITQu4vr4xnSDxMaL">Sarah · confident</option></select></label><label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label><label>Custom instructions<textarea id="instructions" rows="5">${esc(profile.custom_instructions||"")}</textarea></label><button id="save" class="primary wide">Save preferences</button></div><div class="sideStack"><div class="card about"><p class="kicker">ABOUT</p><h3>Ash</h3><p>Developed by Jake Harvey.</p><p class="quiet">Ash is designed around user control, explicit permissions and verifiable action status.</p></div><div class="card devicePanel"><p class="kicker">DEVICES</p><h3>Linked computers</h3>${devices.length?devices.map(d=>`<div class="device"><span class="statusDot ${d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<120000?"on":""}"></span><div><b>${esc(d.nickname||d.device_name)}</b><small>${esc(d.platform)} · ${relative(d.last_seen_at)}</small></div></div>`).join(""):`<p class="quiet">No desktop has checked in yet.</p>`}</div><button id="signout" class="danger">Sign out</button></div></section>`}
+async function initHero3D(){
+  hero3dCleanup?.();hero3dCleanup=null;
+  const canvas=document.querySelector("#ash3dCanvas");
+  if(!canvas)return;
+  canvas.dataset.threeReady="loading";
+  try{
+    const {mountAshHero3D}=await import("./hero3d.js");
+    if(!document.body.contains(canvas))return;
+    hero3dCleanup=await mountAshHero3D(canvas);
+  }catch(e){
+    canvas.dataset.threeReady="error";
+    console.warn("Ash 3D hero unavailable",e);
+  }
+}
 function initCinematicMotion(){
   const root=document.querySelector("#cinematicAuth"),hero=document.querySelector("#authHero"),panel=document.querySelector("#authPanel");
   if(!root||!hero||!panel||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)return;
@@ -458,7 +470,7 @@ async function playVoiceBlob(blob){
     await audio.play();
   }catch{setVoiceState(false)}
 }
-function render(){applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initCinematicMotion();else initAshCore()}
+function render(){hero3dCleanup?.();hero3dCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session){initCinematicMotion();initHero3D()}else initAshCore()}
 function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelector("#meetAsh")?.addEventListener("click",()=>document.querySelector("#email")?.focus());
