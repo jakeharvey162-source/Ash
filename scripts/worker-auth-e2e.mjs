@@ -32,15 +32,13 @@ try{
   await page.locator("#email").fill(email);
   await page.locator("#password").fill(password);
   await page.locator("#authSubmit").click();
-  const signupResult = await Promise.race([
-    page.locator(".shell").waitFor({state:"visible",timeout:15000}).then(()=>({ok:true})),
-    page.locator("#authMsg").waitFor({state:"visible",timeout:15000}).then(async()=>({ok:false,message:await authMessage()}))
-  ]);
-  if(!signupResult.ok){
-    await page.waitForTimeout(1200);
-    if(await page.locator(".shell").isVisible().catch(()=>false)) signupResult.ok=true;
-  }
-  if(!signupResult.ok) throw new Error("Create account did not enter Ash: "+(signupResult.message||await authMessage()));
+  await page.waitForFunction(()=>{
+    if(document.querySelector(".shell")) return true;
+    const msg=(document.querySelector("#authMsg")?.textContent||"").trim();
+    return Boolean(msg && !/creating your account/i.test(msg));
+  },{timeout:20000}).catch(()=>{});
+  const signupOk=await page.locator(".shell").isVisible().catch(()=>false);
+  if(!signupOk) throw new Error("Create account did not enter Ash: "+(await authMessage()));
   report.checks.createAccount=true;
 
   const stored = await page.evaluate(()=>JSON.parse(localStorage.getItem("ash-session")||"null"));
