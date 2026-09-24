@@ -942,7 +942,7 @@ function queueSpeech(text){
 }
 function currentInfoIntent(message){
   const m=String(message||"");
-  return /\b(research|search|web|internet|latest|current|today|tonight|yesterday|tomorrow|date|year|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|result|results|market|stock|weather|president|prime minister|minister|mayor|governor|ceo|leader|officeholder|election|poll|policy|law|legislation|exchange rate|interest rate|roster|lineup|standings|schedule|fixture|availability|outage|status|2026)\b/i.test(m)
+  return /\b(research|search|web|internet|latest|current|today|tonight|yesterday|tomorrow|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|result|results|market|stock|weather|president|prime minister|minister|mayor|governor|ceo|leader|officeholder|election|poll|policy|law|legislation|exchange rate|interest rate|roster|lineup|standings|schedule|fixture|availability|outage|status)\b/i.test(m)
     || (/\b(who is|who's|what is|what's)\b/i.test(m)&&/\b(openai|google|microsoft|apple|meta|anthropic|tesla|nvidia|samsung|netflix|spotify|github|vercel|supabase|chatgpt|gemini|claude|android|windows|iphone)\b/i.test(m));
 }
 async function send(){

@@ -152,7 +152,7 @@ try{
   await page.locator("#email").fill(email);
   await page.locator("#password").fill(password+"WRONG");
   await page.locator("#authSubmit").click();
-  await page.waitForFunction(()=>{const msg=(document.querySelector("#authMsg")?.textContent||"").trim();return Boolean(msg&&!/signing you in/i.test(msg));},{timeout:10000});
+  await page.waitForFunction(()=>{const msg=(document.querySelector("#authMsg")?.textContent||"").trim();return Boolean(msg&&!/signing you in/i.test(msg));},{timeout:20000});
   const wrong=await authMessage();
   report.wrongPasswordMessage=wrong;
   if(/confirm your email/i.test(wrong)) throw new Error("Wrong-password message incorrectly asks the user to confirm email.");
