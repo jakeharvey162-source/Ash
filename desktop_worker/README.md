@@ -12,16 +12,32 @@ It can:
 
 It does **not** train a new foundation model. It adds an independent specialist/executor layer around Ash's model routes.
 
-## Environment
+## Link a computer
+
+The normal user flow no longer requires copying a Supabase access token.
+
+1. Sign in to Ash.
+2. Open **Preferences → Linked computers → Link a computer**.
+3. Copy the temporary pairing code.
+4. On the computer, run:
+
+```bash
+python desktop_worker/remote_worker.py --pair ABCD-2345
+```
+
+The worker exchanges the one-time code for a revocable device credential, saves it under `~/.ash/device.json`, registers the computer, then sends heartbeats automatically. The computer appears in Ash dynamically and can be tested or disconnected from the UI.
+
+Optional environment:
 
 ```
-ASH_SUPABASE_URL=
-ASH_SUPABASE_PUBLISHABLE_KEY=
-ASH_GATEWAY_URL=
-ASH_ACCESS_TOKEN=
+ASH_DEVICE_NAME=
+ASH_DEVICE_LINK_URL=
+ASH_WORKSPACE_ROOT=
 ASH_OLLAMA_URL=http://127.0.0.1:11434
 ASH_OLLAMA_MODEL=qwen3-coder
 ```
+
+Legacy `ASH_ACCESS_TOKEN` authentication remains only for backwards compatibility.
 
 Ollama is optional. The public Ash product should not require users to manually install it; a future packaged desktop runtime can manage a local model automatically.
 

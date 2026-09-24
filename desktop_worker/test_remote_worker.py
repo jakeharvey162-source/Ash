@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 from remote_worker import AshRemoteWorker
 
@@ -67,6 +69,32 @@ class RescueWorkerTests(unittest.TestCase):
         self.assertTrue(worker.finished["ok"])
         self.assertEqual(worker.finished["result"]["summary"], "offline:hello")
         self.assertEqual(worker.finished["result"]["backend"], "python_micro_core")
+
+    def test_pairing_uses_broker(self):
+        class FakeResponse:
+            status_code = 200
+            text = '{"device_id":"dev-1","device_secret":"secret-1","user_id":"user-1"}'
+            def json(self):
+                return {"device_id":"dev-1","device_secret":"secret-1","user_id":"user-1"}
+        class FakeClient:
+            def post(self, *args, **kwargs):
+                self.last = (args, kwargs)
+                return FakeResponse()
+
+        worker = AshRemoteWorker.__new__(AshRemoteWorker)
+        worker.client = FakeClient()
+        worker.link_url = "https://example.invalid/device-link"
+        worker.device_name = "Test Desktop"
+        worker.device_id = ""
+        worker.device_secret = ""
+        worker.user_id = ""
+        worker.agent = FakeAgent()
+        with tempfile.TemporaryDirectory() as td:
+            worker.config_path = Path(td) / "device.json"
+            worker.pair("ABCD-2345")
+            self.assertEqual(worker.device_id, "dev-1")
+            self.assertEqual(worker.device_secret, "secret-1")
+            self.assertTrue(worker.config_path.exists())
 
 
 if __name__ == "__main__":

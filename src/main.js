@@ -1,11 +1,11 @@
 import { CONNECTOR_CATALOG } from './connectors.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic } from './native.js';
 const C=window.JARVIS_CONFIG||{};
-const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations";
+const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations",DEVICE_LINK=BASE+"/functions/v1/ash-device-link";
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
-let heroVisualCleanup=null;
+let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -210,6 +210,7 @@ function voiceCore(){
   const labels={idle:["Ready","Waiting for your command"],listening:["Listening","Voice channel open"],thinking:["Thinking","Specialists are reasoning"],building:["Building","Generating and verifying software"],acting:["Acting","Executing a verified tool"],speaking:["Speaking","Voice synthesis active"],offline:["Local brain","No cloud required"]};
   const [title,sub]=labels[coreState]||labels.idle;
   const localReady=devices.some(d=>d.capabilities?.local_ai||d.capabilities?.builder);
+  const bars=Array.from({length:32},(_,i)=>`<i style="--bar:${i}"></i>`).join("");
   return `<section class="voiceCore card core-${coreState}" id="voiceCore" data-state="${coreState}">
     <div class="reactor ashSphere" id="ashSphere">
       <canvas id="ashCoreCanvas" width="420" height="420" aria-hidden="true"></canvas>
@@ -217,7 +218,13 @@ function voiceCore(){
       <div class="reactorCore"><span>A</span></div>
       <span class="coreOrbit orbitA"></span><span class="coreOrbit orbitB"></span><span class="coreOrbit orbitC"></span>
     </div>
-    <div class="voiceCoreCopy"><p class="kicker">ASH CORE / ${esc(coreState.toUpperCase())}</p><h2>${esc(title)}</h2><p>${esc(coreDetail||sub)}</p><div class="coreTelemetry"><span><i></i>${mode==="high"?"Multi-agent":"Adaptive"} intelligence</span><span><i></i>${localReady?"Local execution ready":"Cloud workspace"}</span><span><i></i>Confirmation guard active</span></div></div>
+    <div class="voiceCoreCopy">
+      <p class="kicker">ASH CORE / ${esc(coreState.toUpperCase())}</p>
+      <h2>${esc(title)}</h2>
+      <p>${esc(coreDetail||sub)}</p>
+      <div class="voiceWave" id="voiceWave" aria-hidden="true">${bars}</div>
+      <div class="coreTelemetry"><span><i></i>${mode==="high"?"Multi-agent":"Adaptive"} intelligence</span><span><i></i>${localReady?"Local execution ready":"Cloud workspace"}</span><span><i></i>Confirmation guard active</span></div>
+    </div>
     <div class="voiceState ${coreState}"><span></span>${esc(title)}</div>
   </section>`;
 }
@@ -373,8 +380,105 @@ async function connectCloudConnector(key){
   await loadOps(true);render();
   toast(item.name+" connector is ready for provider-specific OAuth.");
 }
+async function deviceLink(body){
+  const r=await authedFetch(DEVICE_LINK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  let d={};try{d=await r.json()}catch{}
+  if(!r.ok)throw new Error(d.error||"Device link request failed.");
+  return d;
+}
+function stopPairingWatch(){if(pairingTimer){clearInterval(pairingTimer);pairingTimer=null}}
+function startPairingWatch(){
+  stopPairingWatch();
+  const started=pairing?.createdAt||Date.now();
+  let tries=0;
+  pairingTimer=setInterval(async()=>{
+    if(!session||!pairing){stopPairingWatch();return}
+    tries++;
+    try{
+      await loadOps(true);
+      const linked=devices.find(d=>d.connection_mode==="pairing"&&d.last_seen_at&&new Date(d.last_seen_at).getTime()>=started-5000);
+      if(linked){
+        pairing=null;stopPairingWatch();render();toast((linked.nickname||linked.device_name)+" linked to Ash.");
+        return;
+      }
+    }catch{}
+    if(tries>200||Date.now()>new Date(pairing.expires_at).getTime()){pairing=null;stopPairingWatch();if(view==="settings")render()}
+  },3000);
+}
+async function createDevicePairing(){
+  try{
+    const d=await deviceLink({action:"create_pairing"});
+    pairing={...d,createdAt:Date.now()};
+    render();startPairingWatch();
+  }catch(e){toast(e.message||"Could not create pairing code.")}
+}
+async function disconnectDevice(id){
+  if(!confirm("Disconnect this computer from Ash?"))return;
+  try{await deviceLink({action:"disconnect_device",device_id:id});await loadOps(true);render();toast("Computer disconnected.")}
+  catch(e){toast(e.message||"Could not disconnect computer.")}
+}
+async function testDesktop(id){
+  try{
+    const created=await supa("/rest/v1/jarvis_remote_jobs",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({
+      user_id:session.user.id,target_device_id:id,kind:"mission",mode:"instant",
+      payload:{prompt:"Ash desktop connection test. Reply with a short confirmation that the desktop worker received and completed this test.",source:"device_test"},
+      status:"queued",requires_confirmation:false
+    })});
+    const jobId=created?.[0]?.id;if(!jobId)throw new Error("Could not create desktop test.");
+    toast("Desktop test sent.");
+    for(let i=0;i<20;i++){
+      await new Promise(r=>setTimeout(r,1200));
+      const rows=await supa("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(jobId)+"&select=status,error,result");
+      const j=rows?.[0];
+      if(j?.status==="completed"){toast("Desktop connection verified.");await loadOps(true);render();return}
+      if(j?.status==="failed")throw new Error(j.error||"Desktop test failed.");
+    }
+    toast("Desktop test is still queued. Check Activity.");
+  }catch(e){toast(e.message||"Desktop test failed.")}
+}
 function teamView(){const names=[["Chief Orchestrator","Turns goals into coordinated work."],["Project Manager","Sequences tasks and tracks delivery."],["Business Analyst","Clarifies requirements and constraints."],["Research Analyst","Finds and verifies information."],["Software Architect","Shapes systems and technical decisions."],["Frontend Engineer","Builds product interfaces."],["Backend Engineer","Builds APIs, data and services."],["Desktop Engineer","Handles local computer workflows."],["Mobile Engineer","Builds mobile experiences."],["AI Engineer","Handles models, routing and prompts."],["Security Engineer","Reviews risk and permissions."],["QA Engineer","Tests behavior and catches regressions."]];return `${topbar("Organization","ASH / SPECIALISTS")}<section class="orgIntro"><h2>One assistant in front.<br>Specialists behind it.</h2><p>Ash chooses internal roles based on the task. You never have to manage the organization manually.</p></section><section class="orgGrid">${names.map(([n,d],i)=>`<div class="card specialist"><span>${String(i+1).padStart(2,"0")}</span><div><b>${n}</b><p>${d}</p></div></div>`).join("")}</section>`}
-function settingsView(){return `${topbar("Preferences","ASH / YOU")}<section class="settingsGrid"><div class="card settings"><p class="kicker">IDENTITY</p><label>Assistant name<input id="assistantName" value="${esc(profile.assistant_name)}"></label><label>Wake word<input id="wakeWord" value="${esc(profile.wake_word)}"></label><div class="formGrid"><label>Personality<select id="personality">${["adaptive","executive","companion","builder","analyst","coach"].map(x=>`<option ${profile.personality_preset===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Verbosity<select id="verbosity">${["concise","balanced","detailed"].map(x=>`<option ${profile.behavior_config?.verbosity===x?"selected":""}>${x}</option>`).join("")}</select></label></div><div class="formGrid"><label>Proactivity<select id="proactivity">${["quiet","balanced","proactive"].map(x=>`<option ${profile.behavior_config?.proactivity===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Humor<input id="humor" type="range" min="0" max="100" value="${Number(profile.behavior_config?.humor??20)}"></label></div><label>Voice<select id="voice"><option value="cjVigY5qzO86Huf0OWal">Eric · smooth</option><option value="EXAVITQu4vr4xnSDxMaL">Sarah · confident</option></select></label><label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label><label>Custom instructions<textarea id="instructions" rows="5">${esc(profile.custom_instructions||"")}</textarea></label><button id="save" class="primary wide">Save preferences</button></div><div class="sideStack"><div class="card about"><p class="kicker">ABOUT</p><h3>Ash</h3><p>Developed by Jake Harvey.</p><p class="quiet">Ash is designed around user control, explicit permissions and verifiable action status.</p></div><div class="card devicePanel"><p class="kicker">DEVICES</p><h3>Linked computers</h3>${devices.length?devices.map(d=>`<div class="device"><span class="statusDot ${d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<120000?"on":""}"></span><div><b>${esc(d.nickname||d.device_name)}</b><small>${esc(d.platform)} · ${relative(d.last_seen_at)}</small></div></div>`).join(""):`<p class="quiet">No desktop has checked in yet.</p>`}</div><button id="signout" class="danger">Sign out</button></div></section>`}
+function settingsView(){
+  const now=Date.now();
+  const deviceRows=devices.map(d=>{
+    const online=d.last_seen_at&&now-new Date(d.last_seen_at).getTime()<90000;
+    const caps=Object.entries(d.capabilities||{}).filter(([,v])=>v===true).map(([k])=>k.replaceAll("_"," ")).slice(0,5);
+    return `<div class="linkedDevice">
+      <div class="deviceMain"><span class="statusDot ${online?"on":""}"></span><div><b>${esc(d.nickname||d.device_name)}</b><small>${esc(d.platform)} · ${online?"online now":relative(d.last_seen_at)}</small></div><span class="badge ${online?"connected":""}">${online?"Online":"Offline"}</span></div>
+      <div class="deviceCaps">${caps.map(c=>`<span>${esc(c)}</span>`).join("")||"<span>basic worker</span>"}</div>
+      <div class="deviceActions"><button class="secondary" data-test-device="${d.id}">Test connection</button><button class="dangerGhost" data-disconnect-device="${d.id}">Disconnect</button></div>
+    </div>`;
+  }).join("");
+  const pairingBox=pairing?`<div class="pairingBox">
+    <p class="kicker">PAIRING CODE</p>
+    <strong class="pairCode">${esc(pairing.code)}</strong>
+    <p>On the computer you want to link, open the Ash desktop worker and enter this code. It expires ${fmt(pairing.expires_at)}.</p>
+    <div class="pairActions"><button id="copyPairCode" class="secondary">Copy code</button><button id="newPairCode" class="textBtn">Generate another</button></div>
+    <code>python desktop_worker/remote_worker.py --pair ${esc(pairing.code)}</code>
+  </div>`:"";
+  return `${topbar("Preferences","ASH / YOU")}<section class="settingsGrid">
+    <div class="card settings">
+      <p class="kicker">IDENTITY</p>
+      <label>Assistant name<input id="assistantName" value="${esc(profile.assistant_name)}"></label>
+      <label>Wake word<input id="wakeWord" value="${esc(profile.wake_word)}"></label>
+      <div class="formGrid"><label>Personality<select id="personality">${["adaptive","executive","companion","builder","analyst","coach"].map(x=>`<option ${profile.personality_preset===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Verbosity<select id="verbosity">${["concise","balanced","detailed"].map(x=>`<option ${profile.behavior_config?.verbosity===x?"selected":""}>${x}</option>`).join("")}</select></label></div>
+      <div class="formGrid"><label>Proactivity<select id="proactivity">${["quiet","balanced","proactive"].map(x=>`<option ${profile.behavior_config?.proactivity===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Humor<input id="humor" type="range" min="0" max="100" value="${Number(profile.behavior_config?.humor??20)}"></label></div>
+      <label>Voice<select id="voice"><option value="cjVigY5qzO86Huf0OWal">Eric · smooth</option><option value="EXAVITQu4vr4xnSDxMaL">Sarah · confident</option></select></label>
+      <label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label>
+      <label>Custom instructions<textarea id="instructions" rows="5">${esc(profile.custom_instructions||"")}</textarea></label>
+      <button id="save" class="primary wide">Save preferences</button>
+    </div>
+    <div class="sideStack">
+      <div class="card about"><p class="kicker">ABOUT</p><h3>Ash</h3><p>Personal AI command center.</p><p class="quiet">Cloud reasoning, connected tools and paired local execution use explicit permissions and verifiable status.</p></div>
+      <div class="card devicePanel">
+        <div class="panelTitle"><div><p class="kicker">DEVICES</p><h3>Linked computers</h3></div><button id="refreshDevices" class="textBtn">Refresh</button></div>
+        ${deviceRows||`<div class="deviceEmpty"><p>No computer is linked yet.</p><small>Linking creates a real secure channel for local builds, offline AI and desktop tasks.</small></div>`}
+        ${pairingBox}
+        <button id="linkDesktop" class="primary wide">${pairing?"Generate new pairing code":"Link a computer"}</button>
+      </div>
+      <button id="signout" class="danger">Sign out</button>
+    </div>
+  </section>`;
+}
 function initHeroRobot(){
   heroVisualCleanup?.();heroVisualCleanup=null;
   const host=document.querySelector("#heroRobot");
@@ -434,7 +538,29 @@ function setCoreState(state,detail=""){
   const label={idle:"Ready",listening:"Listening",thinking:"Thinking",building:"Building",acting:"Acting",speaking:"Speaking",offline:"Local brain"}[coreState]||"Ready";
   if(title)title.textContent=label;if(copy)copy.textContent=coreDetail;if(stateEl){stateEl.className=`voiceState ${coreState}`;stateEl.lastChild.textContent=label}
 }
-function setVoiceState(active){speaking=active;setCoreState(active?"speaking":"idle")}
+function resetWave(){
+  cancelAnimationFrame(syntheticWaveRaf);syntheticWaveRaf=0;
+  document.querySelectorAll("#voiceWave i").forEach(b=>b.style.height="12%");
+  document.querySelector("#voiceWave")?.classList.remove("active");
+}
+function animateSyntheticWave(active){
+  cancelAnimationFrame(syntheticWaveRaf);syntheticWaveRaf=0;
+  const wave=document.querySelector("#voiceWave"),bars=[...document.querySelectorAll("#voiceWave i")];
+  if(!active||!bars.length){resetWave();return}
+  wave?.classList.add("active");
+  const start=performance.now();
+  const tick=t=>{
+    if(!speaking)return resetWave();
+    const phase=(t-start)/180;
+    bars.forEach((b,i)=>{const v=16+Math.abs(Math.sin(phase+i*.72))*54+Math.abs(Math.sin(phase*.43+i))*18;b.style.height=Math.min(92,v)+"%"});
+    syntheticWaveRaf=requestAnimationFrame(tick);
+  };
+  syntheticWaveRaf=requestAnimationFrame(tick);
+}
+function setVoiceState(active,synthetic=false){
+  speaking=active;setCoreState(active?"speaking":"idle");
+  if(synthetic)animateSyntheticWave(active);else if(!active)resetWave();
+}
 function initAshCore(){
   const canvas=document.querySelector("#ashCoreCanvas");if(!canvas||canvas.dataset.ready)return;canvas.dataset.ready="1";
   const lowPower=(navigator.deviceMemory&&navigator.deviceMemory<=4)||(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4);const mobile=window.innerWidth<650;const size=mobile?280:360;canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d",{alpha:true}),count=mobile?(lowPower?42:58):(lowPower?72:104);
@@ -454,8 +580,7 @@ function initAshCore(){
       const x3=p.r*Math.cos(p.a),y3=p.z,z3=p.r*Math.sin(p.a);
       const persp=1/(1.55-z3*.5),rad=142*pulse*persp;
       const x=cx+x3*rad,y=cy+y3*rad;
-      const alpha=.18+.72*((z3+1)/2);
-      const size=.75+2.2*((z3+1)/2);
+      const alpha=.18+.72*((z3+1)/2),size=.75+2.2*((z3+1)/2);
       ctx.globalAlpha=alpha;ctx.fillStyle=accent;ctx.beginPath();ctx.arc(x,y,size,0,Math.PI*2);ctx.fill();
     });
     ctx.globalAlpha=.22;ctx.strokeStyle=accent;ctx.lineWidth=1.2;
@@ -464,32 +589,37 @@ function initAshCore(){
   };requestAnimationFrame(draw);
 }
 function animateWaveFromAnalyser(analyser,audio){
-  const bars=[...document.querySelectorAll("#voiceWave i")];
+  const wave=document.querySelector("#voiceWave"),bars=[...document.querySelectorAll("#voiceWave i")];
   if(!bars.length)return;
+  wave?.classList.add("active");
   const data=new Uint8Array(analyser.frequencyBinCount);
   const tick=()=>{
     analyser.getByteFrequencyData(data);
     bars.forEach((b,i)=>{
-      const idx=Math.floor(i/data.length*analyser.frequencyBinCount);
-      const v=Math.max(8,Math.min(100,(data[idx]||0)/255*100));
+      const idx=Math.min(data.length-1,Math.floor(i/(bars.length-1||1)*(data.length-1)));
+      const v=Math.max(10,Math.min(100,(data[idx]||0)/255*100));
       b.style.height=v+"%";
     });
-    if(!audio.paused&&!audio.ended)requestAnimationFrame(tick);
+    if(!audio.paused&&!audio.ended)requestAnimationFrame(tick);else resetWave();
   };
   tick();
 }
 async function playVoiceBlob(blob){
-  const audio=new Audio(URL.createObjectURL(blob));setVoiceState(true);
+  const url=URL.createObjectURL(blob),audio=new Audio(url);setVoiceState(true,false);
   try{
     const AC=window.AudioContext||window.webkitAudioContext;
     if(AC){
       const ctx=new AC(),src=ctx.createMediaElementSource(audio),an=ctx.createAnalyser();
-      an.fftSize=128;an.smoothingTimeConstant=.78;src.connect(an);an.connect(ctx.destination);
+      an.fftSize=128;an.smoothingTimeConstant=.74;src.connect(an);an.connect(ctx.destination);
       audio.addEventListener("play",()=>animateWaveFromAnalyser(an,audio),{once:true});
-      audio.addEventListener("ended",()=>{setVoiceState(false);ctx.close().catch(()=>{});URL.revokeObjectURL(audio.src)},{once:true});
-    }else audio.addEventListener("ended",()=>setVoiceState(false),{once:true});
+      audio.addEventListener("ended",()=>{setVoiceState(false);ctx.close().catch(()=>{});URL.revokeObjectURL(url)},{once:true});
+      audio.addEventListener("error",()=>{setVoiceState(false);ctx.close().catch(()=>{});URL.revokeObjectURL(url)},{once:true});
+    }else{
+      audio.addEventListener("play",()=>animateSyntheticWave(true),{once:true});
+      audio.addEventListener("ended",()=>{setVoiceState(false);URL.revokeObjectURL(url)},{once:true});
+    }
     await audio.play();
-  }catch{setVoiceState(false)}
+  }catch{setVoiceState(false);URL.revokeObjectURL(url)}
 }
 function render(){heroVisualCleanup?.();heroVisualCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session){initCinematicMotion();initHeroRobot()}else initAshCore()}
 function bind(){
@@ -536,7 +666,13 @@ function bind(){
   document.querySelector("#prompt")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
   document.querySelector("#mic")?.addEventListener("click",listen);
   document.querySelector("#save")?.addEventListener("click",saveProfile);
-  document.querySelector("#signout")?.addEventListener("click",()=>{clearSession();authMode="signin";render()});
+  document.querySelector("#linkDesktop")?.addEventListener("click",createDevicePairing);
+  document.querySelector("#newPairCode")?.addEventListener("click",createDevicePairing);
+  document.querySelector("#copyPairCode")?.addEventListener("click",async()=>{if(pairing?.code){await copyText(pairing.code);toast("Pairing code copied.")}});
+  document.querySelector("#refreshDevices")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Device status refreshed.")});
+  document.querySelectorAll("[data-test-device]").forEach(b=>b.onclick=()=>testDesktop(b.dataset.testDevice));
+  document.querySelectorAll("[data-disconnect-device]").forEach(b=>b.onclick=()=>disconnectDevice(b.dataset.disconnectDevice));
+  document.querySelector("#signout")?.addEventListener("click",()=>{stopPairingWatch();pairing=null;clearSession();authMode="signin";render()});
   document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Activity refreshed")});
   document.querySelector("#runHealth")?.addEventListener("click",()=>probeHealth(true));
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
@@ -577,7 +713,7 @@ async function speak(text){
   if("speechSynthesis"in window){
     speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(text.slice(0,1600));
-    u.onstart=()=>setVoiceState(true);
+    u.onstart=()=>setVoiceState(true,true);
     u.onend=()=>setVoiceState(false);
     u.onerror=()=>setVoiceState(false);
     speechSynthesis.speak(u);

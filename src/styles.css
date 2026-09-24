@@ -707,3 +707,42 @@ html,body{overflow-y:auto!important}
   #ashHeroRobot{filter:contrast(1.055) saturate(1.02) brightness(1.015)}
 }
 @media(max-width:430px){.heroRobotDepth{width:min(51vw,216px)}}
+
+
+/* ----- Live voice waveform ----- */
+.voiceWave{
+  height:42px;display:flex;align-items:center;gap:3px;margin:10px 0 8px;max-width:390px;
+  opacity:.58;transition:opacity .2s ease;
+}
+.voiceWave.active{opacity:1}
+.voiceWave i{
+  display:block;flex:1;min-width:2px;max-width:6px;height:12%;border-radius:999px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 88%,white),var(--accent));
+  box-shadow:0 0 10px color-mix(in srgb,var(--accent) 22%,transparent);
+  transition:height 55ms linear;
+}
+.core-speaking .voiceWave{filter:saturate(1.18) brightness(1.12)}
+
+/* ----- Real desktop pairing ----- */
+.devicePanel{display:grid;gap:12px}
+.deviceEmpty{padding:15px;border:1px dashed var(--line);border-radius:14px;background:color-mix(in srgb,var(--surface-solid) 70%,transparent)}
+.deviceEmpty p{margin:0 0 4px;font-weight:750}.deviceEmpty small{color:var(--muted);line-height:1.45}
+.linkedDevice{padding:12px;border:1px solid var(--line);border-radius:15px;background:color-mix(in srgb,var(--surface-solid) 82%,transparent)}
+.deviceMain{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px}
+.deviceMain b,.deviceMain small{display:block}.deviceMain small{color:var(--muted);font-size:.68rem;margin-top:2px}
+.deviceCaps{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0}
+.deviceCaps span{padding:4px 7px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:.59rem;text-transform:capitalize}
+.deviceActions{display:flex;gap:7px}
+.deviceActions button{flex:1}
+.dangerGhost{border:1px solid color-mix(in srgb,#ef4444 34%,var(--line));background:transparent;color:#ef7777}
+.pairingBox{padding:15px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:16px;background:color-mix(in srgb,var(--accent) 5%,var(--surface-solid))}
+.pairCode{display:block;font-size:1.75rem;letter-spacing:.16em;margin:4px 0 8px}
+.pairingBox p:not(.kicker){color:var(--muted);font-size:.72rem;line-height:1.5}
+.pairActions{display:flex;gap:8px;margin:10px 0}
+.pairingBox code{display:block;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.18);font-size:.65rem;overflow:auto;white-space:nowrap}
+:root[data-theme="light"] .pairingBox code{background:rgba(0,0,0,.035)}
+@media(max-width:650px){
+  .voiceWave{height:34px;margin-left:auto;margin-right:auto}
+  .pairCode{font-size:1.45rem}
+  .deviceActions{flex-direction:column}
+}
