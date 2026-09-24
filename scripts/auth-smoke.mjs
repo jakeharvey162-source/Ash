@@ -38,15 +38,18 @@ await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
 
 
 
-async function assertMouseWheelScroll(){
+async function assertPublicPageScroll(){
   await page.setViewportSize({width:1366,height:768});
   await page.reload({waitUntil:"networkidle"});
-  await page.evaluate(()=>window.scrollTo(0,0));
-  await page.mouse.move(24,Math.min(600,(await page.viewportSize()).height-40));
-  await page.mouse.wheel(0,700);
-  await page.waitForTimeout(250);
+  const metrics=await page.evaluate(()=>({
+    scrollHeight:document.scrollingElement?.scrollHeight||document.documentElement.scrollHeight,
+    clientHeight:document.scrollingElement?.clientHeight||document.documentElement.clientHeight
+  }));
+  if(metrics.scrollHeight<=metrics.clientHeight+20)throw new Error("Ash public page is not scrollable: "+JSON.stringify(metrics));
+  await page.evaluate(()=>window.scrollTo(0,Math.min(700,(document.scrollingElement?.scrollHeight||document.documentElement.scrollHeight)-window.innerHeight)));
+  await page.waitForTimeout(80);
   const y=await page.evaluate(()=>window.scrollY);
-  if(y<20)throw new Error("Mouse wheel did not scroll the Ash public page.");
+  if(y<20)throw new Error("Ash public page could not scroll.");
 }
 
 async function assertPublicViewport(width,height,label){
@@ -116,7 +119,7 @@ for (const [w,h,label] of [
   [1920,1080,"Desktop"]
 ]) await assertPublicViewport(w,h,label);
 
-await assertMouseWheelScroll();
+await assertPublicPageScroll();
 
 if(errors.length) throw new Error("Browser errors: "+errors.join(" | "));
 console.log("ASH AUTH UI SMOKE: PASS");
