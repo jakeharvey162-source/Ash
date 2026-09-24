@@ -11,7 +11,7 @@ class WakeMatch:
 class WakeMatcher:
     def __init__(self, wake_word: str | None = None, fuzzy_threshold: float = 0.78) -> None:
         self.wake_word = (wake_word or os.environ.get("ASH_WAKE_WORD", "Ash")).strip()
-        aliases = os.environ.get("ASH_WAKE_ALIASES", "hey ash,okay ash,ok ash")
+        aliases = os.environ.get("ASH_WAKE_ALIASES", "hey ash,okay ash,ok ash,arise")
         self.aliases = [self.wake_word] + [x.strip() for x in aliases.split(",") if x.strip()]
         self.fuzzy_threshold = fuzzy_threshold
 
