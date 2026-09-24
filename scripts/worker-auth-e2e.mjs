@@ -128,7 +128,7 @@ try{
     let d={};try{d=await r.json()}catch{}
     return {ok:r.ok,status:r.status,data:d};
   });
-  report.liveResearch={status:research.status,grounded:research.data?.grounded,sources:Array.isArray(research.data?.sources)?research.data.sources.length:0,researched_at:research.data?.researched_at||null,error:research.data?.error||null};
+  report.liveResearch={status:research.status,grounded:research.data?.grounded,sources:Array.isArray(research.data?.sources)?research.data.sources.length:0,researched_at:research.data?.researched_at||null,error:research.data?.error||null,research_status:research.data?.research_status||null};
   if(!research.ok||research.data?.grounded!==true||!Array.isArray(research.data?.sources)||research.data.sources.length<1)throw new Error("Live research did not return grounded current sources: "+JSON.stringify(report.liveResearch));
   report.checks.liveResearchGrounded=true;
 
