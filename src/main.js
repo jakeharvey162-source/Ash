@@ -4,7 +4,7 @@ const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations";
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
-let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false;
+let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready";
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -111,14 +111,18 @@ function authView(){
 }
 function stat(label,value,meta){return `<div class="stat card"><span>${label}</span><strong>${value}</strong><small>${meta}</small></div>`}
 function voiceCore(){
-  const bars=Array.from({length:36},(_,i)=>`<i style="--i:${i}"></i>`).join("");
-  return `<section class="voiceCore card" id="voiceCore">
-    <div class="reactor">
+  const labels={idle:["Ready","Waiting for your command"],listening:["Listening","Voice channel open"],thinking:["Thinking","Specialists are reasoning"],building:["Building","Generating and verifying software"],acting:["Acting","Executing a verified tool"],speaking:["Speaking","Voice synthesis active"],offline:["Local brain","No cloud required"]};
+  const [title,sub]=labels[coreState]||labels.idle;
+  const localReady=devices.some(d=>d.capabilities?.local_ai||d.capabilities?.builder);
+  return `<section class="voiceCore card core-${coreState}" id="voiceCore" data-state="${coreState}">
+    <div class="reactor ashSphere" id="ashSphere">
+      <canvas id="ashCoreCanvas" width="420" height="420" aria-hidden="true"></canvas>
       <div class="reactorRing ring1"></div><div class="reactorRing ring2"></div><div class="reactorRing ring3"></div>
       <div class="reactorCore"><span>A</span></div>
+      <span class="coreOrbit orbitA"></span><span class="coreOrbit orbitB"></span><span class="coreOrbit orbitC"></span>
     </div>
-    <div class="voiceCoreCopy"><p class="kicker">ASH VOICE CORE</p><h2>${speaking?"Ash is speaking":"Ready when you are"}</h2><p>${speaking?"Voice activity is visualized live from the audio signal.":"Speak or type a command. Ash can reason, research, build and act through one interface."}</p><div class="voiceWave" id="voiceWave">${bars}</div></div>
-    <div class="voiceState ${speaking?"speaking":""}"><span></span>${speaking?"Speaking":"Listening ready"}</div>
+    <div class="voiceCoreCopy"><p class="kicker">ASH CORE / ${esc(coreState.toUpperCase())}</p><h2>${esc(title)}</h2><p>${esc(coreDetail||sub)}</p><div class="coreTelemetry"><span><i></i>${mode==="high"?"Multi-agent":"Adaptive"} intelligence</span><span><i></i>${localReady?"Local execution ready":"Cloud workspace"}</span><span><i></i>Confirmation guard active</span></div></div>
+    <div class="voiceState ${coreState}"><span></span>${esc(title)}</div>
   </section>`;
 }
 function actionCard(m,i){if(!m.action)return"";const a=m.action;const summary=a.tool==="gmail.send"?`Send email to ${esc(a.args?.to||"recipient")} · ${esc(a.args?.subject||"No subject")}`:a.tool==="calendar.create"?`Create event · ${esc(a.args?.event?.summary||a.args?.summary||"Calendar event")}`:"Confirm action";return `<div class="confirmCard"><div><small>CONFIRM ACTION</small><b>${summary}</b></div><button data-confirm-index="${i}" class="primary">Confirm</button></div>`}
@@ -148,6 +152,7 @@ async function createBuildJob(){
   if(!prompt)return toast("Describe the website or app you want Ash to build.");
   const target=document.querySelector("#buildDevice")?.value||null;
   const buildMode=document.querySelector("#buildMode")?.value||"high";
+  setCoreState("building","Project queued for the Ash Builder. Waiting for desktop execution.");
   await supa("/rest/v1/jarvis_remote_jobs",{
     method:"POST",
     headers:{Prefer:"return=representation"},
@@ -215,12 +220,49 @@ function initCinematicMotion(){
   };
   root.onpointerleave=()=>{root.style.setProperty("--mx","0px");root.style.setProperty("--my","0px");panel.style.transform=""};
 }
-function setVoiceState(active){
-  speaking=active;
-  const core=document.querySelector("#voiceCore"),state=core?.querySelector(".voiceState"),title=core?.querySelector(".voiceCoreCopy h2");
-  if(core)core.classList.toggle("isSpeaking",active);
-  if(state){state.classList.toggle("speaking",active);state.lastChild.textContent=active?"Speaking":"Listening ready"}
-  if(title)title.textContent=active?"Ash is speaking":"Ready when you are";
+function setCoreState(state,detail=""){
+  coreState=state||"idle";coreDetail=detail||({
+    idle:"Systems ready. Speak or type a command.",
+    listening:"I'm listening.",
+    thinking:"Reasoning across the best available specialists.",
+    building:"Writing files, running builds and repairing failures.",
+    acting:"Executing the authorized action and checking the result.",
+    speaking:"Voice output synchronized to the Ash Core.",
+    offline:"Running from the private on-device Python brain."
+  }[coreState]||"Systems ready.");
+  const core=document.querySelector("#voiceCore");
+  if(core){core.dataset.state=coreState;core.className=`voiceCore card core-${coreState}`;}
+  const title=core?.querySelector(".voiceCoreCopy h2"),copy=core?.querySelector(".voiceCoreCopy p:not(.kicker)"),stateEl=core?.querySelector(".voiceState");
+  const label={idle:"Ready",listening:"Listening",thinking:"Thinking",building:"Building",acting:"Acting",speaking:"Speaking",offline:"Local brain"}[coreState]||"Ready";
+  if(title)title.textContent=label;if(copy)copy.textContent=coreDetail;if(stateEl){stateEl.className=`voiceState ${coreState}`;stateEl.lastChild.textContent=label}
+}
+function setVoiceState(active){speaking=active;setCoreState(active?"speaking":"idle")}
+function initAshCore(){
+  const canvas=document.querySelector("#ashCoreCanvas");if(!canvas||canvas.dataset.ready)return;canvas.dataset.ready="1";
+  const ctx=canvas.getContext("2d"),count=window.innerWidth<650?86:150;
+  const pts=Array.from({length:count},(_,i)=>{const a=Math.random()*Math.PI*2,z=Math.random()*2-1,r=Math.sqrt(1-z*z);return{a,z,r,seed:Math.random()*20,i}});
+  let frame=0,last=0;
+  const draw=t=>{
+    if(!canvas.isConnected)return;
+    if(t-last<(window.innerWidth<650?32:16)){requestAnimationFrame(draw);return}last=t;frame++;
+    const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,state=coreState;
+    const speed={idle:.0018,listening:.0035,thinking:.0055,building:.0048,acting:.006,speaking:.004,offline:.0024}[state]||.002;
+    const pulse=1+Math.sin(t*(state==="speaking"?.008:.003))*({idle:.02,listening:.05,thinking:.08,building:.07,acting:.09,speaking:.12,offline:.035}[state]||.03);
+    ctx.clearRect(0,0,w,h);
+    const accent=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#f59e0b";
+    pts.forEach(p=>{
+      p.a+=speed*(.65+(p.i%7)/10);
+      const x3=p.r*Math.cos(p.a),y3=p.z,z3=p.r*Math.sin(p.a);
+      const persp=1/(1.55-z3*.5),rad=142*pulse*persp;
+      const x=cx+x3*rad,y=cy+y3*rad;
+      const alpha=.18+.72*((z3+1)/2);
+      const size=.75+2.2*((z3+1)/2);
+      ctx.globalAlpha=alpha;ctx.fillStyle=accent;ctx.beginPath();ctx.arc(x,y,size,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=.22;ctx.strokeStyle=accent;ctx.lineWidth=1.2;
+    for(let i=0;i<3;i++){ctx.beginPath();ctx.ellipse(cx,cy,118+i*18,48+i*8,t*.00015+i*.7,0,Math.PI*2);ctx.stroke()}
+    ctx.globalAlpha=1;requestAnimationFrame(draw);
+  };requestAnimationFrame(draw);
 }
 function animateWaveFromAnalyser(analyser,audio){
   const bars=[...document.querySelectorAll("#voiceWave i")];
@@ -250,7 +292,7 @@ async function playVoiceBlob(blob){
     await audio.play();
   }catch{setVoiceState(false)}
 }
-function render(){applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initCinematicMotion()}
+function render(){applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initCinematicMotion();else initAshCore()}
 function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelector("#meetAsh")?.addEventListener("click",()=>document.querySelector("#email")?.focus());
@@ -314,8 +356,8 @@ async function confirmPendingAction(index){
     m.action=null; render(); toast("Action completed");
   }catch(e){toast(e.message||"Action failed")}
 }
-async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";messages.push({role:"user",content:message});sending=true;render();try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Ash is unavailable.");messages.push({role:"assistant",content:d.answer||"Done.",action:d.pending_action||null});speak(d.answer)}catch(e){messages.push({role:"assistant",content:e.message})}finally{sending=false;render()}}
-function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
+async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";messages.push({role:"user",content:message});sending=true;setCoreState("thinking","Working the request across Ash intelligence.");render();try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Ash is unavailable.");messages.push({role:"assistant",content:d.answer||"Done.",action:d.pending_action||null});speak(d.answer)}catch(e){messages.push({role:"assistant",content:e.message})}finally{sending=false;if(!speaking)setCoreState("idle");render()}}
+function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}setCoreState("listening");const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
 async function speak(text){
   if(!text||profile.voice_config?.auto_speak===false)return;
   try{
