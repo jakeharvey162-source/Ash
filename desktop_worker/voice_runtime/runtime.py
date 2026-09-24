@@ -29,6 +29,7 @@ class AshVoiceRuntime:
             cloud=bool(self.agent.gateway_url and self.agent.access_token),
             claude_cli=self.agent.claude_cli_enabled,
             local_model=self.agent.ollama_model,
+            offline_brain=self.agent.offline.status().__dict__,
         )
         emit("warming_up")
         self.listener.preload()
