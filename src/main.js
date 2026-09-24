@@ -4,7 +4,7 @@ const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations";
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
-let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null;
+let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -219,7 +219,72 @@ async function createBuildJob(){
 function automationView(){
   return `${topbar("Automations","ASH / WORKFLOWS")}<section class="automationGrid"><div class="card createAuto"><p class="kicker">NEW AUTOMATION</p><h2>Put recurring work on autopilot.</h2><p class="quiet">Ash schedules the job in the cloud and dispatches it to your linked desktop when it is time.</p><label>Name<input id="autoName" placeholder="Morning project brief"></label><label>What should Ash do?<textarea id="autoPrompt" rows="4" placeholder="Review my active project and prepare the next actions."></textarea></label><div class="formGrid"><label>Schedule<select id="autoType"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every N minutes</option><option value="once">Once</option></select></label><label id="whenLabel">First run<input id="autoWhen" type="datetime-local"></label></div><label id="intervalWrap" class="hidden">Repeat every<input id="autoInterval" type="number" min="1" value="60"> minutes</label><div class="formGrid"><label>Mode<select id="autoMode"><option>instant</option><option selected>medium</option><option>high</option></select></label><label>Desktop<select id="autoDevice"><option value="">Any linked desktop</option>${devices.map(d=>`<option value="${d.id}">${esc(d.nickname||d.device_name)}</option>`).join("")}</select></label></div><label class="check"><input id="autoConfirm" type="checkbox"> Ask before consequential actions</label><button id="createAuto" class="primary wide">Create automation</button></div><div class="card autoList"><div class="panelTitle"><div><p class="kicker">SCHEDULED</p><h3>Your automations</h3></div><span class="count">${automations.length}</span></div>${automations.length?automations.map(a=>`<div class="autoItem"><div><span class="statusDot ${a.enabled?"on":""}"></span><b>${esc(a.name)}</b><p>${esc(a.description||a.action_config?.prompt||"")}</p><small>${esc(a.trigger_type)} · next ${fmt(a.next_run_at)}</small></div><button data-toggle-auto="${a.id}" data-enabled="${a.enabled}">${a.enabled?"Pause":"Resume"}</button></div>`).join(""):`<div class="emptyState"><p>No automations yet.</p><small>Create one on the left.</small></div>`}</div></section>`;
 }
-function activityView(){return `${topbar("Activity","ASH / OPERATIONS")}<section class="card activityPanel"><div class="activityHeader"><div><p class="kicker">EXECUTION LOG</p><h2>What Ash has been doing</h2></div><button id="refreshOps" class="secondary">Refresh</button></div>${jobs.length?jobs.map(j=>`<div class="activityRow"><div class="activityMark ${j.status}">${j.status==="completed"?"✓":j.status==="failed"?"!":"→"}</div><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><p>${esc(j.error||j.result?.summary||"")}</p><small>${fmt(j.created_at)} · ${esc(j.status)}</small></div><span class="badge">${esc(j.mode)}</span></div>`).join(""):`<div class="emptyState"><p>No activity yet.</p><small>Scheduled and remote tasks will appear here.</small></div>`}</section>`}
+
+function liveDesktop(){
+  return devices.find(d=>d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<120000)||null;
+}
+function healthBadge(label,value){
+  const ok=["online","ready","healthy","active"].includes(value),warn=["degraded","unknown"].includes(value);
+  return `<div class="healthItem"><span class="healthDot ${ok?"ok":warn?"warn":"bad"}"></span><div><b>${esc(label)}</b><small>${esc(value)}</small></div></div>`;
+}
+function healthPanel(){
+  return `<section class="card healthPanel"><div class="activityHeader"><div><p class="kicker">SELF DIAGNOSTICS</p><h2>Ash system health</h2></div><button id="runHealth" class="secondary">Run diagnostics</button></div><div class="healthGrid">${healthBadge("AI gateway",healthState.gateway)}${healthBadge("Session",healthState.session)}${healthBadge("Desktop",healthState.desktop)}${healthBadge("Local AI",healthState.local)}${healthBadge("Voice",healthState.voice)}${healthBadge("PWA",healthState.pwa)}</div><p class="quiet healthNote">${healthState.checkedAt?"Last checked "+relative(healthState.checkedAt):"Run diagnostics to verify every execution path."}</p></section>`;
+}
+async function probeHealth(showToast=false){
+  const next={...healthState,checkedAt:new Date().toISOString()};
+  try{
+    await ensureFreshSession();
+    const auth=await authedFetch(BASE+"/auth/v1/user",{method:"GET"});
+    next.session=auth.ok?"healthy":"degraded";
+  }catch{next.session="offline"}
+  try{
+    const g=await authedFetch(GATEWAY+"?action=health",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    const d=await g.json().catch(()=>({}));
+    next.gateway=g.ok&&d.ok?(d.cloud_ready?"online":"degraded"):"offline";
+    next.voice=g.ok&&d.voice_ready?"ready":"degraded";
+  }catch{next.gateway="offline";next.voice="unknown"}
+  const desk=liveDesktop();
+  next.desktop=desk?"online":"offline";
+  next.local=desk&&(desk.capabilities?.offline_brain||desk.capabilities?.local_ai)?"ready":"unavailable";
+  try{
+    const reg=await navigator.serviceWorker?.getRegistration?.();
+    next.pwa=reg?"active":"degraded";
+  }catch{next.pwa="unknown"}
+  healthState=next;
+  if(document.querySelector(".healthPanel"))render();
+  if(showToast)toast(next.gateway==="online"?"Diagnostics complete":"Diagnostics found a degraded path");
+  return next;
+}
+async function rescueThroughDesktop(message){
+  const desk=liveDesktop();
+  if(!desk||!(desk.capabilities?.offline_brain||desk.capabilities?.local_ai))throw new Error("No local Ash desktop is online.");
+  setCoreState("offline","Cloud unavailable. Rescue Mode handed this request to your local Ash brain.");
+  const created=await supa("/rest/v1/jarvis_remote_jobs",{
+    method:"POST",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({
+      user_id:session.user.id,
+      target_device_id:desk.id,
+      kind:"chat_fallback",
+      mode,
+      payload:{prompt:message,rescue:true,source:"chat"},
+      status:"queued",
+      requires_confirmation:false
+    })
+  });
+  const id=created?.[0]?.id;
+  if(!id)throw new Error("Could not queue Rescue Mode.");
+  for(let attempt=0;attempt<30;attempt++){
+    await new Promise(r=>setTimeout(r,1200));
+    const rows=await supa("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(id)+"&select=id,status,result,error");
+    const job=rows?.[0];
+    if(job?.status==="completed")return job.result?.summary||"Local Ash completed the request.";
+    if(job?.status==="failed")throw new Error(job.error||"Local Ash could not complete the request.");
+  }
+  throw new Error("Rescue Mode is still running on your desktop. Check Activity for the result.");
+}
+
+function activityView(){return `${topbar("Activity","ASH / OPERATIONS")}${healthPanel()}<section class="card activityPanel"><div class="activityHeader"><div><p class="kicker">EXECUTION LOG</p><h2>What Ash has been doing</h2></div><button id="refreshOps" class="secondary">Refresh</button></div>${jobs.length?jobs.map(j=>`<div class="activityRow"><div class="activityMark ${j.status}">${j.status==="completed"?"✓":j.status==="failed"?"!":"→"}</div><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><p>${esc(j.error||j.result?.summary||"")}</p><small>${fmt(j.created_at)} · ${esc(j.status)}</small></div><span class="badge">${esc(j.mode)}</span></div>`).join(""):`<div class="emptyState"><p>No activity yet.</p><small>Scheduled and remote tasks will appear here.</small></div>`}</section>`}
 function integrationFor(key){return integrations.find(i=>i.integration_key===key)||null}
 function connectorStatus(c){if(c.builtIn&&c.native)return nativeState.available?"Available on Android":"Web fallback";const row=integrationFor(c.key);return row?.status||"Not connected"}
 function connectionsView(){
@@ -376,6 +441,7 @@ function bind(){
   document.querySelector("#save")?.addEventListener("click",saveProfile);
   document.querySelector("#signout")?.addEventListener("click",()=>{clearSession();render()});
   document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Activity refreshed")});
+  document.querySelector("#runHealth")?.addEventListener("click",()=>probeHealth(true));
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
   document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
@@ -403,7 +469,7 @@ async function confirmPendingAction(index){
     m.action=null; render(); toast("Action completed");
   }catch(e){toast(e.message||"Action failed")}
 }
-async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);sending=true;setSendBusy(true);setCoreState("thinking","Working the request across Ash intelligence.");try{const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash is unavailable.");const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null};messages.push(reply);appendChatMessage(reply,messages.length-1);speak(d.answer)}catch(e){const reply={role:"assistant",content:e.message};messages.push(reply);appendChatMessage(reply,messages.length-1)}finally{sending=false;setSendBusy(false);if(!speaking)setCoreState("idle")}}
+async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);sending=true;setSendBusy(true);setCoreState("thinking","Working the request across Ash intelligence.");try{const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null};messages.push(reply);appendChatMessage(reply,messages.length-1);speak(d.answer)}catch(e){let text=e.message||"Ash cloud is unavailable.";try{const local=await rescueThroughDesktop(message);text="Rescue Mode · "+local}catch(rescueError){if(!/session expired/i.test(text))text+=" Local rescue is unavailable too: "+(rescueError.message||"desktop offline.")}const reply={role:"assistant",content:text};messages.push(reply);appendChatMessage(reply,messages.length-1)}finally{sending=false;setSendBusy(false);if(!speaking)setCoreState("idle")}}
 function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}setCoreState("listening");const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
 async function speak(text){
   if(!text||profile.voice_config?.auto_speak===false)return;
@@ -433,7 +499,7 @@ render();
   }
 
   if(session){
-    try{await Promise.all([loadProfile(),loadOps()])}catch{}
+    try{await Promise.all([loadProfile(),loadOps()]);await probeHealth(false)}catch{}
   }
 
   render();
