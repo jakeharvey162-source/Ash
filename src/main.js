@@ -4,7 +4,7 @@ const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations";
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
-let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready";
+let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
@@ -14,8 +14,9 @@ async function login(email,password){saveSession(await supa("/auth/v1/token?gran
 async function signup(email,password,name){const d=await supa("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});if(d.access_token)saveSession(d);return d}
 async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
 async function loadProfile(){if(!session)return;const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id)+"&select=*");if(r?.[0])profile={...profile,...r[0],behavior_config:{...profile.behavior_config,...(r[0].behavior_config||{})},voice_config:{...profile.voice_config,...(r[0].voice_config||{})}};mode=profile.preferred_mode||mode}
-async function loadOps(){
+async function loadOps(force=false){
   if(!session)return;
+  if(!force&&Date.now()-opsLoadedAt<15000)return;
   const q="?user_id=eq."+encodeURIComponent(session.user.id)+"&order=created_at.desc&limit=20";
   const [a,j,d,i]=await Promise.all([
     supa("/rest/v1/jarvis_automations"+q).catch(()=>[]),
@@ -23,7 +24,7 @@ async function loadOps(){
     supa("/rest/v1/jarvis_devices"+q).catch(()=>[]),
     supa("/rest/v1/jarvis_integrations"+q).catch(()=>[])
   ]);
-  automations=a||[];jobs=j||[];devices=d||[];integrations=i||[];
+  automations=a||[];jobs=j||[];devices=d||[];integrations=i||[];opsLoadedAt=Date.now();
 }
 async function saveProfile(){
   const body={assistant_name:document.querySelector("#assistantName").value.trim()||"Ash",wake_word:document.querySelector("#wakeWord").value.trim()||"Ash",personality_preset:document.querySelector("#personality").value,preferred_mode:mode,custom_instructions:document.querySelector("#instructions").value.trim(),behavior_config:{...profile.behavior_config,verbosity:document.querySelector("#verbosity").value,proactivity:document.querySelector("#proactivity").value,humor:Number(document.querySelector("#humor").value)},voice_config:{...profile.voice_config,auto_speak:document.querySelector("#speak").checked,voice_id:document.querySelector("#voice").value}};
@@ -140,6 +141,10 @@ function home(){
   </section>
   <section class="split"><div class="card panel"><div class="panelTitle"><div><p class="kicker">UP NEXT</p><h3>Automations</h3></div><button data-view="automation" class="textBtn">Manage</button></div>${automations.length?automations.slice(0,3).map(a=>automationRow(a)).join(""):`<p class="quiet">No automations yet. Create one when you want Ash to work on a schedule.</p>`}</div><div class="card panel"><div class="panelTitle"><div><p class="kicker">RECENT</p><h3>Activity</h3></div><button data-view="activity" class="textBtn">View all</button></div>${jobs.length?jobs.slice(0,4).map(jobRow).join(""):`<p class="quiet">Nothing queued yet.</p>`}</div></section>`;
 }
+function scrollFeed(smooth=true){const feed=document.querySelector(".feed");if(feed)requestAnimationFrame(()=>feed.scrollTo({top:feed.scrollHeight,behavior:smooth?"smooth":"auto"}))}
+function chatArticle(m,i){return `<article class="${m.role==="user"?"mine":"ash"}"><small>${m.role==="user"?"YOU":esc(profile.assistant_name).toUpperCase()}</small><p>${esc(m.content)}</p>${actionCard(m,i)}</article>`}
+function appendChatMessage(m,i){const feed=document.querySelector(".feed");if(!feed)return false;const empty=feed.querySelector(".emptyPrompt");if(empty)empty.remove();feed.insertAdjacentHTML("beforeend",chatArticle(m,i));while(feed.children.length>12)feed.firstElementChild?.remove();scrollFeed(true);return true}
+function setSendBusy(active){const b=document.querySelector("#send");if(b){b.disabled=active;b.textContent=active?"…":"↗"}}
 function automationRow(a){return `<div class="lineItem"><span class="statusDot ${a.enabled?"on":""}"></span><div><b>${esc(a.name)}</b><small>${esc(a.trigger_type)} · next ${fmt(a.next_run_at)}</small></div><span class="badge">${a.enabled?"Active":"Paused"}</span></div>`}
 function jobRow(j){return `<div class="lineItem"><span class="jobIcon">${j.status==="completed"?"✓":j.status==="failed"?"!":"→"}</span><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><small>${esc(j.status)} · ${relative(j.created_at)}</small></div><span class="badge ${j.status}">${esc(j.mode)}</span></div>`}
 function builderView(){
@@ -239,12 +244,13 @@ function setCoreState(state,detail=""){
 function setVoiceState(active){speaking=active;setCoreState(active?"speaking":"idle")}
 function initAshCore(){
   const canvas=document.querySelector("#ashCoreCanvas");if(!canvas||canvas.dataset.ready)return;canvas.dataset.ready="1";
-  const ctx=canvas.getContext("2d"),count=window.innerWidth<650?86:150;
+  const lowPower=(navigator.deviceMemory&&navigator.deviceMemory<=4)||(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4);const mobile=window.innerWidth<650;const size=mobile?280:360;canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d",{alpha:true}),count=mobile?(lowPower?42:58):(lowPower?72:104);
   const pts=Array.from({length:count},(_,i)=>{const a=Math.random()*Math.PI*2,z=Math.random()*2-1,r=Math.sqrt(1-z*z);return{a,z,r,seed:Math.random()*20,i}});
   let frame=0,last=0;
   const draw=t=>{
     if(!canvas.isConnected)return;
-    if(t-last<(window.innerWidth<650?32:16)){requestAnimationFrame(draw);return}last=t;frame++;
+    if(document.hidden){requestAnimationFrame(draw);return}
+    const minFrame=mobile||lowPower?33:22;if(t-last<minFrame){requestAnimationFrame(draw);return}last=t;frame++;
     const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,state=coreState;
     const speed={idle:.0018,listening:.0035,thinking:.0055,building:.0048,acting:.006,speaking:.004,offline:.0024}[state]||.002;
     const pulse=1+Math.sin(t*(state==="speaking"?.008:.003))*({idle:.02,listening:.05,thinking:.08,building:.07,acting:.09,speaking:.12,offline:.035}[state]||.03);
@@ -328,7 +334,7 @@ function bind(){
   document.querySelector("#mic")?.addEventListener("click",listen);
   document.querySelector("#save")?.addEventListener("click",saveProfile);
   document.querySelector("#signout")?.addEventListener("click",()=>{session=null;localStorage.removeItem("ash-session");render()});
-  document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps();render();toast("Activity refreshed")});
+  document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Activity refreshed")});
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
   document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
@@ -343,9 +349,9 @@ async function createAutomation(){
   const config=type==="interval"?{repeat_minutes:Number(document.querySelector("#autoInterval").value||60)}:{};
   const action={prompt,mode:document.querySelector("#autoMode").value,target_device_id:document.querySelector("#autoDevice").value||null,kind:"mission",requires_confirmation:document.querySelector("#autoConfirm").checked};
   await supa("/rest/v1/jarvis_automations",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({user_id:session.user.id,name,description:prompt,trigger_type:type,trigger_config:config,action_config:action,enabled:true,next_run_at:new Date(when).toISOString()})});
-  await loadOps();render();toast("Automation created");
+  await loadOps(true);render();toast("Automation created");
 }
-async function toggleAutomation(id,enabled){await supa("/rest/v1/jarvis_automations?id=eq."+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({enabled:!enabled,updated_at:new Date().toISOString()})});await loadOps();render()}
+async function toggleAutomation(id,enabled){await supa("/rest/v1/jarvis_automations?id=eq."+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({enabled:!enabled,updated_at:new Date().toISOString()})});await loadOps(true);render()}
 async function confirmPendingAction(index){
   const m=messages[index]; if(!m?.action)return;
   const tool=m.action.tool,args=m.action.args||{};
@@ -356,7 +362,7 @@ async function confirmPendingAction(index){
     m.action=null; render(); toast("Action completed");
   }catch(e){toast(e.message||"Action failed")}
 }
-async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";messages.push({role:"user",content:message});sending=true;setCoreState("thinking","Working the request across Ash intelligence.");render();try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Ash is unavailable.");messages.push({role:"assistant",content:d.answer||"Done.",action:d.pending_action||null});speak(d.answer)}catch(e){messages.push({role:"assistant",content:e.message})}finally{sending=false;if(!speaking)setCoreState("idle");render()}}
+async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);sending=true;setSendBusy(true);setCoreState("thinking","Working the request across Ash intelligence.");try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Ash is unavailable.");const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null};messages.push(reply);appendChatMessage(reply,messages.length-1);speak(d.answer)}catch(e){const reply={role:"assistant",content:e.message};messages.push(reply);appendChatMessage(reply,messages.length-1)}finally{sending=false;setSendBusy(false);if(!speaking)setCoreState("idle")}}
 function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}setCoreState("listening");const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
 async function speak(text){
   if(!text||profile.voice_config?.auto_speak===false)return;
