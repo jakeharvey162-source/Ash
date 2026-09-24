@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import fs from "node:fs";
 
 const url = process.env.ASH_LIVE_URL || "https://meet-ash.jakeharvey162.workers.dev/";
+// Gateway v14 research route is verified below with a real grounded query.
 const stamp = Date.now();
 const email = "ash-e2e-worker-" + stamp + "@example.com";
 const password = "AshE2E!" + stamp + "#x9";
