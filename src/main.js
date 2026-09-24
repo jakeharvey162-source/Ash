@@ -33,16 +33,16 @@ async function saveProfile(){
 function fmt(t){if(!t)return"—";const d=new Date(t);return d.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
 function relative(t){if(!t)return"never";const s=Math.round((Date.now()-new Date(t).getTime())/1000);if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago"}
 function toast(t){const n=document.createElement("div");n.className="toast";n.textContent=t;document.body.append(n);setTimeout(()=>n.remove(),2200)}
-function icon(name){const m={home:"⌂",chat:"↗",automation:"↻",activity:"◌",connections:"◎",settings:"⚙",team:"◇"};return m[name]||"•"}
+function icon(name){const m={home:"⌂",chat:"↗",builder:"⌘",automation:"↻",activity:"◌",connections:"◎",settings:"⚙",team:"◇"};return m[name]||"•"}
 function applyTheme(){document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme==="light"?"light":"dark"}
 function toggleTheme(){theme=theme==="dark"?"light":"dark";localStorage.setItem("ash-theme",theme);applyTheme();render()}
 function nav(){
-  const items=[["home","Overview"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["team","Organization"],["settings","Preferences"]];
+  const items=[["home","Overview"],["builder","Builder"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["team","Organization"],["settings","Preferences"]];
   return `<aside class="rail"><div class="wordmark"><span class="mark">A</span><b>${esc(profile.assistant_name)}</b></div><div class="navgroup">${items.map(([k,l])=>`<button class="navitem ${view===k?"selected":""}" data-view="${k}"><span>${icon(k)}</span><em>${l}</em></button>`).join("")}</div><div class="railfoot"><span class="presence"></span><div><b>Cloud connected</b><small>${devices.length?devices.length+" device"+(devices.length>1?"s":""):"No desktop linked"}</small></div></div></aside>`;
 }
 function topbar(title,sub=""){return `<header class="topbar"><div><p class="kicker">${esc(sub)}</p><h1>${esc(title)}</h1></div><div class="topactions"><div class="modeSwitch">${["instant","medium","high"].map(x=>`<button data-mode="${x}" class="${mode===x?"active":""}">${x}</button>`).join("")}</div><button id="themeToggle" class="themeToggle" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button><span class="live"><i></i>Online</span></div></header>`}
 function googleMark(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.24-.2-1.8H12v3.27h5.52c-.11.81-.71 2.03-2.05 2.85l-.02.11 2.98 2.31.21.02c1.95-1.8 3.07-4.45 3.07-7.76Z"/><path fill="#34A853" d="M12 22c2.78 0 5.11-.92 6.81-2.5l-3.24-2.51c-.87.59-2.02 1-3.57 1-2.73 0-5.05-1.8-5.88-4.29l-.1.01-3.1 2.4-.04.1C4.57 19.57 8.03 22 12 22Z"/><path fill="#FBBC05" d="M6.12 13.7A6.02 6.02 0 0 1 5.8 12c0-.59.11-1.16.3-1.7l-.01-.12-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.05 4.46l3.07-2.76Z"/><path fill="#EA4335" d="M12 6.01c1.94 0 3.25.84 4 1.53l2.88-2.81C17.11 3.08 14.78 2 12 2 8.03 2 4.57 4.43 2.88 7.79l3.22 2.51C6.95 7.81 9.27 6.01 12 6.01Z"/></svg>'}
-function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav">${[["home","Home"],["automation","Automate"],["connections","Connect"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
+function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav">${[["home","Home"],["builder","Build"],["automation","Automate"],["connections","Connect"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
 function authView(){
   const signupMode=authMode==="signup";
   return `<section class="cinematicAuth" id="cinematicAuth">
@@ -131,13 +131,40 @@ function home(){
   <section class="stats">${stat("Automations",activeAuto,activeAuto?"active schedules":"none running")}${stat("Work queue",activeJobs,activeJobs?"in progress":"clear")}${stat("Desktop",liveDevices?"Online":"Offline",devices.length?devices.length+" linked":"not linked")}</section>
   <section class="commandPanel card">
     <div class="commandHead"><div><p class="kicker">COMMAND</p><h2>What should Ash handle?</h2></div><span class="modeLabel">${mode}</span></div>
-    <div class="feed">${messages.length?messages.slice(-8).map((m,i)=>`<article class="${m.role==="user"?"mine":"ash"}"><small>${m.role==="user"?"YOU":esc(profile.assistant_name).toUpperCase()}</small><p>${esc(m.content)}</p>${actionCard(m,Math.max(0,messages.length-8)+i)}</article>`).join(""):`<div class="emptyPrompt"><p>Ask a question, plan work, build software, or automate a workflow.</p><div class="suggestions"><button data-suggest="Summarize what I need to focus on today">Plan my day</button><button data-suggest="Help me structure a software project from idea to deployment">Build a project</button><button data-view="automation">Create automation</button></div></div>`}</div>
+    <div class="feed">${messages.length?messages.slice(-8).map((m,i)=>`<article class="${m.role==="user"?"mine":"ash"}"><small>${m.role==="user"?"YOU":esc(profile.assistant_name).toUpperCase()}</small><p>${esc(m.content)}</p>${actionCard(m,Math.max(0,messages.length-8)+i)}</article>`).join(""):`<div class="emptyPrompt"><p>Ask a question, plan work, build software, or automate a workflow.</p><div class="suggestions"><button data-suggest="Summarize what I need to focus on today">Plan my day</button><button data-view="builder">Build a project</button><button data-view="automation">Create automation</button></div></div>`}</div>
     <div class="composer"><button id="mic" aria-label="Voice input">◉</button><textarea id="prompt" placeholder="Ask Ash anything…" rows="1"></textarea><button id="send" class="send" aria-label="Send">${sending?"…":"↗"}</button></div>
   </section>
   <section class="split"><div class="card panel"><div class="panelTitle"><div><p class="kicker">UP NEXT</p><h3>Automations</h3></div><button data-view="automation" class="textBtn">Manage</button></div>${automations.length?automations.slice(0,3).map(a=>automationRow(a)).join(""):`<p class="quiet">No automations yet. Create one when you want Ash to work on a schedule.</p>`}</div><div class="card panel"><div class="panelTitle"><div><p class="kicker">RECENT</p><h3>Activity</h3></div><button data-view="activity" class="textBtn">View all</button></div>${jobs.length?jobs.slice(0,4).map(jobRow).join(""):`<p class="quiet">Nothing queued yet.</p>`}</div></section>`;
 }
 function automationRow(a){return `<div class="lineItem"><span class="statusDot ${a.enabled?"on":""}"></span><div><b>${esc(a.name)}</b><small>${esc(a.trigger_type)} · next ${fmt(a.next_run_at)}</small></div><span class="badge">${a.enabled?"Active":"Paused"}</span></div>`}
 function jobRow(j){return `<div class="lineItem"><span class="jobIcon">${j.status==="completed"?"✓":j.status==="failed"?"!":"→"}</span><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><small>${esc(j.status)} · ${relative(j.created_at)}</small></div><span class="badge ${j.status}">${esc(j.mode)}</span></div>`}
+function builderView(){
+  const builderJobs=jobs.filter(j=>j.kind==="builder"||j.payload?.builder===true);
+  const liveDevices=devices.filter(d=>d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<120000);
+  return `${topbar("Builder","ASH / SOFTWARE STUDIO")}<section class="automationGrid"><div class="card createAuto"><p class="kicker">BUILD WITH ASH</p><h2>Describe it. Ash builds and verifies it.</h2><p class="quiet">Ash plans the product, writes the project files, installs dependencies, runs the production build, repairs build failures and reports the real evidence from the linked desktop.</p><label>What should Ash build?<textarea id="buildPrompt" rows="8" placeholder="Build a premium responsive website for a Johannesburg coffee shop with menu, booking form, admin-ready structure, SEO and dark/light mode."></textarea></label><div class="formGrid"><label>Mode<select id="buildMode"><option value="high" selected>High · multi-step build</option><option value="medium">Medium · faster</option></select></label><label>Desktop<select id="buildDevice"><option value="">Any linked desktop</option>${devices.map(d=>`<option value="${d.id}">${esc(d.nickname||d.device_name)}${d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<120000?" · online":""}</option>`).join("")}</select></label></div><button id="createBuild" class="primary wide">Build project</button><p class="quiet builderHint">${liveDevices.length?"Desktop builder online. Ash can execute builds now.":"No active desktop builder detected. You can queue the build; it will start when the Ash desktop worker connects."}</p></div><div class="card autoList"><div class="panelTitle"><div><p class="kicker">BUILD QUEUE</p><h3>Software projects</h3></div><span class="count">${builderJobs.length}</span></div>${builderJobs.length?builderJobs.map(j=>`<div class="autoItem"><div><span class="statusDot ${j.status==="completed"?"on":""}"></span><b>${esc((j.payload?.prompt||"Software build").slice(0,90))}</b><p>${esc(j.error||j.result?.summary||"Waiting for the desktop builder.")}</p><small>${esc(j.status)} · ${fmt(j.created_at)}${j.result?.workspace?" · workspace ready":""}</small></div><span class="badge ${j.status}">${esc(j.mode||"high")}</span></div>`).join(""):`<div class="emptyState"><p>No builds yet.</p><small>Describe a website or app and Ash will create the first one here.</small></div>`}</div></section>`;
+}
+async function createBuildJob(){
+  const prompt=document.querySelector("#buildPrompt")?.value.trim();
+  if(!prompt)return toast("Describe the website or app you want Ash to build.");
+  const target=document.querySelector("#buildDevice")?.value||null;
+  const buildMode=document.querySelector("#buildMode")?.value||"high";
+  await supa("/rest/v1/jarvis_remote_jobs",{
+    method:"POST",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({
+      user_id:session.user.id,
+      target_device_id:target,
+      kind:"builder",
+      mode:buildMode,
+      payload:{prompt,builder:true,source:"user",executor:"desktop"},
+      status:"queued",
+      requires_confirmation:false
+    })
+  });
+  await loadOps();
+  render();
+  toast(devices.length?"Build queued for Ash desktop.":"Build queued. Link the Ash desktop worker to start it.");
+}
 function automationView(){
   return `${topbar("Automations","ASH / WORKFLOWS")}<section class="automationGrid"><div class="card createAuto"><p class="kicker">NEW AUTOMATION</p><h2>Put recurring work on autopilot.</h2><p class="quiet">Ash schedules the job in the cloud and dispatches it to your linked desktop when it is time.</p><label>Name<input id="autoName" placeholder="Morning project brief"></label><label>What should Ash do?<textarea id="autoPrompt" rows="4" placeholder="Review my active project and prepare the next actions."></textarea></label><div class="formGrid"><label>Schedule<select id="autoType"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every N minutes</option><option value="once">Once</option></select></label><label id="whenLabel">First run<input id="autoWhen" type="datetime-local"></label></div><label id="intervalWrap" class="hidden">Repeat every<input id="autoInterval" type="number" min="1" value="60"> minutes</label><div class="formGrid"><label>Mode<select id="autoMode"><option>instant</option><option selected>medium</option><option>high</option></select></label><label>Desktop<select id="autoDevice"><option value="">Any linked desktop</option>${devices.map(d=>`<option value="${d.id}">${esc(d.nickname||d.device_name)}</option>`).join("")}</select></label></div><label class="check"><input id="autoConfirm" type="checkbox"> Ask before consequential actions</label><button id="createAuto" class="primary wide">Create automation</button></div><div class="card autoList"><div class="panelTitle"><div><p class="kicker">SCHEDULED</p><h3>Your automations</h3></div><span class="count">${automations.length}</span></div>${automations.length?automations.map(a=>`<div class="autoItem"><div><span class="statusDot ${a.enabled?"on":""}"></span><b>${esc(a.name)}</b><p>${esc(a.description||a.action_config?.prompt||"")}</p><small>${esc(a.trigger_type)} · next ${fmt(a.next_run_at)}</small></div><button data-toggle-auto="${a.id}" data-enabled="${a.enabled}">${a.enabled?"Pause":"Resume"}</button></div>`).join(""):`<div class="emptyState"><p>No automations yet.</p><small>Create one on the left.</small></div>`}</div></section>`;
 }
@@ -223,7 +250,7 @@ async function playVoiceBlob(blob){
     await audio.play();
   }catch{setVoiceState(false)}
 }
-function render(){applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initCinematicMotion()}
+function render(){applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initCinematicMotion()}
 function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelector("#meetAsh")?.addEventListener("click",()=>document.querySelector("#email")?.focus());
@@ -252,7 +279,7 @@ function bind(){
       render();
     }catch(e){m.textContent=e.message||"Authentication failed."}
   });
-  document.querySelectorAll("[data-view]").forEach(b=>b.onclick=async()=>{view=b.dataset.view;if(["automation","activity","connections","settings","home"].includes(view))await loadOps();render()});
+  document.querySelectorAll("[data-view]").forEach(b=>b.onclick=async()=>{view=b.dataset.view;if(["builder","automation","activity","connections","settings","home"].includes(view))await loadOps();render()});
   document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{mode=b.dataset.mode;localStorage.setItem("ash-mode",mode);render()});
   document.querySelectorAll("[data-suggest]").forEach(b=>b.onclick=()=>{document.querySelector("#prompt").value=b.dataset.suggest;document.querySelector("#prompt").focus()});  document.querySelector("#send")?.addEventListener("click",send);
   document.querySelector("#prompt")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
@@ -262,6 +289,7 @@ function bind(){
   document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps();render();toast("Activity refreshed")});
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
+  document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
   document.querySelectorAll("[data-toggle-auto]").forEach(b=>b.onclick=()=>toggleAutomation(b.dataset.toggleAuto,b.dataset.enabled==="true"));
   document.querySelectorAll("[data-native-test]").forEach(b=>b.onclick=()=>testNativeConnector(b.dataset.nativeTest));
   document.querySelectorAll("[data-confirm-index]").forEach(b=>b.onclick=()=>confirmPendingAction(Number(b.dataset.confirmIndex)));
