@@ -1,0 +1,167 @@
+/* Ash responsive/performance layer */
+
+:root{
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+}
+
+html,body,#app{min-height:100%}
+body{min-height:100dvh;overflow-x:hidden}
+img{max-width:100%;height:auto}
+button,input,select,textarea{touch-action:manipulation}
+button{min-height:40px}
+
+.workspace{
+  min-height:100dvh;
+  padding-left:max(32px,var(--safe-left));
+  padding-right:max(32px,var(--safe-right));
+}
+
+.authShell,.cinematicAuth{min-height:100dvh}
+.authTop{padding-left:max(4vw,var(--safe-left));padding-right:max(4vw,var(--safe-right))}
+.authHero{min-height:calc(100dvh - 86px);padding-bottom:max(34px,var(--safe-bottom))}
+.mobileNav{padding-bottom:max(7px,var(--safe-bottom))}
+
+.heroPortrait,
+.heroHalo,
+.heroArc,
+.reactorRing,
+.voiceWave i{
+  will-change:transform;
+}
+
+.feed,
+.autoList,
+.activityPanel,
+.connectorGrid,
+.orgGrid{
+  content-visibility:auto;
+  contain-intrinsic-size:1px 600px;
+}
+
+@media (min-width:1600px){
+  .shell{grid-template-columns:248px minmax(0,1fr)}
+  .workspace{max-width:1600px;padding-left:42px;padding-right:42px}
+  .voiceCore{min-height:220px}
+}
+
+@media (max-width:1180px){
+  .workspace{padding-left:22px;padding-right:22px}
+}
+
+@media (max-width:900px){
+  .workspace{
+    padding-top:max(20px,var(--safe-top));
+    padding-left:max(14px,var(--safe-left));
+    padding-right:max(14px,var(--safe-right));
+    padding-bottom:calc(102px + var(--safe-bottom));
+  }
+
+  .mobileNav{
+    bottom:max(12px,var(--safe-bottom));
+    width:min(calc(100% - 20px - var(--safe-left) - var(--safe-right)),520px);
+  }
+
+  .topbar{gap:12px}
+  .topactions{flex-wrap:wrap;justify-content:flex-end}
+  .modeSwitch{max-width:100%;overflow-x:auto}
+
+  .voiceCore{gap:18px}
+  .commandPanel,.panel,.card{border-radius:18px}
+}
+
+@media (max-width:650px){
+  body{
+    background:
+      linear-gradient(180deg,var(--bg2),var(--bg));
+  }
+
+  .workspace{
+    padding-top:max(12px,var(--safe-top));
+    padding-left:max(10px,var(--safe-left));
+    padding-right:max(10px,var(--safe-right));
+    padding-bottom:calc(92px + var(--safe-bottom));
+  }
+
+  .topbar{align-items:flex-start}
+  .topactions{gap:6px}
+  .modeSwitch button{min-width:58px}
+  .themeToggle{min-width:40px;justify-content:center}
+  .mobileNav{
+    width:calc(100% - 16px - var(--safe-left) - var(--safe-right));
+    border-radius:15px;
+  }
+
+  .authTop{
+    padding-left:max(16px,var(--safe-left));
+    padding-right:max(16px,var(--safe-right));
+    padding-top:var(--safe-top);
+    height:calc(72px + var(--safe-top));
+  }
+
+  .authHero{
+    min-height:calc(100dvh - 72px - var(--safe-top));
+    padding-left:max(14px,var(--safe-left));
+    padding-right:max(14px,var(--safe-right));
+    padding-bottom:max(24px,var(--safe-bottom));
+  }
+
+  .heroCopy h1{font-size:clamp(2.75rem,15vw,3.45rem)}
+  .heroLead{max-width:100%}
+  .heroVisual{opacity:.28}
+  .heroPortrait{height:min(50dvh,520px)}
+  .heroHalo{width:min(42dvh,360px);height:min(42dvh,360px)}
+
+  .authPanel{
+    padding:18px;
+    border-radius:20px;
+    backdrop-filter:blur(14px) saturate(1.05);
+  }
+
+  .voiceCore{padding:16px}
+  .reactor{width:108px;height:108px}
+  .voiceWave{height:46px}
+  .feed{min-height:250px}
+  .composer textarea{max-height:38dvh}
+
+  .connector,.specialist,.stat{min-width:0}
+}
+
+@media (max-width:390px){
+  .modeSwitch button{padding-left:5px;padding-right:5px;min-width:50px;font-size:.68rem}
+  .heroCopy h1{font-size:2.65rem}
+  .heroCapabilities{grid-template-columns:1fr 1fr}
+  .authPanel{padding:16px}
+  .mobileNav small{font-size:.58rem}
+}
+
+@media (hover:none) and (pointer:coarse){
+  button:hover{transform:none}
+  .authPanel,.heroVisual{transform:none!important}
+}
+
+@media (max-width:650px), (prefers-reduced-motion:reduce){
+  .heroPortrait,
+  .heroHalo,
+  .heroArc,
+  .reactorRing{
+    animation-duration:12s;
+  }
+}
+
+@media (max-width:650px) and (prefers-reduced-motion:no-preference){
+  .heroArc{display:none}
+  .heroVisual:after{filter:blur(22px)}
+  .card,.mobileNav,.authPanel{box-shadow:none}
+  .mobileNav{backdrop-filter:blur(12px)}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .heroPortrait,
+  .heroHalo,
+  .heroArc,
+  .reactorRing,
+  .voiceWave i{will-change:auto}
+}
