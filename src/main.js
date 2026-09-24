@@ -307,7 +307,12 @@ async function submitVoiceCommand(command){
   box.value=text;box.dispatchEvent(new Event("input",{bubbles:true}));haptic().catch(()=>{});send();
 }
 async function talkNow(){
-  if(!handsFreeEnabled())return listenOnce();
+  if(!handsFreeEnabled()){
+    if(nativeState.available){
+      await persistHandsFree(true,{requestPermission:true});
+      if(!handsFreeEnabled())return;
+    }else return listenOnce();
+  }
   handsFreePaused=false;handsFreeProcessing=false;handsFreeWakeUntil=Date.now()+15000;handsFreeConversationUntil=Date.now()+15000;
   await startHandsFreeListening(true).catch(e=>toast(e.message||"Could not start the microphone."));
   setCoreState("listening","Talk now — no wake word needed.");
@@ -1072,8 +1077,8 @@ async function playVoiceBlobQueued(blob,generation,onStarted){
       if(AC){
         ctx=new AC();const src=ctx.createMediaElementSource(audio),an=ctx.createAnalyser();
         an.fftSize=128;an.smoothingTimeConstant=.74;src.connect(an);an.connect(ctx.destination);
-        audio.addEventListener("play",()=>animateWaveFromAnalyser(an,audio),{once:true});
-      }else audio.addEventListener("play",()=>animateSyntheticWave(true),{once:true});
+        audio.addEventListener("play",()=>{animateWaveFromAnalyser(an,audio);onStarted?.(true)},{once:true});
+      }else audio.addEventListener("play",()=>{animateSyntheticWave(true);onStarted?.(true)},{once:true});
       audio.addEventListener("ended",cleanup,{once:true});
       audio.addEventListener("error",cleanup,{once:true});
       await audio.play();
