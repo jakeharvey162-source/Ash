@@ -10,7 +10,7 @@ on:
       - "index.html"
       - "package.json"
       - "vercel.json"
-      - "scripts/live-audit.mjs"
+      - "scripts/*.mjs"
       - ".github/workflows/live-audit.yml"
 
 permissions:
