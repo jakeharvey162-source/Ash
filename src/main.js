@@ -97,10 +97,6 @@ function authView(){
         <span><i></i>Action confirmations</span>
         <span><i></i>Cross-device sync</span>
       </div>
-      <div class="authHero3d" id="authHero3d" aria-hidden="true">
-        <div class="authHeroGlow"></div>
-        <img src="/images/ash-ai-human.webp" alt="" class="authHeroImage">
-      </div>
     </div>
     <div class="authCard premiumCard">
       <div class="authCardHead">
@@ -210,31 +206,7 @@ function initAuthMotion(){
     document.querySelector("#email")?.focus();
   });
 }
-function initHeroMotion(){
-  const hero=document.querySelector("#authHero3d");
-  if(!hero||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)return;
-  const img=hero.querySelector(".authHeroImage");
-  let raf=0;
-  hero.addEventListener("pointermove",e=>{
-    const r=hero.getBoundingClientRect();
-    const x=(e.clientX-r.left)/r.width-.5;
-    const y=(e.clientY-r.top)/r.height-.5;
-    if(raf)cancelAnimationFrame(raf);
-    raf=requestAnimationFrame(()=>{
-      hero.style.setProperty("--hero-rx",(-y*7).toFixed(2)+"deg");
-      hero.style.setProperty("--hero-ry",(x*9).toFixed(2)+"deg");
-      hero.style.setProperty("--hero-x",(x*10).toFixed(2)+"px");
-      hero.style.setProperty("--hero-y",(y*7).toFixed(2)+"px");
-    });
-  },{passive:true});
-  hero.addEventListener("pointerleave",()=>{
-    hero.style.setProperty("--hero-rx","0deg");
-    hero.style.setProperty("--hero-ry","0deg");
-    hero.style.setProperty("--hero-x","0px");
-    hero.style.setProperty("--hero-y","0px");
-  });
-}
-function render(){document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(!session)initHeroMotion()}
+function render(){document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind()}
 function bind(){
   document.querySelector("#googleSignin")?.addEventListener("click",signInWithGoogle);
   document.querySelectorAll("[data-auth-mode]").forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;render()});
