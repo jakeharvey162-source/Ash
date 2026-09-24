@@ -124,11 +124,11 @@ if (!(await page.locator("#voiceWave").isVisible())) throw new Error("Ash voice 
 if (!(await page.locator("[data-voice-toggle]").first().isVisible())) throw new Error("Voice toggle missing.");
 if (!(await page.locator("#researchMode").isVisible())) throw new Error("Research control missing.");
 if (!(await page.locator("[data-handsfree-toggle]").first().isVisible())) throw new Error("Hands-free toggle missing.");
-await page.getByRole("button", { name: /You$/ }).click();
+await page.getByRole("button", { name: /Preferences$/ }).click();
 await page.waitForTimeout(100);
 if((await page.locator("#voice option").count())<8) throw new Error("Expected at least 8 selectable voices.");
 if(!(await page.locator("#previewVoice").isVisible())) throw new Error("Voice preview control missing.");
-await page.getByRole("button", { name: /Home$/ }).click();
+await page.getByRole("button", { name: /Overview$/ }).click();
 await page.waitForTimeout(100);
 const handsFreeToggle=page.locator("[data-handsfree-toggle]").first();
 if((await handsFreeToggle.getAttribute("aria-pressed"))!=="false") throw new Error("Hands-free should default off.");
