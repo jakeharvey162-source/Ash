@@ -12,6 +12,7 @@ async function supa(path,opt={}){const r=await fetch(BASE+path,{...opt,headers:{
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token,user:s.user};localStorage.setItem("ash-session",JSON.stringify(session))}
 async function login(email,password){saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}))}
 async function signup(email,password,name){const d=await supa("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});if(d.access_token)saveSession(d);return d}
+async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
 async function loadProfile(){if(!session)return;const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id)+"&select=*");if(r?.[0])profile={...profile,...r[0],behavior_config:{...profile.behavior_config,...(r[0].behavior_config||{})},voice_config:{...profile.voice_config,...(r[0].voice_config||{})}};mode=profile.preferred_mode||mode}
 async function loadOps(){
   if(!session)return;
@@ -100,7 +101,7 @@ function authView(){
         <label class="authField"><span>Email</span><div class="inputShell"><span>✉</span><input id="email" type="email" autocomplete="email" placeholder="you@domain.com"></div></label>
         <label class="authField"><span>Password</span><div class="inputShell"><span>▣</span><input id="password" type="password" autocomplete="${signupMode?"new-password":"current-password"}" placeholder="••••••••"></div></label>
 
-        <div class="authMeta"><label><input id="rememberMe" type="checkbox" checked> Remember me</label><button type="button" class="linkButton">Forgot password?</button></div>
+        <div class="authMeta"><label><input id="rememberMe" type="checkbox" checked> Remember me</label><button type="button" id="forgotPassword" class="linkButton">Forgot password?</button></div>
         <button id="authSubmit" class="authSubmit">${signupMode?"Create account":"Sign in"} <span>→</span></button>
         <p id="authMsg" class="formMsg"></p>
         <p class="authFine">Private by design. Sensitive actions stay confirmation-based.</p>
@@ -227,6 +228,13 @@ function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelector("#meetAsh")?.addEventListener("click",()=>document.querySelector("#email")?.focus());
   document.querySelector("#watchVoice")?.addEventListener("click",()=>{toast("Sign in and ask Ash anything to hear the live voice visualization.")});
+  document.querySelector("#forgotPassword")?.addEventListener("click",async()=>{
+    const email=document.querySelector("#email")?.value.trim();
+    const m=document.querySelector("#authMsg");
+    if(!email){m.textContent="Enter your email first.";document.querySelector("#email")?.focus();return}
+    try{await recoverPassword(email);m.textContent="Password reset email sent.";toast("Check your inbox for the reset link.")}
+    catch(e){m.textContent=e.message||"Could not send reset email."}
+  });
   document.querySelectorAll("[data-auth-mode]").forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;render()});
   document.querySelector("#authSubmit")?.addEventListener("click",async()=>{
     const m=document.querySelector("#authMsg"),email=document.querySelector("#email")?.value.trim(),password=document.querySelector("#password")?.value||"";
@@ -280,7 +288,21 @@ async function confirmPendingAction(index){
 }
 async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";messages.push({role:"user",content:message});sending=true;render();try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Ash is unavailable.");messages.push({role:"assistant",content:d.answer||"Done.",action:d.pending_action||null});speak(d.answer)}catch(e){messages.push({role:"assistant",content:e.message})}finally{sending=false;render()}}
 function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
-async function speak(text){if(!text||profile.voice_config?.auto_speak===false)return;try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"speech",text:text.slice(0,5000),voice_id:profile.voice_config?.voice_id})});if(r.ok&&r.headers.get("content-type")?.includes("audio")){new Audio(URL.createObjectURL(await r.blob())).play();return}}catch{}if("speechSynthesis"in window){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(text.slice(0,1600)))}}
+async function speak(text){
+  if(!text||profile.voice_config?.auto_speak===false)return;
+  try{
+    const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"speech",text:text.slice(0,5000),voice_id:profile.voice_config?.voice_id})});
+    if(r.ok&&r.headers.get("content-type")?.includes("audio")){await playVoiceBlob(await r.blob());return}
+  }catch{}
+  if("speechSynthesis"in window){
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text.slice(0,1600));
+    u.onstart=()=>setVoiceState(true);
+    u.onend=()=>setVoiceState(false);
+    u.onerror=()=>setVoiceState(false);
+    speechSynthesis.speak(u);
+  }
+}
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 applyTheme();
 render();
