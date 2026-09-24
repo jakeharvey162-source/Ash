@@ -125,7 +125,7 @@ function wakeAliases(){
   const configured=Array.isArray(profile.voice_config?.wake_aliases)?profile.voice_config.wake_aliases:[];
   return [...new Set([wake,"hey "+wake,"okay "+wake,"ok "+wake,"arise",...configured].map(x=>String(x||"").trim().toLowerCase()).filter(Boolean))].sort((a,b)=>b.length-a.length);
 }
-function escapeRegExp(value){return String(value).replace(/[|\\{}()[\]^$+*?.-]/g,"\\function toggleVoiceOutput(){persistVoiceOutput(!voiceEnabled())}")}
+function escapeRegExp(value){return String(value).replace(/[|\\{}()[\]^$+*?.-]/g,"\\$&")}
 function extractWakeCommand(text){
   const raw=String(text||"").trim();
   for(const phrase of wakeAliases()){
@@ -1110,6 +1110,7 @@ async function runVoiceQueue(generation,onFirstStarted){
     if(!announced)announce(false);
     voiceQueueRunning=false;
     if(generation===voiceGeneration&&!voiceQueue.length)setVoiceState(false);
+    if(handsFreeEnabled()&&handsFreeProcessing)resumeHandsFreeAfterTurn().catch(()=>{});
   }
 }
 function queueSpeech(text){
@@ -1217,4 +1218,5 @@ render();
   }
 
   render();
+  if(session&&handsFreeEnabled()){handsFreePaused=false;setTimeout(()=>startHandsFreeListening(false).catch(()=>{}),250)}
 })();
