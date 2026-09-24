@@ -74,6 +74,20 @@ async function inspect(viewport, name) {
     const b = getComputedStyle(document.body);
     return { background: b.background, color: b.color, fontFamily: b.fontFamily };
   }).catch(()=>null);
+
+  if(name==="desktop"){
+    try{
+      await page.locator("#googleSignin").click();
+      await page.waitForTimeout(900);
+      report[name].googleClick={
+        finalUrl:page.url(),
+        authMessage:await page.locator("#authMsg").innerText().catch(()=>null),
+        bodyPreview:(await page.locator("body").innerText().catch(()=>"")).slice(0,700)
+      };
+    }catch(e){
+      report[name].googleClick={error:String(e)};
+    }
+  }
   await page.screenshot({ path: `audit-${name}.png`, fullPage: true });
   await browser.close();
 }
