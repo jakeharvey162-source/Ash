@@ -538,3 +538,18 @@ body{overscroll-behavior-y:none}
 .healthDot.warn{background:#f59e0b;box-shadow:0 0 10px rgba(245,158,11,.35)}
 .healthDot.bad{background:#ef4444;box-shadow:0 0 10px rgba(239,68,68,.32)}
 .healthNote{margin:9px 0 0}
+
+
+/* ----- Public product sections ----- */
+.authNav button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:6px 8px;border-radius:8px}
+.authNav button:hover,.authNav button:focus-visible{background:color-mix(in srgb,var(--surface-solid) 72%,transparent);outline:none}
+.publicInfo{position:relative;z-index:4;max-width:1180px;margin:0 auto;padding:24px 24px 80px}
+.publicSection{scroll-margin-top:92px;padding:56px 0;border-top:1px solid var(--line)}
+.publicSection h2{font-size:clamp(1.65rem,3vw,2.65rem);line-height:1.08;margin:.4rem 0 1rem;max-width:820px}
+.publicSection>p{max-width:840px;color:var(--muted);line-height:1.7}
+.publicGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:20px}
+.publicGrid span{padding:16px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--surface-solid) 80%,transparent)}
+.publicGrid b{display:block;margin-bottom:6px}.publicGrid small{color:var(--muted);line-height:1.5}
+.publicFine{font-size:.78rem}
+.publicFooter{display:flex;align-items:center;gap:14px;justify-content:space-between;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:.72rem}
+.publicFooter button{border:0;background:transparent;color:inherit;cursor:pointer}
