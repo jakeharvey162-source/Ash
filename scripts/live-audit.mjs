@@ -47,24 +47,25 @@ async function inspect(viewport, name) {
   report[name].title = await page.title().catch(() => "");
   report[name].bodyText = (await page.locator("body").innerText().catch(() => "")).slice(0, 2500);
   report[name].appHtmlLength = await page.locator("#app").innerHTML().then(x=>x.length).catch(() => 0);
-  await page.locator("#ash3dCanvas").waitFor({state:"visible",timeout:10000}).catch(()=>{});
-  await page.waitForFunction(()=>document.querySelector("#ash3dCanvas")?.dataset.threeReady==="true",{timeout:10000}).catch(()=>{});
+  await page.locator("#ashHeroRobot").waitFor({state:"visible",timeout:10000}).catch(()=>{});
+  await page.waitForFunction(()=>document.querySelector("#ashHeroRobot")?.complete===true,{timeout:10000}).catch(()=>{});
   report[name].visible = {
     email: await page.locator("#email").isVisible().catch(()=>false),
     password: await page.locator("#password").isVisible().catch(()=>false),
     signIn: await page.locator("#authSubmit").isVisible().catch(()=>false),
     createAccount: await page.locator("[data-auth-mode='signup']").isVisible().catch(()=>false),
     google: await page.locator("#googleSignin").isVisible().catch(()=>false),
-    threeDHero: await page.locator("#ash3dCanvas").isVisible().catch(()=>false),
+    exactRobot: await page.locator("#ashHeroRobot").isVisible().catch(()=>false),
     themeToggle: await page.locator("#themeToggle").isVisible().catch(()=>false)
   };
-  report[name].hero3d = await page.locator("#ash3dCanvas").evaluate(canvas=>({
-    ready: canvas.dataset.threeReady || null,
-    model: canvas.dataset.model || null,
-    width: canvas.width,
-    height: canvas.height,
-    clientWidth: canvas.clientWidth,
-    clientHeight: canvas.clientHeight
+  report[name].heroRobot = await page.locator("#ashHeroRobot").evaluate(img=>({
+    src: img.getAttribute("src"),
+    asset: img.dataset.asset || null,
+    complete: img.complete,
+    naturalWidth: img.naturalWidth,
+    naturalHeight: img.naturalHeight,
+    clientWidth: img.clientWidth,
+    clientHeight: img.clientHeight
   })).catch(()=>null);
   report[name].config = await page.evaluate(() => {
     const c = window.JARVIS_CONFIG || null;

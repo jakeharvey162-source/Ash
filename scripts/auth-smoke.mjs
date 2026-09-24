@@ -56,6 +56,7 @@ async function assertPublicViewport(width,height,label){
   if(Math.max(dims.doc,dims.body)>dims.viewport+2)throw new Error(label+" public page overflows horizontally: "+JSON.stringify(dims));
   if(!(await page.locator("#authSubmit").isVisible()))throw new Error(label+" auth form missing.");
   if(width<=650 && !(await page.locator(".authNav").isVisible()))throw new Error(label+" mobile public navigation missing.");
+  if(!(await page.locator("#ashHeroRobot").isVisible()))throw new Error(label+" robot image missing.");
 }
 
 const errors=[];
@@ -63,9 +64,10 @@ page.on("pageerror", e=>errors.push(String(e)));
 
 await page.goto(url,{waitUntil:"networkidle",timeout:30000});
 if (!(await page.locator("#authSubmit").isVisible())) throw new Error("Sign in button missing.");
-if (!(await page.locator("#ash3dCanvas").isVisible())) throw new Error("Ash 3D hero canvas missing.");
-await page.waitForFunction(()=>document.querySelector("#ash3dCanvas")?.dataset.threeReady==="true",{timeout:10000}).catch(()=>{throw new Error("Ash 3D hero did not initialize.");});
-if ((await page.locator("#ash3dCanvas").getAttribute("data-model")) !== "white-humanoid-cyan-core") throw new Error("Wrong Ash 3D robot variant rendered.");
+if (!(await page.locator("#ashHeroRobot").isVisible())) throw new Error("Exact Ash homepage robot image missing.");
+await page.waitForFunction(()=>document.querySelector("#ashHeroRobot")?.complete===true,{timeout:10000});
+const robot=await page.locator("#ashHeroRobot").evaluate(img=>({src:img.getAttribute("src"),w:img.naturalWidth,h:img.naturalHeight,asset:img.dataset.asset}));
+if(robot.src!=="/images/ash-home-robot.webp"||robot.w!==148||robot.h!==148||robot.asset!=="user-upload-exact") throw new Error("Homepage is not rendering the exact uploaded Ash robot asset: "+JSON.stringify(robot));
 if (!(await page.getByRole("button",{name:"Create account"}).isVisible())) throw new Error("Create account tab missing.");
 
 for (const label of ["Product","Capabilities","Safety","Company"]) {
