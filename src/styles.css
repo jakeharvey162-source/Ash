@@ -526,3 +526,15 @@ body{overscroll-behavior-y:none}
 .feed article p{font-size:.86rem}
 .composer{position:sticky;bottom:0}
 .autoList,.activityPanel,.connectorGrid,.orgGrid{contain:layout paint style}
+
+
+/* ----- Ash self-diagnostics ----- */
+.healthPanel{margin-bottom:10px;padding:16px 18px}
+.healthGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.healthItem{display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--surface-solid) 82%,transparent);min-width:0}
+.healthItem div{min-width:0}.healthItem b{display:block;font-size:.78rem}.healthItem small{display:block;color:var(--faint);font-size:.65rem;text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.healthDot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.healthDot.ok{background:var(--success);box-shadow:0 0 10px color-mix(in srgb,var(--success) 65%,transparent)}
+.healthDot.warn{background:#f59e0b;box-shadow:0 0 10px rgba(245,158,11,.35)}
+.healthDot.bad{background:#ef4444;box-shadow:0 0 10px rgba(239,68,68,.32)}
+.healthNote{margin:9px 0 0}
