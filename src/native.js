@@ -126,3 +126,79 @@ export async function loadPreference(key) {
   }
   return localStorage.getItem(key);
 }
+
+
+export async function nativeSpeechRecognitionAvailable() {
+  const core = await nativeCore();
+  if (!core) return false;
+  const mod = await loadPlugin('speech-recognition', () => import('@capgo/capacitor-speech-recognition'));
+  const speech = mod?.SpeechRecognition;
+  if (!speech) return false;
+  try {
+    const result = await speech.available();
+    return Boolean(result?.available ?? result?.value ?? result);
+  } catch {
+    return true;
+  }
+}
+
+export async function requestNativeSpeechRecognitionPermissions() {
+  const core = await nativeCore();
+  if (!core) return { speechRecognition: 'granted' };
+  const mod = await loadPlugin('speech-recognition', () => import('@capgo/capacitor-speech-recognition'));
+  const speech = mod?.SpeechRecognition;
+  if (!speech) throw new Error('Native speech recognition is unavailable.');
+  const current = await speech.checkPermissions?.().catch(() => null);
+  if (current?.speechRecognition === 'granted') return current;
+  return speech.requestPermissions();
+}
+
+export async function startNativeSpeechRecognition(options = {}, handlers = {}) {
+  const core = await nativeCore();
+  if (!core) return null;
+  const mod = await loadPlugin('speech-recognition', () => import('@capgo/capacitor-speech-recognition'));
+  const speech = mod?.SpeechRecognition;
+  if (!speech) throw new Error('Native speech recognition is unavailable.');
+
+  const handles = [];
+  if (handlers.onPartial) {
+    handles.push(await speech.addListener('partialResults', data => {
+      const matches = Array.isArray(data?.matches) ? data.matches : [];
+      handlers.onPartial(matches);
+    }));
+  }
+  if (handlers.onState) {
+    handles.push(await speech.addListener('listeningState', data => {
+      handlers.onState(String(data?.status || ''));
+    }));
+  }
+
+  let closed = false;
+  const removeListeners = async () => {
+    const pending = handles.splice(0).map(handle => handle?.remove?.()).filter(Boolean);
+    await Promise.allSettled(pending);
+  };
+  const stop = async () => {
+    if (closed) return;
+    closed = true;
+    try { await speech.stop(); } catch {}
+    await removeListeners();
+  };
+
+  try {
+    const result = await speech.start({
+      language: options.language || navigator.language || 'en-US',
+      maxResults: 3,
+      partialResults: true,
+      popup: false,
+      allowForSilence: true
+    });
+    const matches = Array.isArray(result?.matches) ? result.matches : [];
+    if (matches.length) handlers.onFinal?.(matches);
+  } catch (error) {
+    await removeListeners();
+    throw error;
+  }
+
+  return { stop, removeListeners };
+}
