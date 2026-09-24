@@ -116,6 +116,20 @@ try{
   if(!disconnect.ok())throw new Error("Could not disconnect paired test device.");
   report.checks.desktopPairing=true;
   report.checks.desktopJobChannel=true;
+  const research=await page.evaluate(async ()=>{
+    const cfg=window.JARVIS_CONFIG||{};
+    const s=JSON.parse(localStorage.getItem("ash-session")||"null");
+    const r=await fetch(cfg.ASH_GATEWAY_URL,{
+      method:"POST",
+      headers:{apikey:cfg.SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+s.access_token,"Content-Type":"application/json"},
+      body:JSON.stringify({action:"research",message:"Research the latest official OpenAI product update and give me the source.",mode:"instant",history:[]})
+    });
+    let d={};try{d=await r.json()}catch{}
+    return {ok:r.ok,status:r.status,data:d};
+  });
+  report.liveResearch={status:research.status,grounded:research.data?.grounded,sources:Array.isArray(research.data?.sources)?research.data.sources.length:0,researched_at:research.data?.researched_at||null,error:research.data?.error||null};
+  if(!research.ok||research.data?.grounded!==true||!Array.isArray(research.data?.sources)||research.data.sources.length<1)throw new Error("Live research did not return grounded current sources: "+JSON.stringify(report.liveResearch));
+  report.checks.liveResearchGrounded=true;
 
   await page.locator("[data-view='settings']").first().click();
   await page.locator("#signout").click();

@@ -104,6 +104,16 @@ if (!(await page.locator(".shell").isVisible())) throw new Error("Signed-in shel
 if (!(await page.getByText("Overview", { exact: true }).isVisible())) throw new Error("Desktop navigation missing.");
 if (!(await page.getByText("Builder", { exact: true }).first().isVisible())) throw new Error("Builder navigation missing.");
 
+if (!(await page.locator("#voiceWave").isVisible())) throw new Error("Ash voice waveform missing.");
+if (!(await page.locator("[data-voice-toggle]").first().isVisible())) throw new Error("Voice toggle missing.");
+if (!(await page.locator("#researchMode").isVisible())) throw new Error("Research control missing.");
+const voiceToggle=page.locator("[data-voice-toggle]").first();
+if((await voiceToggle.getAttribute("aria-pressed"))!=="false") throw new Error("Mock profile should render voice off.");
+await voiceToggle.click();
+if((await voiceToggle.getAttribute("aria-pressed"))!=="true") throw new Error("Voice toggle did not switch on.");
+await voiceToggle.click();
+if((await voiceToggle.getAttribute("aria-pressed"))!=="false") throw new Error("Voice toggle did not switch off.");
+
 await page.getByRole("button", { name: /Activity$/ }).click();
 await page.locator("#runHealth").click();
 await page.getByText("online", { exact: true }).first().waitFor({ state: "visible", timeout: 3000 });
