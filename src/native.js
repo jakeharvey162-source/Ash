@@ -1,103 +1,128 @@
-let cap = null;
+let corePromise = null;
+const pluginPromises = new Map();
 
-async function loadCapacitor() {
-  if (cap) return cap;
-  try {
-    const core = await import('@capacitor/core');
-    const [app,browser,clipboard,device,haptics,notifications,preferences,share] = await Promise.all([
-      import('@capacitor/app'),
-      import('@capacitor/browser'),
-      import('@capacitor/clipboard'),
-      import('@capacitor/device'),
-      import('@capacitor/haptics'),
-      import('@capacitor/local-notifications'),
-      import('@capacitor/preferences'),
-      import('@capacitor/share')
-    ]);
-    cap = {
-      Capacitor: core.Capacitor,
-      App: app.App,
-      Browser: browser.Browser,
-      Clipboard: clipboard.Clipboard,
-      Device: device.Device,
-      Haptics: haptics.Haptics,
-      LocalNotifications: notifications.LocalNotifications,
-      Preferences: preferences.Preferences,
-      Share: share.Share
-    };
-    return cap;
-  } catch {
-    return null;
-  }
+async function loadCore() {
+  if (corePromise) return corePromise;
+  corePromise = import('@capacitor/core')
+    .then((core) => core)
+    .catch(() => null);
+  return corePromise;
+}
+
+async function loadPlugin(key, loader) {
+  if (pluginPromises.has(key)) return pluginPromises.get(key);
+  const promise = loader().catch(() => null);
+  pluginPromises.set(key, promise);
+  return promise;
+}
+
+async function nativeCore() {
+  const core = await loadCore();
+  if (!core?.Capacitor?.isNativePlatform?.()) return null;
+  return core;
 }
 
 export async function nativeAvailable() {
-  const c = await loadCapacitor();
-  return Boolean(c?.Capacitor?.isNativePlatform?.());
+  return Boolean(await nativeCore());
 }
 
 export async function getDeviceInfo() {
-  const c = await loadCapacitor();
-  if (!c) return { platform: 'web', model: 'browser', operatingSystem: navigator.platform || 'web' };
+  const core = await loadCore();
+  if (!core) return { platform: 'web', model: 'browser', operatingSystem: navigator.platform || 'web' };
+
   try {
-    const info = await c.Device.getInfo();
-    return { ...info, native: c.Capacitor.isNativePlatform() };
+    const device = await loadPlugin('device', () => import('@capacitor/device'));
+    if (!device?.Device) throw new Error('Device plugin unavailable');
+    const info = await device.Device.getInfo();
+    return { ...info, native: core.Capacitor.isNativePlatform() };
   } catch {
-    return { platform: 'web', model: 'browser', operatingSystem: navigator.platform || 'web' };
+    return {
+      platform: core.Capacitor.getPlatform?.() || 'web',
+      model: 'browser',
+      operatingSystem: navigator.platform || 'web',
+      native: Boolean(core.Capacitor.isNativePlatform?.())
+    };
   }
 }
 
 export async function openUrl(url) {
-  const c = await loadCapacitor();
-  if (c?.Capacitor?.isNativePlatform()) return c.Browser.open({ url });
+  const core = await nativeCore();
+  if (core) {
+    const browser = await loadPlugin('browser', () => import('@capacitor/browser'));
+    if (browser?.Browser) return browser.Browser.open({ url });
+  }
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export async function shareText(title, text, url='') {
-  const c = await loadCapacitor();
-  if (c?.Share) return c.Share.share({ title, text, url, dialogTitle: title });
+  const core = await nativeCore();
+  if (core) {
+    const share = await loadPlugin('share', () => import('@capacitor/share'));
+    if (share?.Share) return share.Share.share({ title, text, url, dialogTitle: title });
+  }
   if (navigator.share) return navigator.share({ title, text, url });
   throw new Error('Sharing is not supported on this device.');
 }
 
 export async function copyText(text) {
-  const c = await loadCapacitor();
-  if (c?.Clipboard) return c.Clipboard.write({ string: text });
+  const core = await nativeCore();
+  if (core) {
+    const clipboard = await loadPlugin('clipboard', () => import('@capacitor/clipboard'));
+    if (clipboard?.Clipboard) return clipboard.Clipboard.write({ string: text });
+  }
   return navigator.clipboard.writeText(text);
 }
 
 export async function notify(title, body) {
-  const c = await loadCapacitor();
-  if (c?.LocalNotifications) {
-    const permission = await c.LocalNotifications.requestPermissions();
-    if (permission.display !== 'granted') throw new Error('Notification permission was not granted.');
-    return c.LocalNotifications.schedule({
-      notifications: [{ id: Math.floor(Date.now()/1000)%2147483647, title, body, schedule: { at: new Date(Date.now()+500) } }]
-    });
+  const core = await nativeCore();
+  if (core) {
+    const notifications = await loadPlugin('notifications', () => import('@capacitor/local-notifications'));
+    if (notifications?.LocalNotifications) {
+      const permission = await notifications.LocalNotifications.requestPermissions();
+      if (permission.display !== 'granted') throw new Error('Notification permission was not granted.');
+      return notifications.LocalNotifications.schedule({
+        notifications: [{
+          id: Math.floor(Date.now()/1000)%2147483647,
+          title,
+          body,
+          schedule: { at: new Date(Date.now()+500) }
+        }]
+      });
+    }
   }
+
   if ('Notification' in window) {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') throw new Error('Notification permission was not granted.');
     new Notification(title,{ body });
     return;
   }
+
   throw new Error('Notifications are not supported on this device.');
 }
 
 export async function haptic() {
-  const c = await loadCapacitor();
-  if (!c?.Haptics) return;
-  try { await c.Haptics.impact({ style: 'LIGHT' }); } catch {}
+  const core = await nativeCore();
+  if (!core) return;
+  const haptics = await loadPlugin('haptics', () => import('@capacitor/haptics'));
+  if (!haptics?.Haptics) return;
+  try { await haptics.Haptics.impact({ style: 'LIGHT' }); } catch {}
 }
 
 export async function savePreference(key, value) {
-  const c = await loadCapacitor();
-  if (c?.Preferences) return c.Preferences.set({ key, value });
+  const core = await nativeCore();
+  if (core) {
+    const preferences = await loadPlugin('preferences', () => import('@capacitor/preferences'));
+    if (preferences?.Preferences) return preferences.Preferences.set({ key, value });
+  }
   localStorage.setItem(key, value);
 }
 
 export async function loadPreference(key) {
-  const c = await loadCapacitor();
-  if (c?.Preferences) return (await c.Preferences.get({ key })).value;
+  const core = await nativeCore();
+  if (core) {
+    const preferences = await loadPlugin('preferences', () => import('@capacitor/preferences'));
+    if (preferences?.Preferences) return (await preferences.Preferences.get({ key })).value;
+  }
   return localStorage.getItem(key);
 }
