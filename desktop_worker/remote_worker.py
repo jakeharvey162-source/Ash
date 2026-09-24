@@ -128,6 +128,15 @@ class AshRemoteWorker:
                     'builder': True,
                 }
                 self.finish(job_id, ok=built.ok, result=result, error='' if built.ok else built.output)
+            elif kind == 'chat_fallback' or payload.get('rescue') is True:
+                mode = str(job.get('mode') or 'high')
+                try:
+                    answer = self.agent._local(prompt)
+                    backend = 'ollama'
+                except Exception:
+                    answer = self.agent.offline.respond(prompt, mode=mode)
+                    backend = self.agent.offline.status().backend
+                self.finish(job_id, ok=True, result={'summary': answer, 'completed_by': self.device_name, 'rescue': True, 'backend': backend})
             else:
                 answer = self.agent.think(prompt, str(job.get('mode') or 'high'))
                 self.finish(job_id, ok=True, result={'summary': answer, 'completed_by': self.device_name})
