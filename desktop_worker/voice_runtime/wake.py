@@ -17,7 +17,8 @@ class WakeMatcher:
 
     def find(self, text: str) -> WakeMatch | None:
         for phrase in sorted(set(self.aliases), key=len, reverse=True):
-            m = re.search(re.escape(phrase), text, flags=re.IGNORECASE)
+            pattern = r"(?<![A-Za-z0-9_])" + re.escape(phrase) + r"(?![A-Za-z0-9_])"
+            m = re.search(pattern, text, flags=re.IGNORECASE)
             if m:
                 return WakeMatch(m.start(), m.end(), m.group())
         if " " in self.wake_word or len(self.wake_word) < 4:
