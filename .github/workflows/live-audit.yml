@@ -25,10 +25,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install Playwright
+      - name: Install app and Playwright
         run: |
+          npm install --no-audit --no-fund
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
+      - name: Build local Ash
+        run: npm run build
+      - name: Start local preview
+        run: |
+          npx vite preview --host 127.0.0.1 --port 4173 > /tmp/ash-vite.log 2>&1 &
+          echo $! > /tmp/ash-vite.pid
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/ash-vite.log
+          exit 1
+      - name: Test signed-in Ash UI
+        run: node scripts/signed-in-smoke.mjs
       - name: Audit live Ash
         env:
           ASH_LIVE_URL: https://ash-f4.vercel.app/
@@ -41,4 +56,5 @@ jobs:
             live-audit.json
             audit-desktop.png
             audit-mobile.png
+            signed-in-smoke.png
           if-no-files-found: error
