@@ -496,3 +496,33 @@ button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
   *{scroll-behavior:auto!important;transition:none!important;animation:none!important}
   .authPanel,.heroVisual{transform:none!important}
 }
+
+
+/* ----- Performance + density pass ----- */
+html{scroll-behavior:smooth}
+body{overscroll-behavior-y:none}
+.shell{grid-template-columns:204px minmax(0,1fr)}
+.rail{padding:14px 10px;backdrop-filter:blur(16px)}
+.wordmark{padding:3px 7px 16px}
+.navitem{padding:8px 9px}
+.workspace{padding:20px 24px 64px;max-width:1380px}
+.topbar{margin-bottom:12px}
+.card{box-shadow:0 16px 44px rgba(0,0,0,.28);backdrop-filter:blur(14px)}
+.voiceCore{min-height:184px;padding:18px 22px;grid-template-columns:150px minmax(0,1fr) auto;gap:20px;margin-bottom:10px}
+.reactor{width:132px;height:132px}
+.reactorCore{width:58px;height:58px}
+.ring2{inset:14px}.ring3{inset:29px}
+.voiceCoreCopy h2{font-size:1.45rem}
+.coreTelemetry{margin-top:7px}
+.stats{gap:9px;margin-bottom:10px}
+.stat{padding:12px 14px}.stat strong{font-size:1.28rem;margin:5px 0 1px}
+.commandHead{padding-top:13px}
+.feed{
+  min-height:230px;max-height:min(46vh,520px);padding:14px 16px;gap:8px;
+  scroll-behavior:smooth;overscroll-behavior:contain;scrollbar-gutter:stable;
+  contain:content;
+}
+.feed article{padding:10px 12px;contain:layout paint}
+.feed article p{font-size:.86rem}
+.composer{position:sticky;bottom:0}
+.autoList,.activityPanel,.connectorGrid,.orgGrid{contain:layout paint style}
