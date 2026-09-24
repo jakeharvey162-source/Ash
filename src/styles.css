@@ -746,3 +746,33 @@ html,body{overflow-y:auto!important}
   .pairCode{font-size:1.45rem}
   .deviceActions{flex-direction:column}
 }
+
+
+/* ----- Voice control, streaming-style reply, research sources ----- */
+.voiceToggle{
+  display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);
+  color:var(--muted);border-radius:999px;padding:6px 9px;font-size:.68rem;white-space:nowrap
+}
+.voiceToggle.active{color:var(--text);border-color:color-mix(in srgb,var(--accent) 35%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--surface-2))}
+.voiceToggle span{font-size:.8rem}.voiceToggle em{font-style:normal}
+.composer{grid-template-columns:40px minmax(0,1fr) 36px 40px}
+.researchBtn{
+  width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);
+  align-self:center;font-size:1rem
+}
+.researchBtn.active{color:var(--text);background:color-mix(in srgb,var(--accent) 12%,var(--surface-2));border-color:color-mix(in srgb,var(--accent) 38%,var(--line));box-shadow:0 0 16px color-mix(in srgb,var(--accent) 12%,transparent)}
+.typingReply p{min-height:1.25em}
+.typingReply p::after{content:"";display:inline-block;width:5px;height:1em;margin-left:3px;vertical-align:-2px;background:var(--accent);border-radius:2px;animation:ashBlink .8s steps(1) infinite}
+.answerSources{margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.answerSources>small{display:block;color:var(--faint);font-size:.56rem;letter-spacing:.12em;margin-bottom:6px}
+.answerSources>div{display:flex;flex-wrap:wrap;gap:6px}
+.answerSources a{display:flex;align-items:center;gap:6px;max-width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);color:var(--muted);text-decoration:none;font-size:.62rem}
+.answerSources a:hover{color:var(--text);border-color:color-mix(in srgb,var(--accent) 34%,var(--line))}
+.answerSources a b{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text);font-size:.55rem}
+.answerSources a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+@keyframes ashBlink{0%,48%{opacity:1}49%,100%{opacity:.15}}
+@media(max-width:650px){
+  .voiceToggle em{display:none}
+  .composer{grid-template-columns:40px minmax(0,1fr) 34px 40px}
+  .answerSources a span{max-width:160px}
+}
