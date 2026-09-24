@@ -211,3 +211,17 @@ button{min-height:40px}
   .healthGrid{grid-template-columns:1fr 1fr;gap:6px}
   .healthItem{padding:8px 9px}
 }
+
+
+@media (max-width:800px){
+  .authNav{display:flex;gap:2px;overflow-x:auto;max-width:58vw}
+  .authNav button{white-space:nowrap;font-size:.7rem}
+  .publicInfo{padding:8px 14px 54px}
+  .publicSection{padding:38px 0}
+  .publicGrid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:520px){
+  .authNav{display:none}
+  .publicGrid{grid-template-columns:1fr}
+  .publicFooter{align-items:flex-start;flex-wrap:wrap}
+}
