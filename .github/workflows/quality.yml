@@ -24,6 +24,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build web app
         run: npm run build
+      - name: Install desktop worker dependencies
+        run: pip install -r desktop_worker/requirements.txt
       - name: Compile Python specialist
         run: |
           python -m py_compile desktop_worker/ash_agent.py
