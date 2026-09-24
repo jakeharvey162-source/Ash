@@ -165,3 +165,10 @@ button{min-height:40px}
   .reactorRing,
   .voiceWave i{will-change:auto}
 }
+
+
+/* Five-action mobile dock: Home, Build, Automate, Connect, You */
+@media (max-width:900px){
+  .mobileNav{grid-template-columns:repeat(5,1fr)}
+  .builderHint{margin:12px 0 0;line-height:1.5}
+}
