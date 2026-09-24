@@ -295,7 +295,7 @@ button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
 /* ----- Cinematic authentication ----- */
 .authShell{min-height:100vh;padding:0}
 .cinematicAuth{
-  --mx:0px;--my:0px;min-height:100vh;position:relative;overflow:hidden;
+  --mx:0px;--my:0px;min-height:100vh;position:relative;overflow-x:hidden;overflow-y:visible;
   background:#050505;color:#fff;isolation:isolate
 }
 :root[data-theme="light"] .cinematicAuth{background:#f6f3ee;color:#12100f}
@@ -500,7 +500,7 @@ button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
 
 /* ----- Performance + density pass ----- */
 html{scroll-behavior:smooth}
-body{overscroll-behavior-y:none}
+body{overflow-y:auto;overscroll-behavior-y:auto;scrollbar-gutter:stable}
 .shell{grid-template-columns:204px minmax(0,1fr)}
 .rail{padding:14px 10px;backdrop-filter:blur(16px)}
 .wordmark{padding:3px 7px 16px}
@@ -519,7 +519,7 @@ body{overscroll-behavior-y:none}
 .commandHead{padding-top:13px}
 .feed{
   min-height:230px;max-height:min(46vh,520px);padding:14px 16px;gap:8px;
-  scroll-behavior:smooth;overscroll-behavior:contain;scrollbar-gutter:stable;
+  scroll-behavior:smooth;overscroll-behavior:auto;scrollbar-gutter:stable;
   contain:content;
 }
 .feed article{padding:10px 12px;contain:layout paint}
@@ -553,3 +553,16 @@ body{overscroll-behavior-y:none}
 .publicFine{font-size:.78rem}
 .publicFooter{display:flex;align-items:center;gap:14px;justify-content:space-between;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:.72rem}
 .publicFooter button{border:0;background:transparent;color:inherit;cursor:pointer}
+
+
+/* ----- Mouse-wheel / page-scroll reliability ----- */
+html,body{overflow-y:auto!important}
+#app,.authShell,.cinematicAuth{overflow-y:visible}
+.shell{overflow:visible}
+.workspace{overflow:visible}
+.publicInfo{overflow:visible}
+.feed{overscroll-behavior:auto}
+@media (pointer:fine){
+  html,body{scroll-behavior:smooth}
+  .feed{scrollbar-width:thin}
+}
