@@ -23,6 +23,8 @@ await page.addInitScript(() => {
 
 await page.route("**/auth/v1/token?grant_type=refresh_token", route => { refresh_token_hits++; return json(route, { access_token: "refreshed-token", refresh_token: "test-refresh-token", user: { id: "00000000-0000-0000-0000-000000000001", email: "ash-test@example.invalid" } }); });
 
+await page.route("**/auth/v1/user", route => json(route, { id: "00000000-0000-0000-0000-000000000001", email: "ash-test@example.invalid" }));
+
 await page.route("**/rest/v1/jarvis_profiles**", route => json(route, [{
   user_id: "00000000-0000-0000-0000-000000000001",
   assistant_name: "Ash",
