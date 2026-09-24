@@ -1,0 +1,91 @@
+import { chromium } from "playwright";
+
+const url = process.env.ASH_LOCAL_URL || "http://127.0.0.1:4173/";
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+
+const json = (route, body, status=200) => route.fulfill({
+  status,
+  contentType: "application/json",
+  body: JSON.stringify(body)
+});
+
+await page.addInitScript(() => {
+  localStorage.setItem("ash-session", JSON.stringify({
+    access_token: "test-access-token",
+    refresh_token: "test-refresh-token",
+    user: { id: "00000000-0000-0000-0000-000000000001", email: "ash-test@example.invalid" }
+  }));
+  localStorage.setItem("ash-mode", "high");
+  localStorage.setItem("ash-theme", "dark");
+});
+
+await page.route("**/rest/v1/jarvis_profiles**", route => json(route, [{
+  user_id: "00000000-0000-0000-0000-000000000001",
+  assistant_name: "Ash",
+  personality_preset: "builder",
+  preferred_mode: "high",
+  wake_word: "Ash",
+  custom_instructions: "",
+  behavior_config: { verbosity: "balanced", proactivity: "balanced", humor: 20, learn_style: true },
+  voice_config: { auto_speak: false, voice_id: "test" }
+}]));
+
+await page.route("**/rest/v1/jarvis_automations**", route => json(route, []));
+await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
+await page.route("**/rest/v1/jarvis_devices**", route => json(route, [{
+  id: "10000000-0000-0000-0000-000000000001",
+  user_id: "00000000-0000-0000-0000-000000000001",
+  device_name: "Ash Test Desktop",
+  nickname: "Ash Test Desktop",
+  platform: "windows",
+  last_seen_at: new Date().toISOString(),
+  capabilities: { builder: true, verified_builds: true }
+}]));
+
+let queued = false;
+await page.route("**/rest/v1/jarvis_remote_jobs**", async route => {
+  if (route.request().method() === "POST") {
+    const body = JSON.parse(route.request().postData() || "{}");
+    if (body.kind !== "builder" || body.payload?.builder !== true || !body.payload?.prompt) {
+      return json(route, { error: "bad_builder_payload" }, 400);
+    }
+    queued = true;
+    return json(route, [{ id: "20000000-0000-0000-0000-000000000001", ...body }], 201);
+  }
+  return json(route, []);
+});
+
+const errors = [];
+page.on("pageerror", err => errors.push(String(err)));
+page.on("console", msg => { if (msg.type() === "error") errors.push(msg.text()); });
+
+await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+
+if (!(await page.locator(".shell").isVisible())) throw new Error("Signed-in shell did not render.");
+if (!(await page.getByText("Overview", { exact: true }).isVisible())) throw new Error("Desktop navigation missing.");
+if (!(await page.getByText("Builder", { exact: true }).first().isVisible())) throw new Error("Builder navigation missing.");
+
+await page.getByText("Builder", { exact: true }).first().click();
+await page.waitForTimeout(150);
+
+if (!(await page.locator("#buildPrompt").isVisible())) throw new Error("Builder prompt is not visible.");
+if (!(await page.locator("#createBuild").isVisible())) throw new Error("Builder action is not visible.");
+if (!(await page.getByText("Desktop builder online.", { exact: false }).isVisible())) throw new Error("Builder did not detect linked desktop.");
+
+await page.locator("#buildPrompt").fill("Build a responsive portfolio website with a contact form and dark mode.");
+await page.locator("#createBuild").click();
+await page.waitForTimeout(150);
+
+if (!queued) throw new Error("Builder request was not queued.");
+if (errors.length) throw new Error("Browser errors: " + errors.join(" | "));
+
+await page.setViewportSize({ width: 390, height: 844 });
+await page.reload({ waitUntil: "networkidle" });
+if (!(await page.locator(".mobileNav").isVisible())) throw new Error("Mobile navigation did not render.");
+const mobileButtons = await page.locator(".mobileNav button").count();
+if (mobileButtons !== 5) throw new Error("Expected 5 mobile navigation actions, got " + mobileButtons);
+
+await page.screenshot({ path: "signed-in-smoke.png", fullPage: true });
+console.log("ASH SIGNED-IN UI SMOKE: PASS");
+await browser.close();
