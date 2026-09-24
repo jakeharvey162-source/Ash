@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from voice_runtime.claude_cli import ClaudeCodeBackend
+from offline_brain import AshOfflineBrain
 
 
 @dataclass
@@ -33,6 +34,7 @@ class AshPythonAgent:
         self.ollama_model = os.environ.get("ASH_OLLAMA_MODEL", "qwen3-coder")
         self.claude_cli_enabled = os.environ.get("ASH_CLAUDE_CLI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
         self.claude_backend = ClaudeCodeBackend() if self.claude_cli_enabled else None
+        self.offline = AshOfflineBrain()
         self.timeout = httpx.Timeout(45.0, connect=6.0)
 
     def _headers(self) -> dict[str, str]:
@@ -75,7 +77,10 @@ class AshPythonAgent:
             except Exception:
                 pass
 
-        return self._local(prompt)
+        try:
+            return self._local(prompt)
+        except Exception:
+            return self.offline.respond(prompt, mode=mode)
 
     def think_stream(self, prompt: str, mode: str = "high", on_narration=None) -> str:
         try:
@@ -92,7 +97,10 @@ class AshPythonAgent:
             except Exception:
                 pass
 
-        answer = self._local(prompt)
+        try:
+            answer = self._local(prompt)
+        except Exception:
+            answer = self.offline.respond(prompt, mode=mode)
         if on_narration:
             on_narration(answer)
         return answer
