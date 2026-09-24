@@ -46,9 +46,13 @@ jobs:
         run: node scripts/auth-smoke.mjs
       - name: Test signed-in Ash UI
         run: node scripts/signed-in-smoke.mjs
+      - name: Test production Worker auth end to end
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/worker-auth-e2e.mjs
       - name: Audit live Ash
         env:
-          ASH_LIVE_URL: https://ash-f4.vercel.app/
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
         run: node scripts/live-audit.mjs
       - name: Upload audit
         uses: actions/upload-artifact@v4
@@ -59,4 +63,6 @@ jobs:
             audit-desktop.png
             audit-mobile.png
             signed-in-smoke.png
+            worker-auth-e2e.json
+            worker-auth-*.png
           if-no-files-found: error
