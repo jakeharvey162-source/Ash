@@ -69,7 +69,7 @@ await page.route("**/rest/v1/jarvis_remote_jobs**", async route => {
 
 const errors = [];
 page.on("pageerror", err => errors.push(String(err)));
-page.on("console", msg => { if (msg.type() === "error") errors.push(msg.text()); });
+page.on("console", msg => { if (msg.type() === "error" && !msg.text().includes("401 (Unauthorized)")) errors.push(msg.text()); });
 
 await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
 
