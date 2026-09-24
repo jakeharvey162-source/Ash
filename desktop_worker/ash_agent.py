@@ -99,10 +99,12 @@ class AshPythonAgent:
 
     @staticmethod
     def _extract_json(text: str) -> Any:
-        fenced = re.search(r"```(?:json)?\\s*(.*?)```", text, flags=re.S | re.I)
+        fenced = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S | re.I)
         candidate = fenced.group(1).strip() if fenced else text.strip()
         starts = [i for i in (candidate.find("{"), candidate.find("[")) if i >= 0]
-        return json.loads(candidate[min(starts) if starts else 0:])
+        start = min(starts) if starts else 0
+        value, _ = json.JSONDecoder().raw_decode(candidate[start:])
+        return value
 
     @staticmethod
     def _safe_root(root: str) -> pathlib.Path:
