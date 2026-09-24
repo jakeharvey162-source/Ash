@@ -27,6 +27,7 @@ jobs:
       - name: Compile Python specialist
         run: |
           python -m py_compile desktop_worker/ash_agent.py
+          python -m py_compile desktop_worker/remote_worker.py
           python -m py_compile desktop_worker/voice_runtime/__init__.py
           python -m py_compile desktop_worker/voice_runtime/events.py
           python -m py_compile desktop_worker/voice_runtime/wake.py
