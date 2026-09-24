@@ -4,12 +4,53 @@ const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations";
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal"}};
-let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0;
+let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null;
 
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
-async function supa(path,opt={}){const r=await fetch(BASE+path,{...opt,headers:{...headers(),...(opt.headers||{})}});let d={};try{d=await r.json()}catch{};if(!r.ok)throw new Error(d?.msg||d?.message||d?.error_description||d?.error||("HTTP "+r.status));return d}
-function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token,user:s.user};localStorage.setItem("ash-session",JSON.stringify(session))}
+function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token||session?.refresh_token,user:s.user||session?.user};localStorage.setItem("ash-session",JSON.stringify(session))}
+function clearSession(){session=null;localStorage.removeItem("ash-session");opsLoadedAt=0}
+function tokenExpiresSoon(token,skew=60){
+  try{
+    const part=token.split(".")[1];if(!part)return false;
+    const json=JSON.parse(atob(part.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(part.length/4)*4,"=")));
+    return Number(json.exp||0)*1000-Date.now()<skew*1000;
+  }catch{return false}
+}
+async function refreshSession(){
+  if(refreshPromise)return refreshPromise;
+  if(!session?.refresh_token)throw new Error("Your Ash session has expired. Please sign in again.");
+  refreshPromise=(async()=>{
+    const r=await fetch(BASE+"/auth/v1/token?grant_type=refresh_token",{
+      method:"POST",
+      headers:{apikey:KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({refresh_token:session.refresh_token})
+    });
+    let d={};try{d=await r.json()}catch{}
+    if(!r.ok||!d?.access_token){clearSession();throw new Error("Your Ash session has expired. Please sign in again.");}
+    saveSession(d);return session;
+  })().finally(()=>{refreshPromise=null});
+  return refreshPromise;
+}
+async function ensureFreshSession(){
+  if(session?.access_token&&session?.refresh_token&&tokenExpiresSoon(session.access_token))await refreshSession();
+  return session;
+}
+async function authedFetch(url,opt={},retry=true){
+  await ensureFreshSession();
+  const run=()=>fetch(url,{...opt,headers:{apikey:KEY,...(opt.headers||{}),...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})}});
+  let r=await run();
+  if(r.status===401&&retry&&session?.refresh_token){await refreshSession();r=await run();}
+  return r;
+}
+async function supa(path,opt={},retry=true){
+  await ensureFreshSession();
+  let r=await fetch(BASE+path,{...opt,headers:{...headers(),...(opt.headers||{})}});
+  if(r.status===401&&retry&&session?.refresh_token&&!path.startsWith("/auth/v1/")){await refreshSession();return supa(path,opt,false)}
+  let d={};try{d=await r.json()}catch{}
+  if(!r.ok)throw new Error(d?.msg||d?.message||d?.error_description||d?.error||("HTTP "+r.status));
+  return d
+}
 async function login(email,password){saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}))}
 async function signup(email,password,name){const d=await supa("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});if(d.access_token)saveSession(d);return d}
 async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
@@ -200,7 +241,7 @@ async function connectCloudConnector(key){
   if(["gmail","google_calendar","google_drive"].includes(key)){
     try{
       const returnUrl=location.origin+location.pathname;
-      const r=await fetch(INTEGRATIONS+"?action=start&integration="+encodeURIComponent(key)+"&return_url="+encodeURIComponent(returnUrl),{headers:{Authorization:"Bearer "+session.access_token,apikey:KEY}});
+      const r=await authedFetch(INTEGRATIONS+"?action=start&integration="+encodeURIComponent(key)+"&return_url="+encodeURIComponent(returnUrl));
       const d=await r.json();
       if(!r.ok)throw new Error(d.error||"Connection setup failed");
       await openUrl(d.authorization_url);
@@ -333,7 +374,7 @@ function bind(){
   document.querySelector("#prompt")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
   document.querySelector("#mic")?.addEventListener("click",listen);
   document.querySelector("#save")?.addEventListener("click",saveProfile);
-  document.querySelector("#signout")?.addEventListener("click",()=>{session=null;localStorage.removeItem("ash-session");render()});
+  document.querySelector("#signout")?.addEventListener("click",()=>{clearSession();render()});
   document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Activity refreshed")});
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
@@ -356,18 +397,18 @@ async function confirmPendingAction(index){
   const m=messages[index]; if(!m?.action)return;
   const tool=m.action.tool,args=m.action.args||{};
   try{
-    const r=await fetch(INTEGRATIONS+"?action="+encodeURIComponent(tool),{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify(tool==="gmail.send"?{...args,confirmed:true}:{event:args.event||args,confirmed:true})});
+    const r=await authedFetch(INTEGRATIONS+"?action="+encodeURIComponent(tool),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(tool==="gmail.send"?{...args,confirmed:true}:{event:args.event||args,confirmed:true})});
     const d=await r.json(); if(!r.ok)throw new Error(d.error||"Action failed");
     m.content=tool==="gmail.send"?"Email sent successfully.":"Calendar event created successfully.";
     m.action=null; render(); toast("Action completed");
   }catch(e){toast(e.message||"Action failed")}
 }
-async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);sending=true;setSendBusy(true);setCoreState("thinking","Working the request across Ash intelligence.");try{const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Ash is unavailable.");const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null};messages.push(reply);appendChatMessage(reply,messages.length-1);speak(d.answer)}catch(e){const reply={role:"assistant",content:e.message};messages.push(reply);appendChatMessage(reply,messages.length-1)}finally{sending=false;setSendBusy(false);if(!speaking)setCoreState("idle")}}
+async function send(){if(sending)return;const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;box.value="";const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);sending=true;setSendBusy(true);setCoreState("thinking","Working the request across Ash intelligence.");try{const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message,mode,history:messages.slice(-10,-1)})});const d=await r.json();if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash is unavailable.");const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null};messages.push(reply);appendChatMessage(reply,messages.length-1);speak(d.answer)}catch(e){const reply={role:"assistant",content:e.message};messages.push(reply);appendChatMessage(reply,messages.length-1)}finally{sending=false;setSendBusy(false);if(!speaking)setCoreState("idle")}}
 function listen(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast("Voice input needs a supported browser.");return}setCoreState("listening");const r=new SR();r.lang=navigator.language||"en-US";r.onresult=e=>{document.querySelector("#prompt").value=e.results[0][0].transcript;send()};r.onerror=()=>toast("I couldn't hear that clearly.");r.start()}
 async function speak(text){
   if(!text||profile.voice_config?.auto_speak===false)return;
   try{
-    const r=await fetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token,apikey:KEY},body:JSON.stringify({action:"speech",text:text.slice(0,5000),voice_id:profile.voice_config?.voice_id})});
+    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text:text.slice(0,5000),voice_id:profile.voice_config?.voice_id})});
     if(r.ok&&r.headers.get("content-type")?.includes("audio")){await playVoiceBlob(await r.blob());return}
   }catch{}
   if("speechSynthesis"in window){
