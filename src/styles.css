@@ -652,3 +652,58 @@ html,body{overflow-y:auto!important}
 @media(prefers-reduced-motion:reduce){
   .heroRobotDepth{transform:none!important;transition:none}
 }
+
+
+/* ----- Ash auth visual refinement ----- */
+#ashHeroRobot{
+  filter:contrast(1.07) saturate(1.025) brightness(1.02);
+  backface-visibility:hidden;
+  transform:translateZ(16px);
+  image-rendering:auto;
+}
+.heroRobotDepth{
+  width:min(28vw,350px);
+  max-width:350px;
+}
+.heroRobotDepth::before{
+  content:"";position:absolute;inset:-9%;z-index:-1;border-radius:34px;
+  background:
+    radial-gradient(circle at 48% 42%,rgba(104,231,240,.13),transparent 48%),
+    linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,0));
+  border:1px solid rgba(255,255,255,.055);
+  transform:translateZ(-22px);
+}
+.authPanel{
+  isolation:isolate;
+  transform-style:preserve-3d;
+  overflow:hidden;
+  border-color:rgba(255,255,255,.11);
+  box-shadow:
+    0 26px 70px rgba(0,0,0,.42),
+    0 1px 0 rgba(255,255,255,.08) inset,
+    -1px 0 0 rgba(255,255,255,.035) inset;
+}
+.authPanel::before{
+  content:"";position:absolute;z-index:-1;right:-54px;top:34px;width:150px;height:82px;
+  border:1px solid rgba(255,255,255,.07);border-radius:17px;
+  background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,0));
+  transform:skewY(-14deg) rotate(-7deg);
+}
+.authPanel::after{
+  content:"";position:absolute;z-index:-1;left:-18%;bottom:16%;width:70%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(37,217,233,.28),transparent);
+  transform:rotate(13deg);
+}
+.inputShell{box-shadow:0 1px 0 rgba(255,255,255,.045) inset,0 10px 24px rgba(0,0,0,.08)}
+.authSubmit{transform:translateZ(10px)}
+:root[data-theme="light"] .authPanel{
+  border-color:rgba(28,40,44,.09);
+  box-shadow:0 26px 65px rgba(57,72,78,.17),0 1px 0 rgba(255,255,255,.9) inset;
+}
+:root[data-theme="light"] #ashHeroRobot{filter:contrast(1.045) saturate(1.015) brightness(1.015)}
+@media(max-width:900px){.heroRobotDepth{width:min(38vw,320px)}}
+@media(max-width:650px){
+  .heroRobotDepth{width:min(48vw,236px)}
+  #ashHeroRobot{filter:contrast(1.055) saturate(1.02) brightness(1.015)}
+}
+@media(max-width:430px){.heroRobotDepth{width:min(51vw,216px)}}
