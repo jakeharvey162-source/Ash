@@ -12,6 +12,8 @@ from typing import Any
 
 import httpx
 
+from voice_runtime.claude_cli import ClaudeCodeBackend
+
 
 @dataclass
 class AgentResult:
@@ -29,6 +31,8 @@ class AshPythonAgent:
         self.publishable_key = os.environ.get("ASH_SUPABASE_PUBLISHABLE_KEY", "")
         self.ollama_url = os.environ.get("ASH_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
         self.ollama_model = os.environ.get("ASH_OLLAMA_MODEL", "qwen3-coder")
+        self.claude_cli_enabled = os.environ.get("ASH_CLAUDE_CLI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+        self.claude_backend = ClaudeCodeBackend() if self.claude_cli_enabled else None
         self.timeout = httpx.Timeout(45.0, connect=6.0)
 
     def _headers(self) -> dict[str, str]:
@@ -63,7 +67,35 @@ class AshPythonAgent:
         try:
             return self._cloud(prompt, mode=mode)
         except Exception:
-            return self._local(prompt)
+            pass
+
+        if self.claude_backend is not None:
+            try:
+                return self.claude_backend.process(prompt)
+            except Exception:
+                pass
+
+        return self._local(prompt)
+
+    def think_stream(self, prompt: str, mode: str = "high", on_narration=None) -> str:
+        try:
+            answer = self._cloud(prompt, mode=mode)
+            if on_narration:
+                on_narration(answer)
+            return answer
+        except Exception:
+            pass
+
+        if self.claude_backend is not None:
+            try:
+                return self.claude_backend.process(prompt, on_narration=on_narration)
+            except Exception:
+                pass
+
+        answer = self._local(prompt)
+        if on_narration:
+            on_narration(answer)
+        return answer
 
     @staticmethod
     def _extract_json(text: str) -> Any:
