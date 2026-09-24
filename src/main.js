@@ -51,8 +51,25 @@ async function supa(path,opt={},retry=true){
   if(!r.ok)throw new Error(d?.msg||d?.message||d?.error_description||d?.error||("HTTP "+r.status));
   return d
 }
-async function login(email,password){saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}))}
-async function signup(email,password,name){const d=await supa("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});if(d.access_token)saveSession(d);return d}
+async function login(email,password){
+  try{
+    saveSession(await supa("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email,password})}));
+  }catch(e){
+    const raw=String(e?.message||"");
+    if(/invalid login credentials/i.test(raw))throw new Error("Email or password is incorrect. If you just signed up, confirm your email first; otherwise use Forgot password.");
+    if(/email not confirmed/i.test(raw))throw new Error("Confirm your email address before signing in. Check your inbox and spam folder.");
+    throw e;
+  }
+}
+async function signup(email,password,name){
+  const d=await supa("/auth/v1/signup",{method:"POST",body:JSON.stringify({email,password,data:{full_name:name}})});
+  if(d.access_token)saveSession(d);
+  const identities=Array.isArray(d?.user?.identities)?d.user.identities:null;
+  return {
+    ...d,
+    signup_state:d.access_token?"signed_in":identities&&identities.length===0?"existing_or_obfuscated":"confirmation_required"
+  };
+}
 async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
 async function loadProfile(){if(!session)return;const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id)+"&select=*");if(r?.[0])profile={...profile,...r[0],behavior_config:{...profile.behavior_config,...(r[0].behavior_config||{})},voice_config:{...profile.voice_config,...(r[0].voice_config||{})}};mode=profile.preferred_mode||mode}
 async function loadOps(force=false){
@@ -91,7 +108,7 @@ function authView(){
     <div class="authBackdrop"></div>
     <div class="authTop">
       <div class="cinematicLogo"><span class="ashGlyph">A</span><strong>Ash<span>.</span></strong></div>
-      <nav class="authNav"><span>Product</span><span>Capabilities</span><span>Safety</span><span>Company</span></nav>
+      <nav class="authNav"><button type="button" data-public-section="product">Product</button><button type="button" data-public-section="capabilities">Capabilities</button><button type="button" data-public-section="safety">Safety</button><button type="button" data-public-section="company">Company</button></nav>
       <button id="themeToggle" class="themeToggle authTheme" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button>
     </div>
 
@@ -149,6 +166,43 @@ function authView(){
         <p class="authFine">Private by design. Sensitive actions stay confirmation-based.</p>
       </div>
     </div>
+
+    <section class="publicInfo" id="publicInfo">
+      <article class="publicSection" id="product">
+        <p class="kicker">PRODUCT</p>
+        <h2>Ash is an AI command center, not a single model.</h2>
+        <p>Ash combines conversational AI, software building, automation, connected tools, voice interaction and optional local AI in one interface. Cloud features use configured providers and Supabase services; local features require the Ash desktop worker and a supported local model.</p>
+      </article>
+      <article class="publicSection" id="capabilities">
+        <p class="kicker">CAPABILITIES</p>
+        <h2>What Ash can actually do today.</h2>
+        <div class="publicGrid">
+          <span><b>Reason & chat</b><small>Adaptive and multi-agent cloud reasoning when providers are available.</small></span>
+          <span><b>Build software</b><small>Generate projects, install dependencies, run builds, repair failures and report evidence through a linked desktop.</small></span>
+          <span><b>Automate work</b><small>Schedule supported jobs and dispatch them through Ash's cloud/desktop workflow.</small></span>
+          <span><b>Work locally</b><small>Use Ollama or Ash's direct offline Python/GGUF fallback when configured on your computer.</small></span>
+          <span><b>Voice</b><small>Speech input and spoken responses where the browser/device and configured voice service support them.</small></span>
+          <span><b>Connected tools</b><small>Permission-based integrations such as Google services where the connector is configured and authorized.</small></span>
+        </div>
+      </article>
+      <article class="publicSection" id="safety">
+        <p class="kicker">SAFETY & CONTROL</p>
+        <h2>You stay in control of consequential actions.</h2>
+        <p>Ash is designed to distinguish suggestions from actions that actually happened. Sensitive external actions can require confirmation, connected services use their own authorization scopes, and system diagnostics expose degraded services instead of pretending everything worked.</p>
+        <p class="publicFine">Ash can make mistakes. Verify important outputs before relying on them, especially for financial, legal, medical, security or irreversible decisions.</p>
+      </article>
+      <article class="publicSection" id="company">
+        <p class="kicker">COMPANY / PROJECT</p>
+        <h2>Independent software project.</h2>
+        <p>Ash is an independent project developed by Jake Harvey. This page does not claim that Ash is a registered company unless and until a legal entity is formally established.</p>
+        <p class="publicFine">Ash is not affiliated with or endorsed by OpenAI, Anthropic, Google, Microsoft, Meta, Marvel, or other third-party model, platform or media brands unless an official partnership is explicitly announced. Third-party names are used only to identify compatible services or integrations.</p>
+      </article>
+      <footer class="publicFooter">
+        <span>© 2026 Ash project.</span>
+        <button type="button" data-public-section="safety">Safety</button>
+        <button type="button" data-public-section="company">About</button>
+      </footer>
+    </section>
   </section>`;
 }
 function stat(label,value,meta){return `<div class="stat card"><span>${label}</span><strong>${value}</strong><small>${meta}</small></div>`}
@@ -409,6 +463,9 @@ function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelector("#meetAsh")?.addEventListener("click",()=>document.querySelector("#email")?.focus());
   document.querySelector("#watchVoice")?.addEventListener("click",()=>{toast("Sign in and ask Ash anything to hear the live voice visualization.")});
+  document.querySelectorAll("[data-public-section]").forEach(b=>b.addEventListener("click",()=>{
+    document.querySelector("#"+b.dataset.publicSection)?.scrollIntoView({behavior:"smooth",block:"start"});
+  }));
   document.querySelector("#forgotPassword")?.addEventListener("click",async()=>{
     const email=document.querySelector("#email")?.value.trim();
     const m=document.querySelector("#authMsg");
@@ -425,7 +482,14 @@ function bind(){
       if(authMode==="signup"){
         const name=document.querySelector("#name")?.value.trim()||"";
         const d=await signup(email,password,name);
-        if(!session){m.textContent=d?.user?"Account created. Check your email if confirmation is enabled.":"Account created.";return}
+        if(!session){
+          if(d.signup_state==="existing_or_obfuscated"){
+            m.textContent="If this email already has an account, sign in or use Forgot password. If it is new, check your inbox for a confirmation email.";
+          }else{
+            m.textContent="Check your email to confirm your Ash account before signing in. Check spam/junk if it does not arrive.";
+          }
+          return
+        }
       }else{
         await login(email,password);
       }
