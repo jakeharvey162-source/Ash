@@ -536,7 +536,7 @@ function bind(){
   document.querySelector("#prompt")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
   document.querySelector("#mic")?.addEventListener("click",listen);
   document.querySelector("#save")?.addEventListener("click",saveProfile);
-  document.querySelector("#signout")?.addEventListener("click",()=>{clearSession();render()});
+  document.querySelector("#signout")?.addEventListener("click",()=>{clearSession();authMode="signin";render()});
   document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Activity refreshed")});
   document.querySelector("#runHealth")?.addEventListener("click",()=>probeHealth(true));
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
