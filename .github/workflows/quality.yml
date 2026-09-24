@@ -25,6 +25,15 @@ jobs:
       - name: Build web app
         run: npm run build
       - name: Compile Python specialist
-        run: python -m py_compile desktop_worker/ash_agent.py
+        run: |
+          python -m py_compile desktop_worker/ash_agent.py
+          python -m py_compile desktop_worker/voice_runtime/__init__.py
+          python -m py_compile desktop_worker/voice_runtime/events.py
+          python -m py_compile desktop_worker/voice_runtime/wake.py
+          python -m py_compile desktop_worker/voice_runtime/claude_cli.py
+          python -m py_compile desktop_worker/voice_runtime/listener.py
+          python -m py_compile desktop_worker/voice_runtime/runtime.py
+      - name: Test local voice routing helpers
+        run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_voice_runtime.py
       - name: Check public config exists
         run: test -f dist/config.js
