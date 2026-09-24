@@ -60,6 +60,7 @@ async function inspect(viewport, name) {
   };
   report[name].hero3d = await page.locator("#ash3dCanvas").evaluate(canvas=>({
     ready: canvas.dataset.threeReady || null,
+    model: canvas.dataset.model || null,
     width: canvas.width,
     height: canvas.height,
     clientWidth: canvas.clientWidth,

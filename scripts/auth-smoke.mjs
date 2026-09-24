@@ -65,6 +65,7 @@ await page.goto(url,{waitUntil:"networkidle",timeout:30000});
 if (!(await page.locator("#authSubmit").isVisible())) throw new Error("Sign in button missing.");
 if (!(await page.locator("#ash3dCanvas").isVisible())) throw new Error("Ash 3D hero canvas missing.");
 await page.waitForFunction(()=>document.querySelector("#ash3dCanvas")?.dataset.threeReady==="true",{timeout:10000}).catch(()=>{throw new Error("Ash 3D hero did not initialize.");});
+if ((await page.locator("#ash3dCanvas").getAttribute("data-model")) !== "white-humanoid-cyan-core") throw new Error("Wrong Ash 3D robot variant rendered.");
 if (!(await page.getByRole("button",{name:"Create account"}).isVisible())) throw new Error("Create account tab missing.");
 
 for (const label of ["Product","Capabilities","Safety","Company"]) {
