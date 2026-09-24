@@ -34,6 +34,12 @@ class BuilderSafetyTests(unittest.TestCase):
         self.assertEqual(data['name'], 'demo')
         self.assertEqual(data['files'][0]['path'], 'index.html')
 
+    def test_extract_json_ignores_trailing_commentary(self):
+        text = 'Result: {"ok":true,"files":[]} trailing words that are not JSON'
+        data = self.agent._extract_json(text)
+        self.assertTrue(data['ok'])
+        self.assertEqual(data['files'], [])
+
 
 if __name__ == '__main__':
     unittest.main()
