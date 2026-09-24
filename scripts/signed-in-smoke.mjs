@@ -38,6 +38,10 @@ await page.route("**/rest/v1/jarvis_automations**", route => json(route, []));
 await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
 let gateway_hits = 0;
 await page.route("**/functions/v1/jarvis-ai-gateway**", route => {
+  const reqUrl = new URL(route.request().url());
+  if (reqUrl.searchParams.get("action") === "health") {
+    return json(route, { ok: true, service: "jarvis-ai-gateway", cloud_ready: true, voice_ready: true });
+  }
   gateway_hits++;
   const auth = route.request().headers()["authorization"] || "";
   if (gateway_hits === 1 && !auth.includes("refreshed-token")) return json(route, { error: "unauthorized" }, 401);
@@ -51,7 +55,7 @@ await page.route("**/rest/v1/jarvis_devices**", route => json(route, [{
   nickname: "Ash Test Desktop",
   platform: "windows",
   last_seen_at: new Date().toISOString(),
-  capabilities: { builder: true, verified_builds: true }
+  capabilities: { builder: true, verified_builds: true, local_ai: true, offline_brain: true }
 }]));
 
 let queued = false;
@@ -76,6 +80,12 @@ await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
 if (!(await page.locator(".shell").isVisible())) throw new Error("Signed-in shell did not render.");
 if (!(await page.getByText("Overview", { exact: true }).isVisible())) throw new Error("Desktop navigation missing.");
 if (!(await page.getByText("Builder", { exact: true }).first().isVisible())) throw new Error("Builder navigation missing.");
+
+await page.getByText("Activity", { exact: true }).click();
+await page.locator("#runHealth").click();
+await page.getByText("online", { exact: true }).first().waitFor({ state: "visible", timeout: 3000 });
+if (!(await page.getByText("Local AI", { exact: true }).isVisible())) throw new Error("Health panel missing local AI status.");
+await page.getByText("Overview", { exact: true }).click();
 
 await page.locator("#ashCoreCanvas").evaluate(el => el.dataset.persistToken = "keep");
 await page.locator("#prompt").fill("Test chat rendering");
