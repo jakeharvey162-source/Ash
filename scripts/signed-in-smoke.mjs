@@ -71,6 +71,27 @@ await page.route("**/rest/v1/jarvis_remote_jobs**", async route => {
   return json(route, []);
 });
 
+
+async function assertNoHorizontalOverflow(label){
+  const dims=await page.evaluate(()=>({
+    doc:document.documentElement.scrollWidth,
+    body:document.body.scrollWidth,
+    viewport:window.innerWidth
+  }));
+  if(Math.max(dims.doc,dims.body)>dims.viewport+2)throw new Error(label+" has horizontal overflow: "+JSON.stringify(dims));
+}
+async function assertSignedInViewport(width,height,label){
+  await page.setViewportSize({width,height});
+  await page.reload({waitUntil:"networkidle"});
+  await assertNoHorizontalOverflow(label);
+  if(width<=900 || (width<=1024&&height<=600)){
+    if(!(await page.locator(".mobileNav").isVisible()))throw new Error(label+" mobile navigation missing.");
+  }else{
+    if(!(await page.locator(".rail").isVisible()))throw new Error(label+" desktop rail missing.");
+  }
+  if(!(await page.locator("#prompt").isVisible()))throw new Error(label+" chat composer missing.");
+}
+
 const errors = [];
 page.on("pageerror", err => errors.push(String(err)));
 page.on("console", msg => { if (msg.type() === "error" && !msg.text().includes("401 (Unauthorized)")) errors.push(msg.text()); });
@@ -109,12 +130,20 @@ await page.waitForTimeout(150);
 if (!queued) throw new Error("Builder request was not queued.");
 if (errors.length) throw new Error("Browser errors: " + errors.join(" | "));
 
-await page.setViewportSize({ width: 390, height: 844 });
-await page.reload({ waitUntil: "networkidle" });
-if (!(await page.locator(".mobileNav").isVisible())) throw new Error("Mobile navigation did not render.");
+for (const [w,h,label] of [
+  [360,800,"Android narrow portrait"],
+  [390,844,"Android portrait"],
+  [844,390,"Android landscape"],
+  [768,1024,"Tablet portrait"],
+  [1366,768,"Laptop"],
+  [1920,1080,"Desktop"]
+]){
+  await assertSignedInViewport(w,h,label);
+}
 const mobileButtons = await page.locator(".mobileNav button").count();
+await page.setViewportSize({width:390,height:844});
+await page.reload({waitUntil:"networkidle"});
 if (mobileButtons !== 5) throw new Error("Expected 5 mobile navigation actions, got " + mobileButtons);
-
 await page.screenshot({ path: "signed-in-smoke.png", fullPage: true });
 console.log("ASH SIGNED-IN UI SMOKE: PASS");
 await browser.close();
