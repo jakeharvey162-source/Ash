@@ -691,11 +691,11 @@ async function playVoiceBlob(blob){
     if(AC){
       const ctx=new AC(),src=ctx.createMediaElementSource(audio),an=ctx.createAnalyser();
       an.fftSize=128;an.smoothingTimeConstant=.74;src.connect(an);an.connect(ctx.destination);
-      audio.addEventListener("play",()=>animateWaveFromAnalyser(an,audio),{once:true});
+      audio.addEventListener("play",()=>{animateWaveFromAnalyser(an,audio);onStarted?.(true)},{once:true});
       audio.addEventListener("ended",()=>{setVoiceState(false);ctx.close().catch(()=>{});URL.revokeObjectURL(url)},{once:true});
       audio.addEventListener("error",()=>{setVoiceState(false);ctx.close().catch(()=>{});URL.revokeObjectURL(url)},{once:true});
     }else{
-      audio.addEventListener("play",()=>animateSyntheticWave(true),{once:true});
+      audio.addEventListener("play",()=>{animateSyntheticWave(true);onStarted?.(true)},{once:true});
       audio.addEventListener("ended",()=>{setVoiceState(false);URL.revokeObjectURL(url)},{once:true});
     }
     await audio.play();
@@ -804,21 +804,35 @@ function splitSpeechChunks(text){
   if(!clean)return [];
   const sentences=clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g)||[clean];
   const out=[];
+  const splitByWords=(sentence,limit)=>{
+    const parts=[];let part="";
+    for(const word of sentence.trim().split(/\s+/)){
+      const next=(part+" "+word).trim();
+      if(next.length>limit&&part){parts.push(part);part=word}else part=next;
+    }
+    if(part)parts.push(part);
+    return parts;
+  };
+
+  const first=(sentences.shift()||"").trim();
+  if(first)out.push(...splitByWords(first,82));
+
   let bucket="";
   for(const sentence of sentences){
-    const next=(bucket+" "+sentence.trim()).trim();
-    if(next.length<=240){bucket=next;continue}
-    if(bucket)out.push(bucket);
-    if(sentence.length<=240){bucket=sentence.trim();continue}
-    const words=sentence.trim().split(/\s+/);let part="";
-    for(const word of words){
-      if((part+" "+word).trim().length>220){if(part)out.push(part);part=word}else part=(part+" "+word).trim()
+    const s=sentence.trim();
+    const next=(bucket+" "+s).trim();
+    if(next.length<=205){bucket=next;continue}
+    if(bucket){out.push(bucket);bucket=""}
+    if(s.length<=205)bucket=s;
+    else{
+      const pieces=splitByWords(s,185);
+      if(pieces.length){out.push(...pieces.slice(0,-1));bucket=pieces.at(-1)||""}
     }
-    bucket=part;
   }
   if(bucket)out.push(bucket);
-  return out.slice(0,18);
+  return out.filter(Boolean).slice(0,24);
 }
+
 async function fetchVoiceBlob(text,generation){
   if(!voiceEnabled()||generation!==voiceGeneration)return null;
   try{
@@ -827,18 +841,18 @@ async function fetchVoiceBlob(text,generation){
   }catch{}
   return null;
 }
-function playBrowserSpeech(text,generation){
+function playBrowserSpeech(text,generation,onStarted){
   return new Promise(resolve=>{
-    if(!voiceEnabled()||generation!==voiceGeneration||!("speechSynthesis"in window)){resolve();return}
+    if(!voiceEnabled()||generation!==voiceGeneration||!("speechSynthesis"in window)){onStarted?.(false);resolve();return}
     const u=new SpeechSynthesisUtterance(text);
-    u.rate=1.03;
-    u.onstart=()=>setVoiceState(true,true);
+    u.rate=1.18;u.pitch=1;
+    u.onstart=()=>{setVoiceState(true,true);onStarted?.(true)};
     u.onend=()=>{setVoiceState(false);resolve()};
-    u.onerror=()=>{setVoiceState(false);resolve()};
+    u.onerror=()=>{onStarted?.(false);setVoiceState(false);resolve()};
     speechSynthesis.speak(u);
   });
 }
-async function playVoiceBlobQueued(blob,generation){
+async function playVoiceBlobQueued(blob,generation,onStarted){
   if(!blob||!voiceEnabled()||generation!==voiceGeneration)return;
   return new Promise(async resolve=>{
     const url=URL.createObjectURL(blob),audio=new Audio(url);
@@ -866,66 +880,100 @@ async function playVoiceBlobQueued(blob,generation){
       audio.addEventListener("ended",cleanup,{once:true});
       audio.addEventListener("error",cleanup,{once:true});
       await audio.play();
-    }catch{cleanup()}
+    }catch{onStarted?.(false);cleanup()}
   });
 }
-async function runVoiceQueue(generation){
+async function runVoiceQueue(generation,onFirstStarted){
   if(voiceQueueRunning)return;
   voiceQueueRunning=true;
+  let announced=false,browserOnly=false,first=true;
+  const announce=ok=>{if(!announced){announced=true;onFirstStarted?.(Boolean(ok))}};
   try{
     while(voiceQueue.length&&generation===voiceGeneration&&voiceEnabled()){
       const item=voiceQueue.shift();
+      if(!item)continue;
+
       let blob=null;
-      if(item?.blobPromise)blob=await item.blobPromise;
+      if(!browserOnly&&item.blobPromise){
+        if(first){
+          blob=await Promise.race([
+            item.blobPromise,
+            new Promise(resolve=>setTimeout(()=>resolve(null),900))
+          ]);
+          if(!blob)browserOnly=true;
+        }else blob=await item.blobPromise;
+      }
+
       if(generation!==voiceGeneration||!voiceEnabled())break;
-      if(blob)await playVoiceBlobQueued(blob,generation);
-      else await playBrowserSpeech(item.text,generation);
+      if(blob&&!browserOnly)await playVoiceBlobQueued(blob,generation,announce);
+      else await playBrowserSpeech(item.text,generation,announce);
+      first=false;
     }
   }finally{
+    if(!announced)announce(false);
     voiceQueueRunning=false;
     if(generation===voiceGeneration&&!voiceQueue.length)setVoiceState(false);
   }
 }
 function queueSpeech(text){
-  if(!text||!voiceEnabled())return;
+  if(!text||!voiceEnabled())return Promise.resolve(false);
   stopVoicePlayback();
   const generation=voiceGeneration;
   const chunks=splitSpeechChunks(text);
+  if(!chunks.length)return Promise.resolve(false);
+
+  let resolveStarted;
+  const started=new Promise(resolve=>{resolveStarted=resolve});
   voiceQueue=chunks.map((chunk,i)=>({
     text:chunk,
-    blobPromise:i<3?fetchVoiceBlob(chunk,generation):null
+    blobPromise:i<4?fetchVoiceBlob(chunk,generation):null
   }));
-  // Prefetch the first few chunks immediately; later chunks are fetched just before playback.
-  for(let i=3;i<voiceQueue.length;i++){
+
+  for(let i=4;i<voiceQueue.length;i++){
     Object.defineProperty(voiceQueue[i],"blobPromise",{configurable:true,enumerable:true,get(){
       const p=fetchVoiceBlob(this.text,generation);
       Object.defineProperty(this,"blobPromise",{value:p,writable:true,enumerable:true});
       return p;
     }});
   }
-  runVoiceQueue(generation);
+
+  runVoiceQueue(generation,ok=>resolveStarted(Boolean(ok)));
+  return started;
 }
 function currentInfoIntent(message){
-  return /\b(research|search|web|internet|latest|current|today|tonight|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|result|results|market|stock|weather)\b/i.test(message);
+  const m=String(message||"");
+  return /\b(research|search|web|internet|latest|current|today|tonight|yesterday|tomorrow|date|year|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|result|results|market|stock|weather|president|prime minister|minister|mayor|governor|ceo|leader|officeholder|election|poll|policy|law|legislation|exchange rate|interest rate|roster|lineup|standings|schedule|fixture|availability|outage|status|2026)\b/i.test(m)
+    || (/\b(who is|who's|what is|what's)\b/i.test(m)&&/\b(openai|google|microsoft|apple|meta|anthropic|tesla|nvidia|samsung|netflix|spotify|github|vercel|supabase|chatgpt|gemini|claude|android|windows|iphone)\b/i.test(m));
 }
 async function send(){
   if(sending)return;
   const box=document.querySelector("#prompt"),message=box?.value.trim();if(!message)return;
   const forceResearch=box?.dataset.forceResearch==="1";
+  const fresh=forceResearch||currentInfoIntent(message);
   box.value="";box.dataset.forceResearch="0";document.querySelector("#researchMode")?.classList.remove("active");
   stopVoicePlayback();typeGeneration++;
   const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);
   const replyIndex=messages.length;
-  appendAssistantPlaceholder(replyIndex,forceResearch||currentInfoIntent(message));
-  sending=true;setSendBusy(true);setCoreState("thinking",forceResearch||currentInfoIntent(message)?"Researching the live web and checking sources.":"Working the request across Ash intelligence.");
+  sending=true;setSendBusy(true);setCoreState("thinking",fresh?"Researching the live web and checking sources.":"Working the request across Ash intelligence.");
+
   try{
-    const action=forceResearch||currentInfoIntent(message)?"research":"chat";
+    const action=fresh?"research":"chat";
     const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(-10)})});
     const d=await r.json();
     if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");
+
     const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null,grounded:Boolean(d.grounded),sources:Array.isArray(d.sources)?d.sources:[],researched_at:d.researched_at||null};
     messages.push(reply);
-    if(voiceEnabled())queueSpeech(reply.content);
+
+    if(voiceEnabled()){
+      // No answer text is rendered until the first spoken audio actually starts.
+      await queueSpeech(reply.content);
+      appendAssistantPlaceholder(replyIndex,reply.grounded);
+      await new Promise(r=>setTimeout(r,70));
+    }else{
+      appendAssistantPlaceholder(replyIndex,reply.grounded);
+    }
+
     await typeAssistantReply(replyIndex,reply.content,reply);
   }catch(e){
     let text=e.message||"Ash cloud is unavailable.";
@@ -935,6 +983,7 @@ async function send(){
       if(!/session expired/i.test(text))text+=" Local rescue is unavailable too: "+(rescueError.message||"desktop offline.")
     }
     const reply={role:"assistant",content:text};messages.push(reply);
+    appendAssistantPlaceholder(replyIndex,false);
     await typeAssistantReply(replyIndex,text,reply);
   }finally{
     sending=false;setSendBusy(false);if(!speaking)setCoreState("idle")

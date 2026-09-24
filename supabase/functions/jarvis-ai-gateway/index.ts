@@ -115,6 +115,9 @@ async function learnStyle(ctx: { user: any; auth: string; url: string; anon: str
 }
 
 function buildSystemPrompt(profile: any, style: any) {
+  const now = new Date();
+  const currentDate = now.toISOString().slice(0, 10);
+  const currentYear = now.getUTCFullYear();
   const name = String(profile?.assistant_name || "Ash").slice(0, 40);
   const preset = String(profile?.personality_preset || "adaptive");
   const behavior = profile?.behavior_config || {};
@@ -138,6 +141,9 @@ function buildSystemPrompt(profile: any, style: any) {
 
   return [
     `You are ${name}, the single front door to a private multi-agent AI organization. Your default identity is Ash until the user chooses another assistant name.`,
+    `Current date: ${currentDate} UTC. Current year: ${currentYear}.`,
+    "Never present 2023, 2024, 2025, or another past year as the current year.",
+    "Never say that Ash's information only goes up to 2023. Static model training may be older, but Ash must use live research for facts that can change over time instead of presenting stale model memory as current.",
     personalities[preset] || personalities.adaptive,
     `Response verbosity: ${verbosity}. Proactivity: ${proactivity}. Humor level: ${humor}/100.`,
     "Be human, clear and useful. Never pretend an action, test, message, deployment or computer operation succeeded unless there is evidence.",
@@ -398,7 +404,9 @@ async function askHighEnsemble(system: string, message: string, history: ChatMes
 }
 
 function researchIntent(message: string) {
-  return /\b(research|search|web|internet|online|latest|current|today|tonight|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|result|results|market|stock|weather)\b/i.test(message);
+  const m = String(message || "");
+  return /\b(research|search|web|internet|online|latest|current|today|tonight|yesterday|tomorrow|date|year|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|result|results|market|stock|weather|president|prime minister|minister|mayor|governor|ceo|leader|officeholder|election|poll|policy|law|legislation|exchange rate|interest rate|roster|lineup|standings|schedule|fixture|availability|outage|status|2026)\b/i.test(m)
+    || (/\b(who is|who's|what is|what's)\b/i.test(m) && /\b(openai|google|microsoft|apple|meta|anthropic|tesla|nvidia|samsung|netflix|spotify|github|vercel|supabase|chatgpt|gemini|claude|android|windows|iphone)\b/i.test(m));
 }
 
 function cleanSourceUrl(value: unknown) {
@@ -760,7 +768,7 @@ async function speech(text: string, voiceId?: string) {
     body: JSON.stringify({
       text: text.slice(0, 5000),
       model_id: model,
-      voice_settings: { stability: 0.52, similarity_boost: 0.78, style: 0.18, use_speaker_boost: true }
+      voice_settings: { stability: 0.50, similarity_boost: 0.78, style: 0.08, use_speaker_boost: true, speed: 1.15 }
     })
   });
   if (!response.ok) return null;

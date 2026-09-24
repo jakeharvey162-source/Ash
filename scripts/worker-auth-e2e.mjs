@@ -131,6 +131,20 @@ try{
   report.liveResearch={status:research.status,grounded:research.data?.grounded,sources:Array.isArray(research.data?.sources)?research.data.sources.length:0,researched_at:research.data?.researched_at||null,error:research.data?.error||null,research_status:research.data?.research_status||null};
   if(!research.ok||research.data?.grounded!==true||!Array.isArray(research.data?.sources)||research.data.sources.length<1)throw new Error("Live research did not return grounded current sources: "+JSON.stringify(report.liveResearch));
   report.checks.liveResearchGrounded=true;
+  const yearCheck=await page.evaluate(async ()=>{
+    const cfg=window.JARVIS_CONFIG||{};
+    const s=JSON.parse(localStorage.getItem("ash-session")||"null");
+    const r=await fetch(cfg.ASH_GATEWAY_URL,{
+      method:"POST",
+      headers:{apikey:cfg.SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+s.access_token,"Content-Type":"application/json"},
+      body:JSON.stringify({action:"chat",message:"What year is it right now? Answer with the current year.",mode:"instant",history:[]})
+    });
+    let d={};try{d=await r.json()}catch{}
+    return {ok:r.ok,status:r.status,answer:String(d.answer||"")};
+  });
+  report.currentYearCheck=yearCheck;
+  if(!yearCheck.ok||!/\b2026\b/.test(yearCheck.answer)||/\b2023\b/.test(yearCheck.answer))throw new Error("Ash returned a stale current year: "+JSON.stringify(yearCheck));
+  report.checks.currentYear2026=true;
 
   await page.locator("[data-view='settings']").first().click();
   await page.locator("#signout").click();
