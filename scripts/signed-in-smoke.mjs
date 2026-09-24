@@ -33,6 +33,8 @@ await page.route("**/rest/v1/jarvis_profiles**", route => json(route, [{
 
 await page.route("**/rest/v1/jarvis_automations**", route => json(route, []));
 await page.route("**/rest/v1/jarvis_integrations**", route => json(route, []));
+await page.route("**/functions/v1/jarvis-ai-gateway**", route => json(route, { answer: "Chat render test passed.", mode: "high", assistant_name: "Ash" }));
+
 await page.route("**/rest/v1/jarvis_devices**", route => json(route, [{
   id: "10000000-0000-0000-0000-000000000001",
   user_id: "00000000-0000-0000-0000-000000000001",
@@ -65,6 +67,13 @@ await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
 if (!(await page.locator(".shell").isVisible())) throw new Error("Signed-in shell did not render.");
 if (!(await page.getByText("Overview", { exact: true }).isVisible())) throw new Error("Desktop navigation missing.");
 if (!(await page.getByText("Builder", { exact: true }).first().isVisible())) throw new Error("Builder navigation missing.");
+
+await page.locator("#ashCoreCanvas").evaluate(el => el.dataset.persistToken = "keep");
+await page.locator("#prompt").fill("Test chat rendering");
+await page.locator("#send").click();
+await page.getByText("Chat render test passed.", { exact: true }).waitFor({ state: "visible", timeout: 5000 });
+const persisted = await page.locator("#ashCoreCanvas").evaluate(el => el.dataset.persistToken || "");
+if (persisted !== "keep") throw new Error("Chat send rebuilt the Ash Core instead of updating in place.");
 
 await page.getByText("Builder", { exact: true }).first().click();
 await page.waitForTimeout(150);
