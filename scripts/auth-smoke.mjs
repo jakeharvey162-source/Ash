@@ -94,6 +94,7 @@ await page.locator("#password").fill("Password123!");
 await page.locator("#authSubmit").click();
 await page.locator(".shell").waitFor({state:"visible",timeout:5000});
 if (!(await page.getByText("Overview",{exact:true}).isVisible())) throw new Error("New signup did not enter Ash immediately.");
+await page.getByRole("button",{name:"Preferences",exact:true}).click();
 await page.locator("#signout").click();
 await page.getByRole("button",{name:"Sign in",exact:true}).waitFor({state:"visible",timeout:3000});
 if (await page.locator("#name").count()) throw new Error("Sign-in mode still shows name field.");
