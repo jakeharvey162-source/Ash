@@ -66,7 +66,7 @@ if (!(await page.locator("#authSubmit").isVisible())) throw new Error("Sign in b
 if (!(await page.getByRole("button",{name:"Create account"}).isVisible())) throw new Error("Create account tab missing.");
 
 for (const label of ["Product","Capabilities","Safety","Company"]) {
-  const nav = page.getByRole("button",{name:label,exact:true});
+  const nav = page.locator(".authNav").getByRole("button",{name:label,exact:true});
   if (!(await nav.isVisible())) throw new Error(label+" navigation button missing.");
   await nav.click();
   await page.waitForTimeout(80);
