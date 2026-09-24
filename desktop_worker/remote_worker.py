@@ -59,7 +59,7 @@ class AshRemoteWorker:
             'app_version': 'ash-desktop-worker-2',
             'is_trusted': True,
             'last_seen_at': now,
-            'capabilities': {'builder': True, 'local_ai': True, 'verified_builds': True, 'auto_repair': True},
+            'capabilities': {'builder': True, 'local_ai': True, 'offline_brain': True, 'verified_builds': True, 'auto_repair': True},
         }
         if rows:
             self.device_id = str(rows[0]['id'])
