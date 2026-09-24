@@ -42,7 +42,7 @@ async function assertMouseWheelScroll(){
   await page.setViewportSize({width:1366,height:768});
   await page.reload({waitUntil:"networkidle"});
   await page.evaluate(()=>window.scrollTo(0,0));
-  await page.mouse.move(700,600);
+  await page.mouse.move(24,Math.min(600,(await page.viewportSize()).height-40));
   await page.mouse.wheel(0,700);
   await page.waitForTimeout(250);
   const y=await page.evaluate(()=>window.scrollY);
