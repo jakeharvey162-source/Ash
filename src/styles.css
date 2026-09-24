@@ -776,3 +776,33 @@ html,body{overflow-y:auto!important}
   .composer{grid-template-columns:40px minmax(0,1fr) 34px 40px}
   .answerSources a span{max-width:160px}
 }
+
+
+/* ----- Hands-free wake listening ----- */
+.handsFreeToggle{
+  display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface-2);
+  color:var(--muted);border-radius:999px;padding:6px 9px;font-size:.68rem;white-space:nowrap
+}
+.handsFreeToggle span{font-size:.58rem;color:var(--faint);transition:.2s ease}
+.handsFreeToggle em{font-style:normal}
+.handsFreeToggle.active{color:var(--text);border-color:color-mix(in srgb,var(--accent) 38%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--surface-2))}
+.handsFreeToggle.active span{color:var(--accent);box-shadow:0 0 12px color-mix(in srgb,var(--accent) 70%,transparent);border-radius:50%}
+.handsFreeToggle.listening span{animation:ashMicPulse 1.25s ease-in-out infinite}
+.wakeControlRow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 7px}
+.wakeControlRow small{color:var(--muted);font-size:.63rem}
+.wakePill{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;
+  padding:6px 9px;background:var(--surface-2);color:var(--muted);font-size:.62rem
+}
+.wakePill span{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.wakePill.active{color:var(--text);border-color:color-mix(in srgb,var(--accent) 36%,var(--line))}
+.wakePill.active span{background:var(--accent);box-shadow:0 0 10px color-mix(in srgb,var(--accent) 75%,transparent)}
+#mic.listening{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,var(--line));box-shadow:0 0 18px color-mix(in srgb,var(--accent) 18%,transparent);animation:ashMicPulse 1.25s ease-in-out infinite}
+.core-listening .voiceWave{opacity:1}
+.voicePrivacy{margin:-4px 0 8px;line-height:1.45}
+@keyframes ashMicPulse{0%,100%{transform:scale(1);opacity:.72}50%{transform:scale(1.08);opacity:1}}
+@media(max-width:900px){.handsFreeToggle em{display:none}}
+@media(max-width:650px){
+  .handsFreeToggle{padding:6px 8px}
+  .wakeControlRow{justify-content:center}
+}
