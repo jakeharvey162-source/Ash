@@ -542,14 +542,14 @@ function normalizeResearchQuery(message: string) {
   let q = String(message || "").trim();
   q = q.replace(/^\s*(research|search(?: the)?(?: web)?|look up|find online|verify|fact[- ]?check)\s+/i, "");
   q = q.replace(/\b(include|with)\s+(live\s+)?sources?\.?$/i, "").trim();
-  if (/\bofficial\s+openai\b/i.test(q) || /\bopenai\b/i.test(q) && /\bofficial\b/i.test(q)) {
-    q = "site:openai.com " + q.replace(/\bofficial\b/ig, "").trim();
+  if (/\bofficial(?:ly)?\s+openai\b/i.test(q) || /\bopenai\b/i.test(q) && /\bofficial(?:ly)?\b/i.test(q)) {
+    q = "site:openai.com " + q.replace(/\bofficial(?:ly)?\b/ig, "").trim();
   }
   return q || message;
 }
 
 async function openAiOfficialResearch(system: string, message: string, mode: Mode, researchedAt: string) {
-  if (!/\bopenai\b/i.test(message) || !/\bofficial\b/i.test(message)) throw new Error("openai_official_not_requested");
+  if (!/\bopenai\b/i.test(message) || !/\bofficial(?:ly)?\b/i.test(message)) throw new Error("openai_official_not_requested");
 
   const isOfficialOpenAi = (url: string) => {
     try {
@@ -826,7 +826,7 @@ async function openRouterLegacyResearch(system: string, message: string, mode: M
 
 async function webResearch(system: string, message: string, mode: Mode) {
   const researchedAt = new Date().toISOString();
-  if (/\bopenai\b/i.test(message) && /\bofficial\b/i.test(message)) {
+  if (/\bopenai\b/i.test(message) && /\bofficial(?:ly)?\b/i.test(message)) {
     return await openAiOfficialResearch(system, message, mode, researchedAt);
   }
   const researchSystem = system + [
