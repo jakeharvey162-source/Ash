@@ -106,7 +106,8 @@ class AshRemoteWorker:
         if not self.device_id or not self.device_secret:
             raise RuntimeError("Ash did not return a device credential.")
         self._save_device_config()
-        self.agent.set_device_credentials(self.device_id, self.device_secret)
+        if hasattr(self.agent, "set_device_credentials"):
+            self.agent.set_device_credentials(self.device_id, self.device_secret)
 
     def headers(self, prefer: str | None = None) -> dict[str, str]:
         h = {"apikey": self.key, "Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
