@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "BETA_RELEASE"
+      - ".github/workflows/publish-android-beta.yml"
 
 permissions:
   contents: write
