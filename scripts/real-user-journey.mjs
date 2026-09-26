@@ -5,13 +5,14 @@ const url = process.env.ASH_LIVE_URL || "https://meet-ash.jakeharvey162.workers.
 const stamp = Date.now();
 const email = "ash-user-journey-" + stamp + "@example.com";
 const password = "AshUser!" + stamp + "#Q7";
-const report = { url, startedAt:new Date().toISOString(), email, tasks:[], checks:{}, errors:[] };
+const report = { url, startedAt:new Date().toISOString(), email, tasks:[], checks:{}, errors:[], badResponses:[] };
 
 const browser = await chromium.launch({ headless:true });
 const page = await browser.newPage({ viewportSize:{ width:1440, height:960 } });
 page.on("console", msg => { if (msg.type()==="error") report.errors.push({type:"console",text:msg.text()}); });
 page.on("pageerror", err => report.errors.push({type:"page",text:String(err)}));
 page.on("requestfailed", req => report.errors.push({type:"request",url:req.url(),text:req.failure()?.errorText||"failed" }));
+page.on("response", res => { if(res.status()>=400) report.badResponses.push({status:res.status(),url:res.url()}); });
 
 async function visible(sel,label,timeout=15000){
   await page.locator(sel).waitFor({state:"visible",timeout}).catch(()=>{ throw new Error(label+" not visible"); });
@@ -125,6 +126,20 @@ try{
   report.voice=voice;
   if(!voice.ok) throw new Error("Voice catalog request failed HTTP "+voice.status);
   report.checks.voiceCatalog=true;
+
+  const tts=await page.evaluate(async()=>{
+    const cfg=window.JARVIS_CONFIG||{};
+    const s=JSON.parse(localStorage.getItem("ash-session")||"null");
+    const r=await fetch(cfg.ASH_GATEWAY_URL,{
+      method:"POST",
+      headers:{apikey:cfg.SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+s.access_token,"Content-Type":"application/json"},
+      body:JSON.stringify({action:"speech",text:"Ash voice test.",voice_speed:1.07})
+    });
+    return {ok:r.ok,status:r.status,contentType:r.headers.get("content-type")||"",bytes:(await r.arrayBuffer()).byteLength};
+  });
+  report.tts=tts;
+  if(!tts.ok || !/audio/i.test(tts.contentType) || tts.bytes<500) throw new Error("TTS failed: "+JSON.stringify(tts));
+  report.checks.tts=true;
 
   await page.screenshot({path:"ash-real-user-journey.png",fullPage:true});
   report.ok=true;
