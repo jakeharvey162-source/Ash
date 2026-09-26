@@ -1335,32 +1335,51 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
   let raw = "";
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (geminiKey) {
-    const configured = Deno.env.get("GEMINI_VISION_MODEL") || Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
-    try {
-      const response = await providerFetch(
-        "computer_vision_primary",
-        "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(configured) + ":generateContent?key=" + geminiKey,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              role: "user",
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType: "image/jpeg", data: screenshotBase64 } }
-              ]
-            }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 1200, responseMimeType: "application/json" }
-          })
-        },
-        10000
-      );
-      if (response.ok) {
+    const configured = String(Deno.env.get("GEMINI_VISION_MODEL") || Deno.env.get("GEMINI_MODEL") || "").trim();
+    const modelCandidates = [...new Set([
+      configured,
+      "gemini-3.8-flash",
+      "gemini-3.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.5-flash"
+    ].filter(Boolean))];
+    for (const model of modelCandidates) {
+      try {
+        const response = await providerFetch(
+          "computer_vision_primary",
+          "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + geminiKey,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{
+                role: "user",
+                parts: [
+                  { text: prompt },
+                  { inlineData: { mimeType: "image/jpeg", data: screenshotBase64 } }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 1200,
+                responseMimeType: "application/json"
+              }
+            })
+          },
+          12000
+        );
+        if (!response.ok) {
+          console.warn("ash_computer_vision_model_failed", model, response.status);
+          continue;
+        }
         const data = await response.json();
         raw = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || "").join("").trim() || "";
+        if (raw) break;
+        console.warn("ash_computer_vision_model_empty", model);
+      } catch (error) {
+        console.warn("ash_computer_vision_model_error", model, String((error as Error)?.message || error));
       }
-    } catch {}
+    }
   }
 
   if (!raw) {
