@@ -70,6 +70,24 @@ class RescueWorkerTests(unittest.TestCase):
         self.assertEqual(worker.finished["result"]["summary"], "offline:hello")
         self.assertEqual(worker.finished["result"]["backend"], "python_micro_core")
 
+    def test_sync_preferences_writes_wake_config(self):
+        worker = AshRemoteWorker.__new__(AshRemoteWorker)
+        worker.device_id = "dev-1"
+        worker.device_secret = "secret-1"
+        worker.broker = lambda action, body=None: {
+            "assistant_name": "Orion",
+            "wake_word": "Nova",
+            "wake_aliases": ["sentinel", "computer"],
+            "updated_at": "2026-09-26T12:00:00Z",
+        } if action == "preferences" else {}
+        with tempfile.TemporaryDirectory() as td:
+            worker.preferences_path = Path(td) / "preferences.json"
+            worker.sync_preferences()
+            data = __import__("json").loads(worker.preferences_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["assistant_name"], "Orion")
+            self.assertEqual(data["wake_word"], "Nova")
+            self.assertEqual(data["wake_aliases"], ["sentinel", "computer"])
+
     def test_pairing_uses_broker(self):
         class FakeResponse:
             status_code = 200
