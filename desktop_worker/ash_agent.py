@@ -131,6 +131,99 @@ class AshPythonAgent:
         return value
 
     @staticmethod
+    def _fallback_web_plan(request: str) -> dict[str, Any]:
+        return {
+            "name": "Ash Generated App",
+            "stack": ["React", "Vite", "CSS"],
+            "design_system": {
+                "direction": "premium editorial product design",
+                "typography": "strong hierarchy with readable system typography",
+                "spacing": "consistent responsive spacing rhythm",
+                "surfaces": "restrained cards, borders and elevation",
+                "interaction": "visible focus, hover and active states",
+                "responsive": "mobile-first layouts without horizontal overflow",
+            },
+            "files": [
+                {"path": "package.json", "purpose": "Vite React package metadata and scripts"},
+                {"path": "index.html", "purpose": "Accessible HTML entry document"},
+                {"path": "src/main.jsx", "purpose": "React application entry point"},
+                {"path": "src/App.jsx", "purpose": "Complete product interface and realistic content for the user request"},
+                {"path": "src/styles.css", "purpose": "Complete responsive visual system, light/dark themes and interaction states"},
+            ],
+            "acceptance_tests": [
+                "npm install succeeds",
+                "npm run build succeeds",
+                "desktop layout renders without overflow",
+                "mobile layout renders without overflow",
+                "no browser console errors",
+                "no placeholder or fabricated proof",
+            ],
+            "fallback_reason": "Model planning output was not machine-readable; Ash used a verified web scaffold instead.",
+            "request": request[:4000],
+        }
+
+    @staticmethod
+    def _scaffold_file(rel: str):
+        fixed = {
+            "package.json": """{
+  "name": "ash-generated-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^7.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {}
+}
+""",
+            "index.html": """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Application created with Ash Builder" />
+    <title>Ash Build</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+""",
+            "src/main.jsx": """import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App.jsx";
+import "./styles.css";
+
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+""",
+        }
+        return fixed.get(rel)
+
+    @staticmethod
+    def _clean_generated_file(content: str) -> str:
+        text = str(content or "").strip()
+        fence = chr(96) * 3
+        if text.startswith(fence) and text.endswith(fence):
+            first_break = text.find("\n")
+            if first_break >= 0:
+                text = text[first_break + 1:-3].strip()
+        return text + ("\n" if text else "")
+
+    @staticmethod
     def _safe_root(root: str) -> pathlib.Path:
         p = pathlib.Path(root).expanduser().resolve()
         p.mkdir(parents=True, exist_ok=True)
@@ -218,10 +311,12 @@ Rules:
 - Acceptance tests must include build success, mobile layout, desktop layout, no horizontal overflow, no console errors and no fabricated content.
 USER REQUEST:
 """ + request
+        planner_warning = ""
         try:
             plan = self.think_json(planner_prompt, attempts=3)
         except Exception as exc:
-            return AgentResult(False, "Planning did not return valid JSON after structured retries.", {"error": str(exc)})
+            planner_warning = str(exc)
+            plan = self._fallback_web_plan(request)
         specs = plan.get("files") if isinstance(plan, dict) else None
         if not isinstance(specs, list) or not specs:
             return AgentResult(False, "Plan contained no files.", {"plan": plan})
@@ -244,7 +339,9 @@ ARCHITECTURE:
 FILE: {rel}
 PURPOSE: {purpose}
 """
-            content = self.think(prompt, "high")
+            content = self._scaffold_file(rel)
+            if content is None:
+                content = self._clean_generated_file(self.think(prompt, "high"))
             self._safe_write(root, rel, content)
             generated.append(rel)
         evidence: list[dict[str, Any]] = []
@@ -266,7 +363,7 @@ Never claim a test passed unless its exit code is 0. Return a concise release-re
 REQUEST:
 """ + request + "\n\nFILES:\n" + "\n".join(generated) + "\n\nEVIDENCE:\n" + json.dumps(evidence, indent=2), "medium")
         ok = all(item.get("code") == 0 for item in evidence) if evidence else True
-        return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "repaired_files": repaired, "plan": plan, "evidence": evidence})
+        return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "repaired_files": repaired, "plan": plan, "planner_warning": planner_warning, "evidence": evidence})
 
 
 def main() -> int:
