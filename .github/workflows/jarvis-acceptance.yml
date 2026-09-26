@@ -25,6 +25,7 @@ jobs:
       - name: Install app and Playwright
         run: |
           npm install --no-audit --no-fund
+          npm install --no-save playwright
           npx playwright install --with-deps chromium
       - name: Run Jarvis-grade production acceptance
         env:
