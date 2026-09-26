@@ -123,6 +123,17 @@ if (!(await page.getByText("Builder", { exact: true }).first().isVisible())) thr
 if (!(await page.locator("#voiceWave").isVisible())) throw new Error("Ash voice waveform missing.");
 if (!(await page.locator("[data-voice-toggle]").first().isVisible())) throw new Error("Voice toggle missing.");
 if (!(await page.locator("#researchMode").isVisible())) throw new Error("Research control missing.");
+if (!(await page.locator("#voice").count())) {
+  await page.getByRole("button", { name: /You$/ }).click();
+}
+await page.getByRole("button", { name: /You$/ }).click().catch(()=>{});
+await page.waitForTimeout(60);
+if (!(await page.locator("#voice").isVisible())) throw new Error("Voice picker missing.");
+if ((await page.locator("#voice option").count()) < 6) throw new Error("Voice picker should expose multiple voices.");
+if (!(await page.locator("#previewVoice").isVisible())) throw new Error("Voice preview control missing.");
+if (!(await page.locator("#voiceSpeed").isVisible())) throw new Error("Voice pace control missing.");
+await page.getByRole("button", { name: /Home$/ }).click().catch(()=>{});
+await page.getByRole("button", { name: /Overview$/ }).click().catch(()=>{});
 if (!(await page.locator("[data-handsfree-toggle]").first().isVisible())) throw new Error("Hands-free toggle missing.");
 await page.getByRole("button", { name: /Preferences$/ }).click();
 await page.waitForTimeout(100);
