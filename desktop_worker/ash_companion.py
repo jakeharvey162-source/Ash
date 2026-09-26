@@ -7,6 +7,8 @@ import subprocess
 import sys
 import webbrowser
 import tkinter as tk
+import threading
+import queue
 
 ASH_URL = "https://meet-ash.jakeharvey162.workers.dev/"
 
@@ -53,8 +55,13 @@ class AshCompanion:
 
         frame.bind("<Button-3>", self._menu)
         self.worker = None
+        self.voice = None
+        self.events = queue.Queue()
+        self.listening = False
         if start_worker:
             self._start_worker(pair_code)
+            self._start_voice_runtime()
+        self.root.after(120, self._drain_events)
         self._animate()
 
     def _assistant_name(self) -> str:
@@ -82,6 +89,69 @@ class AshCompanion:
         except Exception:
             self.state.config(text="worker could not start")
 
+
+    def _start_voice_runtime(self) -> None:
+        script_dir = pathlib.Path(__file__).parent
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            self.voice = subprocess.Popen(
+                [sys.executable, "-m", "voice_runtime.runtime"],
+                cwd=str(script_dir),
+                creationflags=creationflags,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+            threading.Thread(target=self._read_voice_events, daemon=True).start()
+        except Exception:
+            self.voice = None
+
+    def _read_voice_events(self) -> None:
+        if not self.voice or not self.voice.stdout:
+            return
+        for line in self.voice.stdout:
+            try:
+                event = json.loads(line)
+            except Exception:
+                continue
+            self.events.put(event)
+
+    def _drain_events(self) -> None:
+        try:
+            while True:
+                event = self.events.get_nowait()
+                kind = str(event.get("type") or "")
+                if kind == "ready":
+                    self.state.config(text="always listening · ready")
+                    self.listening = True
+                elif kind == "listening":
+                    self.state.config(text="listening for wake word")
+                    self.listening = True
+                elif kind == "wake":
+                    self.state.config(text="wake word heard")
+                    self.listening = False
+                elif kind == "heard":
+                    heard = str(event.get("text") or "").strip()
+                    self.state.config(text=("heard · " + heard[:28]) if heard else "heard you")
+                elif kind == "thinking":
+                    self.state.config(text="thinking…")
+                    self.listening = False
+                elif kind == "narration":
+                    self.state.config(text="speaking…")
+                    self.listening = False
+                elif kind == "done":
+                    self.state.config(text="ready for next command")
+                    self.listening = True
+                elif kind == "runtime_error":
+                    self.state.config(text="voice optional · open Ash to configure")
+                    self.listening = False
+        except queue.Empty:
+            pass
+        self.root.after(120, self._drain_events)
+
     def _drag_start(self, event) -> None:
         self.drag_x = event.x_root - self.root.winfo_x()
         self.drag_y = event.y_root - self.root.winfo_y()
@@ -100,7 +170,7 @@ class AshCompanion:
     def _animate(self) -> None:
         self.phase = (self.phase + 1) % 40
         pulse = abs(20 - self.phase) / 20
-        inset = int(5 + pulse * 3)
+        inset = int((3 if self.listening else 5) + pulse * (5 if self.listening else 3))
         self.orb.coords(self.ring, inset, inset, 58 - inset, 58 - inset)
         name = self._assistant_name()
         if name != self.name:
@@ -109,11 +179,12 @@ class AshCompanion:
         self.root.after(70, self._animate)
 
     def close(self) -> None:
-        if self.worker and self.worker.poll() is None:
-            try:
-                self.worker.terminate()
-            except Exception:
-                pass
+        for proc in (self.voice, self.worker):
+            if proc and proc.poll() is None:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
         self.root.destroy()
 
     def run(self) -> None:
