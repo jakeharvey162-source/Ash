@@ -47,6 +47,14 @@ jobs:
         run: node scripts/auth-smoke.mjs
       - name: Test signed-in Ash UI
         run: node scripts/signed-in-smoke.mjs
+      - name: Smoke test Cloudflare deployment
+        env:
+          ASH_DEPLOY_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/deployment-smoke.mjs
+      - name: Smoke test Vercel deployment
+        env:
+          ASH_DEPLOY_URL: https://ash-f4.vercel.app/
+        run: node scripts/deployment-smoke.mjs
       - name: Test production Worker auth end to end
         env:
           ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
