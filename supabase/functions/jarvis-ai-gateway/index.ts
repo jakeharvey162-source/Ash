@@ -1022,7 +1022,7 @@ async function listElevenVoices() {
     const labels = voice?.labels && typeof voice.labels === "object" ? voice.labels : {};
     const accent = String(labels.accent || labels.locale || "").trim();
     const gender = String(labels.gender || "").trim();
-    const description = String(labels.description || voice?.description || voice?.category || "ElevenLabs voice").trim();
+    const description = String(labels.description || voice?.description || voice?.category || "Premium voice").trim();
     const meta = [accent, gender].filter(Boolean).join(" · ") || String(voice?.category || "available voice");
     return {
       id: String(voice?.voice_id || ""),
@@ -1161,7 +1161,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "voices") {
       const voices = await listElevenVoices();
-      return json({ voices, provider: voices.length ? "elevenlabs" : "fallback" });
+      return json({ voices });
     }
 
     if (action === "speech") {
