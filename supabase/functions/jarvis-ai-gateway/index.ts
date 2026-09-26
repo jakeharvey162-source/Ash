@@ -3,7 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 type Mode = "instant" | "medium" | "high";
 type ChatMessage = { role?: string; content?: string };
 type ChatBody = {
-  action?: "chat" | "speech" | "research";
+  action?: "chat" | "speech" | "research" | "voices";
   message?: string;
   mode?: Mode;
   history?: ChatMessage[];
@@ -11,6 +11,7 @@ type ChatBody = {
   voice_id?: string;
   previous_text?: string;
   next_text?: string;
+  voice_speed?: number;
 };
 
 const cors = {
@@ -755,24 +756,55 @@ async function callIntegration(ctx: { user: any; auth: string; url: string; anon
 }
 
 const VOICE_PROFILES: Record<string, { stability: number; similarity_boost: number; style: number; speed: number }> = {
-  "cjVigY5qzO86Huf0OWal": { stability: 0.58, similarity_boost: 0.82, style: 0.02, speed: 1.08 },
-  "CwhRBWXzGAHq8TQ4Fs17": { stability: 0.56, similarity_boost: 0.80, style: 0.03, speed: 1.06 },
-  "onwK4e9ZLuTAKqWW03F9": { stability: 0.62, similarity_boost: 0.82, style: 0.01, speed: 1.06 },
-  "IKne3meq5aSn9XLyUdCD": { stability: 0.50, similarity_boost: 0.80, style: 0.05, speed: 1.10 },
-  "EXAVITQu4vr4xnSDxMaL": { stability: 0.58, similarity_boost: 0.82, style: 0.02, speed: 1.08 },
-  "hpp4J3VqNfWAUOO0d1Us": { stability: 0.60, similarity_boost: 0.82, style: 0.02, speed: 1.06 },
-  "Xb7hH8MSUJpSbSDYk0k2": { stability: 0.60, similarity_boost: 0.80, style: 0.01, speed: 1.07 },
-  "pFZP5JQG7iQjIQuC4Bku": { stability: 0.62, similarity_boost: 0.82, style: 0.02, speed: 1.05 }
+  "cjVigY5qzO86Huf0OWal": { stability: 0.52, similarity_boost: 0.76, style: 0, speed: 1.07 },
+  "CwhRBWXzGAHq8TQ4Fs17": { stability: 0.50, similarity_boost: 0.75, style: 0, speed: 1.06 },
+  "onwK4e9ZLuTAKqWW03F9": { stability: 0.54, similarity_boost: 0.77, style: 0, speed: 1.05 },
+  "IKne3meq5aSn9XLyUdCD": { stability: 0.48, similarity_boost: 0.75, style: 0, speed: 1.09 },
+  "EXAVITQu4vr4xnSDxMaL": { stability: 0.52, similarity_boost: 0.76, style: 0, speed: 1.07 },
+  "hpp4J3VqNfWAUOO0d1Us": { stability: 0.53, similarity_boost: 0.77, style: 0, speed: 1.06 },
+  "Xb7hH8MSUJpSbSDYk0k2": { stability: 0.53, similarity_boost: 0.76, style: 0, speed: 1.06 },
+  "pFZP5JQG7iQjIQuC4Bku": { stability: 0.54, similarity_boost: 0.77, style: 0, speed: 1.05 }
 };
-const DEFAULT_VOICE_PROFILE = { stability: 0.58, similarity_boost: 0.80, style: 0.02, speed: 1.08 };
+const DEFAULT_VOICE_PROFILE = { stability: 0.52, similarity_boost: 0.76, style: 0, speed: 1.07 };
 
-async function speech(text: string, voiceId?: string, previousText = "", nextText = "") {
+function clampVoiceSpeed(value: unknown, fallback: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1.16, Math.max(0.94, n));
+}
+
+async function listElevenVoices() {
+  const key = Deno.env.get("ELEVENLABS_API_KEY");
+  if (!key) return [];
+  const response = await fetch("https://api.elevenlabs.io/v2/voices?page_size=40&sort=name&sort_direction=asc&include_total_count=false", {
+    headers: { "xi-api-key": key, Accept: "application/json" }
+  });
+  if (!response.ok) return [];
+  const data = await response.json();
+  const voices = Array.isArray(data?.voices) ? data.voices : [];
+  return voices.slice(0, 40).map((voice: any) => {
+    const labels = voice?.labels && typeof voice.labels === "object" ? voice.labels : {};
+    const accent = String(labels.accent || labels.locale || "").trim();
+    const gender = String(labels.gender || "").trim();
+    const description = String(labels.description || voice?.description || voice?.category || "ElevenLabs voice").trim();
+    const meta = [accent, gender].filter(Boolean).join(" · ") || String(voice?.category || "available voice");
+    return {
+      id: String(voice?.voice_id || ""),
+      name: String(voice?.name || "Voice"),
+      label: description.slice(0, 90),
+      meta: meta.slice(0, 90)
+    };
+  }).filter((voice: any) => voice.id);
+}
+
+async function speech(text: string, voiceId?: string, previousText = "", nextText = "", requestedSpeed?: number) {
   const key = Deno.env.get("ELEVENLABS_API_KEY");
   if (!key) return null;
 
   const voice = voiceId || Deno.env.get("ELEVENLABS_VOICE_ID") || "cjVigY5qzO86Huf0OWal";
   const model = Deno.env.get("ELEVENLABS_MODEL") || "eleven_flash_v2_5";
   const voiceProfile = VOICE_PROFILES[voice] || DEFAULT_VOICE_PROFILE;
+  const speechSpeed = clampVoiceSpeed(requestedSpeed, voiceProfile.speed);
   const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128`, {
     method: "POST",
     headers: {
@@ -783,9 +815,10 @@ async function speech(text: string, voiceId?: string, previousText = "", nextTex
     body: JSON.stringify({
       text: text.slice(0, 5000),
       model_id: model,
-      voice_settings: { ...voiceProfile, use_speaker_boost: true },
+      voice_settings: { ...voiceProfile, speed: speechSpeed, style: 0, use_speaker_boost: true },
       previous_text: previousText.slice(-1000) || undefined,
-      next_text: nextText.slice(0, 1000) || undefined
+      next_text: nextText.slice(0, 1000) || undefined,
+      apply_text_normalization: "auto"
     })
   });
   if (!response.ok) return null;
@@ -855,11 +888,17 @@ Deno.serve(async (req: Request) => {
     const profile = await getProfile(ctx);
     const style = await getStyleSignals(ctx);
 
+    if (action === "voices") {
+      const voices = await listElevenVoices();
+      return json({ voices, provider: voices.length ? "elevenlabs" : "fallback" });
+    }
+
     if (action === "speech") {
       const text = String(body.text || "").trim();
       if (!text) return json({ error: "text_required" }, 400);
       const configuredVoice = String(body.voice_id || profile?.voice_config?.voice_id || "");
-      const result = await speech(text, configuredVoice || undefined, String(body.previous_text || ""), String(body.next_text || ""));
+      const configuredSpeed = Number(body.voice_speed ?? profile?.voice_config?.speech_speed ?? NaN);
+      const result = await speech(text, configuredVoice || undefined, String(body.previous_text || ""), String(body.next_text || ""), configuredSpeed);
       return result || json({ error: "voice_not_configured" }, 503);
     }
 
