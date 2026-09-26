@@ -187,11 +187,20 @@ public class AshWakeService extends Service implements RecognitionListener {
         PendingIntent pending = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         SharedPreferences prefs = getSharedPreferences(PREFS, 0);
         String wake = prefs.getString("wake_word", "Ash");
+        Intent pauseIntent = new Intent(this, AshWakeService.class);
+        pauseIntent.setAction(ACTION_PAUSE);
+        PendingIntent pausePending = PendingIntent.getService(this, 1, pauseIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent stopIntent = new Intent(this, AshWakeService.class);
+        stopIntent.setAction(ACTION_STOP);
+        PendingIntent stopPending = PendingIntent.getService(this, 2, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         return new NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Ash background wake")
             .setContentText("Listening for “" + wake + "” in the background and while the screen is locked.")
             .setContentIntent(pending)
+            .addAction(android.R.drawable.ic_media_pause, "Pause", pausePending)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPending)
             .setOngoing(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
