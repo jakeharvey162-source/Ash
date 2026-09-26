@@ -157,7 +157,8 @@ class AshPythonAgent:
             last = evidence[-1] if evidence else {}
             if last.get("code") == 0:
                 break
-            diagnosis_prompt = """You are Ash's senior debugging engineer.
+            diagnosis_prompt = (
+                """You are Ash's senior debugging engineer.
 A generated web application failed its build. Diagnose the failure and return ONLY JSON:
 {"files":[{"path":"relative/path","content":"complete replacement contents"}],"reason":"short explanation"}
 Rules:
@@ -168,8 +169,10 @@ Rules:
 - Do not claim the build is fixed; the caller will verify it.
 
 PROJECT REQUEST:
-""" + request + "\n\nARCHITECTURE:\n" + json.dumps(plan, indent=2)[:12000] +
-                "\n\nBUILD EVIDENCE:\n" + json.dumps(evidence[-4:], indent=2)[:12000]
+""" + request
+                + "\n\nARCHITECTURE:\n" + json.dumps(plan, indent=2)[:12000]
+                + "\n\nBUILD EVIDENCE:\n" + json.dumps(evidence[-4:], indent=2)[:12000]
+            )
                 
             try:
                 patch = self.think_json(diagnosis_prompt, attempts=2)
