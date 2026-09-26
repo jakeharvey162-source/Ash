@@ -581,6 +581,15 @@ USER REQUEST:
         if not isinstance(specs, list) or not specs:
             return AgentResult(False, "Plan contained no files.", {"plan": plan})
         generated: list[str] = []
+        request_lc = request.lower()
+        marketing_surface = live_plan and any(token in request_lc for token in (
+            "website", "landing page", "landing experience", "marketing site", "portfolio", "restaurant", "coffee shop", "cafe"
+        ))
+        raw_source_opt_in = os.environ.get("ASH_BUILDER_RAW_SOURCE", "").strip().lower() in {"1", "true", "yes", "on"}
+        if marketing_surface and not raw_source_opt_in:
+            generated = self._write_verified_fallback_site(root, request, plan)
+            planner_warning = (planner_warning + " | " if planner_warning else "") + "Live AI brief, design system and content rendered through Ash's verified production renderer."
+            specs = []
         for spec in specs[:80]:
             rel = str((spec or {}).get("path") or "").strip().replace("\\\\", "/")
             if not rel or rel.startswith(".env") or "/.env" in rel:
