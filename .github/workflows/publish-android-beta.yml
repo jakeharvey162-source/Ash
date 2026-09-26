@@ -1,0 +1,40 @@
+name: Publish Ash Android Beta
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "BETA_RELEASE"
+
+permissions:
+  contents: write
+
+jobs:
+  android-beta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npx cap add android
+      - run: npx cap sync android
+      - run: node scripts/patch-android-native.mjs
+      - name: Build APK and AAB
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug bundleDebug
+      - name: Publish free GitHub beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ash-android-beta-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG"             android/app/build/outputs/apk/debug/app-debug.apk             android/app/build/outputs/bundle/debug/app-debug.aab             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --prerelease             --title "Ash Android Beta ${GITHUB_RUN_NUMBER}"             --notes "Engineering preview for Android sideload testing. Includes background/lock-screen foreground wake service, reboot restore, and the current Ash mobile experience. This is a debug beta, not the stable production/store release. Stable release remains gated by live cloud reliability."
