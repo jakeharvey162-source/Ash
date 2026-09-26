@@ -6,7 +6,8 @@ const cwd="builder-acceptance-output";
 const reportPath="builder-visual-acceptance.json";
 const report={checks:{},errors:[]};
 
-const child=spawn("npm",["run","preview","--","--host","127.0.0.1","--port","5179"],{cwd,shell:false,stdio:["ignore","pipe","pipe"]});
+const detached=process.platform!=="win32";
+const child=spawn("npm",["run","preview","--","--host","127.0.0.1","--port","5179"],{cwd,shell:false,stdio:["ignore","pipe","pipe"],detached});
 let logs="";
 child.stdout.on("data",d=>logs+=d.toString());
 child.stderr.on("data",d=>logs+=d.toString());
@@ -55,7 +56,11 @@ try{
   report.ok=false;report.failure=String(e?.stack||e);
 }finally{
   if(browser)await browser.close();
-  child.kill("SIGTERM");
+  try{
+    if(detached&&child.pid)process.kill(-child.pid,"SIGTERM");
+    else child.kill("SIGTERM");
+  }catch{}
+  child.stdout.destroy();child.stderr.destroy();
   fs.writeFileSync(reportPath,JSON.stringify(report,null,2));
   console.log("=== ASH BUILDER VISUAL ACCEPTANCE ===");
   console.log(JSON.stringify(report,null,2));
