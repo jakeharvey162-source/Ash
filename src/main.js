@@ -1005,7 +1005,13 @@ function bind(){
       render();
     }catch(e){const msg=String(e?.message||"");if(authMode==="signup"&&/already registered|already exists|user_already_exists/i.test(msg)){authMode="signin";m.textContent="This email already has an Ash account. Create account does not change its password. Sign in or use Forgot password.";setTimeout(render,1300);return}m.textContent=msg||"Authentication failed."}
   });
-  document.querySelectorAll("[data-view]").forEach(b=>b.onclick=async()=>{view=b.dataset.view;if(["builder","automation","activity","connections","settings","home"].includes(view))await loadOps();render()});
+  document.querySelectorAll("[data-view]").forEach(b=>b.onclick=async()=>{
+    const target=b.dataset.view;
+    if(view===target)return;
+    view=target;
+    if(["builder","automation","activity","connections","settings","home"].includes(view))await loadOps();
+    render();
+  });
   document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{mode=b.dataset.mode;localStorage.setItem("ash-mode",mode);render()});
   document.querySelectorAll("[data-suggest]").forEach(b=>b.onclick=()=>{document.querySelector("#prompt").value=b.dataset.suggest;document.querySelector("#prompt").focus()});  document.querySelector("#send")?.addEventListener("click",send);
   document.querySelector("#prompt")?.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
