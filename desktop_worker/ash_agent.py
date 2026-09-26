@@ -169,7 +169,7 @@ Rules:
 
 PROJECT REQUEST:
 """ + request + "\n\nARCHITECTURE:\n" + json.dumps(plan, indent=2)[:12000] +
-                "\n\nBUILD EVIDENCE:\n" + json.dumps(evidence[-4:], indent=2)[:12000],
+                "\n\nBUILD EVIDENCE:\n" + json.dumps(evidence[-4:], indent=2)[:12000]
                 
             try:
                 patch = self.think_json(diagnosis_prompt, attempts=2)
