@@ -5,6 +5,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
+import android.net.Uri;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -80,6 +83,26 @@ public class AshWakePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void openBatterySettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve(status());
+        } catch (Exception first) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getContext().getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(intent);
+                call.resolve(status());
+            } catch (Exception second) {
+                call.reject("Could not open battery settings.");
+            }
+        }
+    }
+
+    @PluginMethod
     public void status(PluginCall call) {
         call.resolve(status());
     }
@@ -91,6 +114,11 @@ public class AshWakePlugin extends Plugin {
         out.put("paused", prefs.getBoolean("paused", true));
         out.put("wakeWord", prefs.getString("wake_word", "Ash"));
         out.put("permissionGranted", ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED);
+        PowerManager pm = (PowerManager) getContext().getSystemService(android.content.Context.POWER_SERVICE);
+        boolean batteryExempt = pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+        out.put("batteryOptimizationIgnored", batteryExempt);
+        out.put("backgroundMode", "foreground_microphone_service");
+        out.put("lockScreenCapable", true);
         return out;
     }
 }
