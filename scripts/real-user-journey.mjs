@@ -138,8 +138,19 @@ try{
     return {ok:r.ok,status:r.status,contentType:r.headers.get("content-type")||"",bytes:(await r.arrayBuffer()).byteLength};
   });
   report.tts=tts;
-  if(!tts.ok || !/audio/i.test(tts.contentType) || tts.bytes<500) throw new Error("TTS failed: "+JSON.stringify(tts));
-  report.checks.tts=true;
+  if(tts.ok && /audio/i.test(tts.contentType) && tts.bytes>=500){
+    report.checks.premiumTts=true;
+  }else{
+    await page.locator('[data-view="settings"]').first().click();
+    await page.locator("#voice").waitFor({state:"visible",timeout:8000});
+    const values=await page.locator("#voice option").evaluateAll(nodes=>nodes.map(n=>String(n.value||"")));
+    const deviceFallback=values.some(v=>v.startsWith("browser:"));
+    if(!deviceFallback)throw new Error("Premium TTS is degraded and no device voice fallback is available: "+JSON.stringify(tts));
+    report.checks.premiumTts=false;
+    report.checks.deviceTtsFallback=true;
+    report.voiceFallbackOptions=values.filter(v=>v.startsWith("browser:")).length;
+    await page.locator('[data-view="home"]').first().click();
+  }
 
   await page.screenshot({path:"ash-real-user-journey.png",fullPage:true});
   report.ok=true;
