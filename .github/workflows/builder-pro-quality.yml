@@ -8,6 +8,7 @@ on:
       - "desktop_worker/ash_agent.py"
       - "desktop_worker/offline_brain.py"
       - "scripts/builder-pro-quality.py"
+      - "scripts/pair-ci-desktop.mjs"
       - "scripts/builder-visual-audit.mjs"
       - ".github/workflows/builder-pro-quality.yml"
 
@@ -31,6 +32,10 @@ jobs:
           pip install -r desktop_worker/requirements.txt
           npm install --no-save playwright
           npx playwright install --with-deps chromium
+      - name: Pair CI as a real Ash desktop
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/pair-ci-desktop.mjs
       - name: Generate two production-style products
         run: python scripts/builder-pro-quality.py
       - name: Audit generated products visually
