@@ -65,9 +65,9 @@ class AshPythonAgent:
                 raise RuntimeError("Local model returned no answer.")
             return answer
 
-    def think(self, prompt: str, mode: str = "high") -> str:
+    def think(self, prompt: str, mode: str = "high", action: str = "chat") -> str:
         try:
-            return self._cloud(prompt, mode=mode)
+            return self._cloud(prompt, mode=mode, action=action)
         except Exception:
             pass
 
@@ -113,7 +113,7 @@ class AshPythonAgent:
             suffix = ""
             if attempt:
                 suffix = "\n\nIMPORTANT: Your previous attempt was not valid JSON. Return one valid JSON object only. No prose, no markdown fences, no explanation."
-            raw = self.think(prompt + suffix, mode)
+            raw = self.think(prompt + suffix, mode, action="generate")
             try:
                 return self._extract_json(raw)
             except Exception as exc:
@@ -341,7 +341,7 @@ PURPOSE: {purpose}
 """
             content = self._scaffold_file(rel)
             if content is None:
-                content = self._clean_generated_file(self.think(prompt, "high"))
+                content = self._clean_generated_file(self.think(prompt, "high", action="generate"))
             self._safe_write(root, rel, content)
             generated.append(rel)
         evidence: list[dict[str, Any]] = []
@@ -361,7 +361,7 @@ PURPOSE: {purpose}
 Never claim a test passed unless its exit code is 0. Return a concise release-readiness report.
 
 REQUEST:
-""" + request + "\n\nFILES:\n" + "\n".join(generated) + "\n\nEVIDENCE:\n" + json.dumps(evidence, indent=2), "medium")
+""" + request + "\n\nFILES:\n" + "\n".join(generated) + "\n\nEVIDENCE:\n" + json.dumps(evidence, indent=2), "medium", action="generate")
         ok = all(item.get("code") == 0 for item in evidence) if evidence else True
         return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "repaired_files": repaired, "plan": plan, "planner_warning": planner_warning, "evidence": evidence})
 
