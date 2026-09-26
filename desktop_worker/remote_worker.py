@@ -204,6 +204,17 @@ class AshRemoteWorker:
         payload = job.get("payload") or {}
         prompt = str(payload.get("prompt") or "").strip()
         kind = str(job.get("kind") or payload.get("kind") or "mission")
+        if job.get("requires_confirmation") is True:
+            # Modern paired workers are held by ash-device-link before claim. This
+            # protects the legacy token path too, so a confirmation-required job
+            # can never execute merely because an older worker received it.
+            now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            if not self.device_secret:
+                self.rest("jarvis_remote_jobs", method="PATCH", params={"id": f"eq.{job_id}"}, body={
+                    "status": "waiting_for_confirmation",
+                    "updated_at": now,
+                })
+            return
         if not prompt:
             self.finish(job_id, ok=False, error="Job contained no prompt.")
             return
