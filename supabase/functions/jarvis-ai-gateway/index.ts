@@ -460,7 +460,7 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
   const answer = String(data?.choices?.[0]?.message?.content || "").trim();
   if (!answer) console.warn("ash_nvidia_text_empty", model);
   return answer;
-}}
+}
 
 async function askBytez(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("BYTEZ_API_KEY");
