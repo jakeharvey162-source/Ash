@@ -1384,6 +1384,46 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
   }
 
   if (!raw) {
+    const nvidiaKey = Deno.env.get("NVIDIA_API_KEY");
+    if (nvidiaKey) {
+      try {
+        const response = await providerFetch(
+          "computer_vision_nvidia",
+          "https://integrate.api.nvidia.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + nvidiaKey,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: Deno.env.get("NVIDIA_VISION_MODEL") || "meta/llama-3.2-90b-vision-instruct",
+              messages: [{
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  { type: "image_url", image_url: { url: "data:image/jpeg;base64," + screenshotBase64 } }
+                ]
+              }],
+              temperature: 0.1,
+              max_tokens: 1200
+            })
+          },
+          12000
+        );
+        if (response.ok) {
+          const data = await response.json();
+          raw = String(data?.choices?.[0]?.message?.content || "").trim();
+        } else {
+          console.warn("ash_computer_vision_nvidia_failed", response.status);
+        }
+      } catch (error) {
+        console.warn("ash_computer_vision_nvidia_error", String((error as Error)?.message || error));
+      }
+    }
+  }
+
+  if (!raw) {
     const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!openRouterKey) throw new Error("computer_vision_unavailable");
     const visionModel = Deno.env.get("OPENROUTER_VISION_MODEL") || "google/gemini-3-flash-preview";
