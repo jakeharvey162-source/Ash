@@ -34,6 +34,7 @@ class AshPythonAgent:
         self.publishable_key = os.environ.get("ASH_SUPABASE_PUBLISHABLE_KEY", "")
         self.ollama_url = os.environ.get("ASH_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
         self.ollama_model = os.environ.get("ASH_OLLAMA_MODEL", "qwen3-coder")
+        self.ollama_vision_model = os.environ.get("ASH_OLLAMA_VISION_MODEL", "qwen3-vl:4b")
         self.claude_cli_enabled = os.environ.get("ASH_CLAUDE_CLI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
         self.claude_backend = ClaudeCodeBackend() if self.claude_cli_enabled else None
         self.offline = AshOfflineBrain()
@@ -69,24 +70,76 @@ class AshPythonAgent:
                 raise RuntimeError("Ash gateway returned no answer.")
             return answer
 
-    def plan_computer(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
-        if not self.gateway_url or not (self.access_token or (self.device_id and self.device_secret)):
-            raise RuntimeError("Ash computer vision requires an authenticated Ash session or paired desktop.")
-        payload = {
-            "action": "computer_plan",
-            "message": str(goal or ""),
-            "screenshot_base64": str(screenshot_base64 or ""),
-            "screen_width": int(width),
-            "screen_height": int(height),
-        }
-        with httpx.Client(timeout=httpx.Timeout(18.0, connect=6.0)) as client:
-            r = client.post(self.gateway_url, headers=self._headers(), json=payload)
-            if r.status_code >= 400:
-                raise RuntimeError(f"Ash computer vision returned HTTP {r.status_code}: {r.text[:300]}")
-            data = r.json()
+    def _local_computer_plan(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
+        prompt = "\n".join([
+            "You are Ash Computer Control running locally on the user's own computer.",
+            "Inspect the screenshot and choose the smallest safe next actions toward the goal.",
+            'Return ONE JSON object only using this schema: {"done":boolean,"summary":string,"actions":[{"type":"move|click|double_click|type_text|press|hotkey|scroll|wait","x":number,"y":number,"text":string,"key":string,"keys":[string],"amount":number,"seconds":number}]}',
+            "Maximum 4 actions.",
+            f"Coordinates are pixels within {int(width)}x{int(height)}.",
+            "Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
+            "Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
+            "If a sensitive/manual step is required, return done=true with a summary asking the user to do it manually.",
+            "Do not claim success unless the screenshot proves it.",
+            "GOAL: " + str(goal or ""),
+        ])
+        with httpx.Client(timeout=httpx.Timeout(35.0, connect=2.0)) as client:
+            r = client.post(
+                f"{self.ollama_url}/api/chat",
+                json={
+                    "model": self.ollama_vision_model,
+                    "stream": False,
+                    "format": "json",
+                    "messages": [{"role": "user", "content": prompt, "images": [str(screenshot_base64 or "")]}],
+                    "options": {"temperature": 0.1},
+                },
+            )
+            r.raise_for_status()
+            raw = str((r.json().get("message") or {}).get("content") or "").strip()
+        if not raw:
+            raise RuntimeError("Local Ash vision returned no plan.")
+        data = self._extract_json(raw)
         if not isinstance(data, dict):
-            raise RuntimeError("Ash computer vision returned an invalid plan.")
-        return data
+            raise RuntimeError("Local Ash vision returned an invalid plan.")
+        allowed = {"move", "click", "double_click", "type_text", "press", "hotkey", "scroll", "wait"}
+        actions = [a for a in (data.get("actions") or []) if isinstance(a, dict) and str(a.get("type") or "") in allowed][:4]
+        return {"done": data.get("done") is True, "summary": str(data.get("summary") or ""), "actions": actions, "vision_source": "local"}
+
+    def plan_computer(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
+        cloud_error: Exception | None = None
+        if self.gateway_url and (self.access_token or (self.device_id and self.device_secret)):
+            payload = {
+                "action": "computer_plan",
+                "message": str(goal or ""),
+                "screenshot_base64": str(screenshot_base64 or ""),
+                "screen_width": int(width),
+                "screen_height": int(height),
+            }
+            try:
+                with httpx.Client(timeout=httpx.Timeout(18.0, connect=6.0)) as client:
+                    r = client.post(self.gateway_url, headers=self._headers(), json=payload)
+                    if r.status_code >= 400:
+                        raise RuntimeError(f"Ash computer vision returned HTTP {r.status_code}: {r.text[:300]}")
+                    data = r.json()
+                if not isinstance(data, dict):
+                    raise RuntimeError("Ash computer vision returned an invalid plan.")
+                data.setdefault("vision_source", "cloud")
+                return data
+            except Exception as exc:
+                cloud_error = exc
+
+        try:
+            return self._local_computer_plan(goal, screenshot_base64, width, height)
+        except Exception as local_exc:
+            if cloud_error is not None:
+                raise RuntimeError(
+                    "Ash computer vision is unavailable in both cloud and local modes. "
+                    f"Cloud: {cloud_error}. Local model {self.ollama_vision_model}: {local_exc}"
+                ) from local_exc
+            raise RuntimeError(
+                "Ash computer vision needs either a paired/cloud session or a local Ollama vision model. "
+                f"Local model {self.ollama_vision_model} failed: {local_exc}"
+            ) from local_exc
 
     def _local(self, prompt: str) -> str:
         with httpx.Client(timeout=self.timeout) as client:
