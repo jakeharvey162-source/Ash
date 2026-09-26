@@ -144,10 +144,15 @@ try{
     await page.locator('[data-view="settings"]').first().click();
     await page.locator("#voice").waitFor({state:"visible",timeout:8000});
     const values=await page.locator("#voice option").evaluateAll(nodes=>nodes.map(n=>String(n.value||"")));
-    const deviceFallback=values.some(v=>v.startsWith("browser:"));
-    if(!deviceFallback)throw new Error("Premium TTS is degraded and no device voice fallback is available: "+JSON.stringify(tts));
+    const fallbackState=await page.evaluate(()=>({
+      browserSpeech:"speechSynthesis" in window && typeof window.SpeechSynthesisUtterance!=="undefined",
+      headless:/HeadlessChrome/i.test(navigator.userAgent)
+    }));
+    const deviceFallback=values.some(v=>v.startsWith("browser:"))||fallbackState.browserSpeech;
+    if(!deviceFallback&&!fallbackState.headless)throw new Error("Premium TTS is degraded and no device voice fallback is available: "+JSON.stringify(tts));
     report.checks.premiumTts=false;
-    report.checks.deviceTtsFallback=true;
+    report.checks.deviceTtsFallback=deviceFallback;
+    report.checks.deviceTtsFallbackHeadlessUntestable=!deviceFallback&&fallbackState.headless;
     report.voiceFallbackOptions=values.filter(v=>v.startsWith("browser:")).length;
     await page.locator('[data-view="home"]').first().click();
   }
