@@ -55,6 +55,10 @@ jobs:
         env:
           ASH_DEPLOY_URL: https://ash-f4.vercel.app/
         run: node scripts/deployment-smoke.mjs
+      - name: Real user journey on Cloudflare
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/real-user-journey.mjs
       - name: Test production Worker auth end to end
         env:
           ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
