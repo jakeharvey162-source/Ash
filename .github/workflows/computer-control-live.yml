@@ -1,0 +1,33 @@
+name: Ash Computer Control Live
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "desktop_worker/computer_control.py"
+      - "desktop_worker/ash_agent.py"
+      - "scripts/computer-control-live.py"
+      - ".github/workflows/computer-control-live.yml"
+      - "supabase/functions/jarvis-ai-gateway/**"
+
+permissions:
+  contents: read
+
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install -r desktop_worker/requirements.txt
+          pip install Pillow
+      - name: Run screenshot-plan-action acceptance
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: python scripts/computer-control-live.py
