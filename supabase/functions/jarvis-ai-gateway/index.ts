@@ -559,7 +559,7 @@ function researchIntent(message: string) {
 
 function protectedInfrastructureRequest(message: string) {
   const text = String(message || "").toLowerCase();
-  const protectedTopic = /(api\s*key|credential|hidden\s+(?:ai\s+)?provider|model\s+routing|routing\s+rules|backend\s+configuration|internal\s+infrastructure|system\s+prompt)/i;
+  const protectedTopic = /(api\s*keys?|credentials?|hidden\s+(?:ai\s+)?providers?|model\s+routing|routing\s+rules|backend\s+configuration|(?:internal|hidden|private)\s+infrastructure|system\s+prompt)/i;
   const disclosureRequest = /(reveal|show|tell|list|give|expose|what|which|print|dump)/i;
   return protectedTopic.test(text) && disclosureRequest.test(text);
 }
