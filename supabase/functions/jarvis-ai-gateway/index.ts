@@ -550,13 +550,25 @@ function normalizeResearchQuery(message: string) {
 
 async function openAiOfficialResearch(system: string, message: string, mode: Mode, researchedAt: string) {
   if (!/\bopenai\b/i.test(message) || !/\bofficial\b/i.test(message)) throw new Error("openai_official_not_requested");
-  const candidates = [
+
+  const isOfficialOpenAi = (url: string) => {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      return host === "openai.com" || host.endsWith(".openai.com");
+    } catch {
+      return false;
+    }
+  };
+
+  const evidence: any[] = [];
+  const directCandidates = [
     { title: "OpenAI Release Notes", url: "https://openai.com/products/release-notes/" },
     { title: "OpenAI Product News and Updates", url: "https://openai.com/news/product-releases/" },
-    { title: "OpenAI News", url: "https://openai.com/news/" }
+    { title: "OpenAI News", url: "https://openai.com/news/" },
+    { title: "ChatGPT Release Notes", url: "https://help.openai.com/en/articles/6825453-chatgpt-release-notes" }
   ];
-  const evidence: any[] = [];
-  for (const source of candidates) {
+
+  for (const source of directCandidates) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 6500);
@@ -581,19 +593,86 @@ async function openAiOfficialResearch(system: string, message: string, mode: Mod
       }
     } catch {}
   }
-  const sources = uniqueSources(evidence);
+
+  if (!evidence.length) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 7000);
+      try {
+        const q = "site:openai.com OpenAI latest product update release notes 2026";
+        const response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q), {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; AshResearch/1.0)",
+            "Accept": "text/html,application/xhtml+xml"
+          },
+          signal: controller.signal
+        });
+        if (response.ok) {
+          const html = await response.text();
+          const linkRe = /<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+          const snippetRe = /<(?:a|div)[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|div)>/gi;
+          const links: any[] = [];
+          let match;
+          while ((match = linkRe.exec(html)) && links.length < 10) {
+            const url = unwrapDuckUrl(match[1]);
+            if (!url || !isOfficialOpenAi(url)) continue;
+            links.push({ title: decodeHtml(match[2]), url });
+          }
+          const snippets: string[] = [];
+          while ((match = snippetRe.exec(html)) && snippets.length < 10) snippets.push(decodeHtml(match[1]));
+          for (let i = 0; i < links.length; i++) {
+            evidence.push({ ...links[i], snippet: snippets[i] || "" });
+          }
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {}
+  }
+
+  if (!evidence.length) {
+    const key = Deno.env.get("SERPAPI_API_KEY");
+    if (key) {
+      try {
+        const endpoint = new URL("https://serpapi.com/search.json");
+        endpoint.searchParams.set("engine", "google");
+        endpoint.searchParams.set("q", "site:openai.com OpenAI latest product update release notes 2026");
+        endpoint.searchParams.set("num", "8");
+        endpoint.searchParams.set("api_key", key);
+        const response = await fetch(endpoint);
+        if (response.ok) {
+          const data = await response.json();
+          for (const r of (Array.isArray(data?.organic_results) ? data.organic_results : [])) {
+            const url = cleanSourceUrl(r?.link);
+            if (!url || !isOfficialOpenAi(url)) continue;
+            evidence.push({
+              title: String(r?.title || ""),
+              url,
+              snippet: String(r?.snippet || ""),
+              date: String(r?.date || "")
+            });
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const sources = uniqueSources(evidence.filter((item:any)=>isOfficialOpenAi(item.url)));
   if (!sources.length) throw new Error("openai_official_unavailable");
+
   let answer = "";
   try {
     answer = await askGroq(
-      system + "\nYou are in official-source research mode. Use ONLY the supplied OpenAI pages. Every factual claim must be supported by this evidence. Do not invent article titles, dates, URLs, model names, prices, percentages, or features. If the pages do not support a claim, omit it.",
+      system + "\nYou are in official-source research mode. Use ONLY the supplied OpenAI-owned evidence. Every factual claim must be supported by this evidence. Do not invent article titles, dates, URLs, model names, prices, percentages, or features. If the evidence is incomplete, say so plainly.",
       message + "\n\nOFFICIAL OPENAI EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 42000),
       [],
       mode
     );
   } catch {}
+
   if (!answer) {
-    answer = "I found current official OpenAI release information here:\n\n" + sources.map((s:any)=>"- " + s.title + ": " + s.url).join("\n");
+    answer = "I found current official OpenAI sources, but I could not safely synthesize them right now:\n\n" +
+      sources.map((s:any)=>"- " + s.title + ": " + s.url).join("\n");
   }
   return { answer, sources, source: "openai_official", researched_at: researchedAt };
 }
