@@ -332,7 +332,7 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
           max_tokens: generation ? 2600 : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
         })
-      }, generation ? 14000 : (model.includes("120b") ? 4500 : 5500));
+      }, generation ? 28000 : (model.includes("120b") ? 4500 : 5500));
       if (!response.ok) {
         lastError = "route_failed_" + response.status;
         continue;
@@ -377,7 +377,7 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
         }
       })
     },
-    generation ? 14000 : 6000
+    generation ? 28000 : 6000
   );
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
@@ -402,7 +402,7 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
       temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
       max_tokens: generation ? 2800 : (mode === "instant" ? 1200 : mode === "high" ? 3600 : 2200)
     })
-  }, generation ? 14000 : 6500);
+  }, generation ? 28000 : 6500);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || "";
@@ -429,7 +429,7 @@ async function askAnthropic(system: string, message: string, history: ChatMessag
       max_tokens: generation ? 2800 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
       messages: [...history, { role: "user", content: message }]
     })
-  }, generation ? 15000 : 8000);
+  }, generation ? 30000 : 8000);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return (data?.content || []).map((part: any) => part?.text || "").join("");
@@ -463,7 +463,7 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
           top_p: 0.95,
           max_tokens: generation ? 2800 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
         })
-      }, generation ? 14000 : 7000);
+      }, generation ? 28000 : 7000);
       if (!response.ok) {
         lastError = "route_failed_" + response.status;
         console.warn("ash_nvidia_text_failed", response.status, model);
@@ -1686,7 +1686,7 @@ Deno.serve(async (req: Request) => {
         : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const routeBudgetMs = generationMode ? 23000 : (mode === "instant" ? 3600 : 4300);
+      const routeBudgetMs = generationMode ? 50000 : (mode === "instant" ? 3600 : 4300);
       const answer = await firstUsefulAnswer(generationMode ? routes : routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
       if (answer) {
         learnStyle(ctx, message, profile);
