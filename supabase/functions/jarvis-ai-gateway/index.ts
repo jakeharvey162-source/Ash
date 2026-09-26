@@ -1529,7 +1529,8 @@ Deno.serve(async (req: Request) => {
       : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const answer = await firstUsefulAnswer(routes.slice(0, 5), system, message, history, mode, mode === "instant" ? 3600 : 4300);
+      const routeBudgetMs = generationMode ? (mode === "high" ? 18000 : 12000) : (mode === "instant" ? 3600 : 4300);
+      const answer = await firstUsefulAnswer(routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
       if (answer) {
         learnStyle(ctx, message, profile);
         return json({ answer: cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
