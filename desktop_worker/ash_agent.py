@@ -532,17 +532,20 @@ PROJECT REQUEST:
     def build_fullstack(self, request: str, workspace: str) -> AgentResult:
         root = self._safe_root(workspace)
         planner_prompt = """You are Ash's senior product architect and product designer. Design a production-minded web application that looks intentionally designed, not AI-generic.
-Return ONLY JSON with keys: name, stack, design_system, files, acceptance_tests.
+Return ONLY one compact JSON object with keys: name, stack, design_system, files, acceptance_tests.
+STRICT SIZE LIMIT: keep the entire JSON under 2600 characters. Do not include file contents in this planning response.
 Rules:
 - Prefer React + Vite for standalone web experiences unless the user explicitly asks for another stack.
-- package.json must include working dev, build and preview scripts.
-- design_system must define typography, spacing, surface treatment, interaction states, responsive behavior and a clear visual direction.
+- Keep stack to a short array of technologies.
+- design_system must use short string values for: direction, typography, spacing, surfaces, interaction, responsive.
+- files must contain no more than 8 items and each item must contain only path and a one-sentence purpose.
+- package.json must include working dev, build and preview scripts when generated later.
 - Use realistic content. No lorem ipsum, fake testimonials, fake metrics, fake company claims or placeholder sections.
 - The interface must have strong hierarchy, accessible contrast, deliberate spacing, responsive layouts and polished hover/focus/loading states.
 - Avoid generic neon/cyber aesthetics unless the user explicitly requests them.
 - Include a complete responsive stylesheet or equivalent design implementation.
-- Each files entry must have path and purpose. Use relative paths. Never include secrets.
-- Acceptance tests must include build success, mobile layout, desktop layout, no horizontal overflow, no console errors and no fabricated content.
+- Use relative paths. Never include secrets.
+- acceptance_tests must be a short array covering build success, mobile layout, desktop layout, no horizontal overflow, no console errors and no fabricated content.
 USER REQUEST:
 """ + request
         planner_warning = ""
