@@ -548,6 +548,56 @@ function normalizeResearchQuery(message: string) {
   return q || message;
 }
 
+async function openAiOfficialResearch(system: string, message: string, mode: Mode, researchedAt: string) {
+  if (!/\bopenai\b/i.test(message) || !/\bofficial\b/i.test(message)) throw new Error("openai_official_not_requested");
+  const candidates = [
+    { title: "OpenAI Release Notes", url: "https://openai.com/products/release-notes/" },
+    { title: "OpenAI Product News and Updates", url: "https://openai.com/news/product-releases/" },
+    { title: "OpenAI News", url: "https://openai.com/news/" }
+  ];
+  const evidence: any[] = [];
+  for (const source of candidates) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6500);
+      try {
+        const response = await fetch(source.url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (compatible; AshResearch/1.0)",
+            "Accept": "text/html,application/xhtml+xml"
+          },
+          signal: controller.signal
+        });
+        if (!response.ok) continue;
+        const html = await response.text();
+        const text = decodeHtml(
+          html
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        ).slice(0, 24000);
+        if (text.length > 200) evidence.push({ title: source.title, url: source.url, snippet: text });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {}
+  }
+  const sources = uniqueSources(evidence);
+  if (!sources.length) throw new Error("openai_official_unavailable");
+  let answer = "";
+  try {
+    answer = await askGroq(
+      system + "\nYou are in official-source research mode. Use ONLY the supplied OpenAI pages. Every factual claim must be supported by this evidence. Do not invent article titles, dates, URLs, model names, prices, percentages, or features. If the pages do not support a claim, omit it.",
+      message + "\n\nOFFICIAL OPENAI EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 42000),
+      [],
+      mode
+    );
+  } catch {}
+  if (!answer) {
+    answer = "I found current official OpenAI release information here:\n\n" + sources.map((s:any)=>"- " + s.title + ": " + s.url).join("\n");
+  }
+  return { answer, sources, source: "openai_official", researched_at: researchedAt };
+}
+
 async function bingRssResearch(system: string, message: string, mode: Mode, researchedAt: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 7000);
@@ -683,6 +733,7 @@ async function webResearch(system: string, message: string, mode: Mode) {
   ].join("\n");
 
   const routes: Promise<any>[] = [];
+  routes.push(openAiOfficialResearch(researchSystem, message, mode, researchedAt));
   routes.push(bingRssResearch(researchSystem, message, mode, researchedAt));
   routes.push(serpApiResearch(researchSystem, message, mode, researchedAt));
   routes.push(openRouterLegacyResearch(researchSystem, message, mode, researchedAt));
