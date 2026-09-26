@@ -11,6 +11,7 @@ on:
       - "package.json"
       - "vercel.json"
       - "scripts/*.mjs"
+      - "supabase/functions/**"
       - ".github/workflows/live-audit.yml"
 
 permissions:
