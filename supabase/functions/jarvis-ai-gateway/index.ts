@@ -3,7 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 type Mode = "instant" | "medium" | "high";
 type ChatMessage = { role?: string; content?: string };
 type ChatBody = {
-  action?: "chat" | "speech" | "research" | "voices";
+  action?: "chat" | "generate" | "speech" | "research" | "voices";
   message?: string;
   mode?: Mode;
   history?: ChatMessage[];
@@ -1198,10 +1198,11 @@ Deno.serve(async (req: Request) => {
     if (!message) return json({ error: "message_required" }, 400);
     if (message.length > 20_000) return json({ error: "message_too_long" }, 413);
 
-    const system = buildSystemPrompt(profile, style);
+    const generationMode = action === "generate";
+    const system = buildSystemPrompt(profile, style) + (generationMode ? "\nInternal generation mode: do not browse or research. Follow requested output format exactly. Return code, JSON, or requested content directly without meta commentary." : "");
     const history = normalizeHistory(body.history);
 
-    if (integrationIntent(message)) {
+    if (!generationMode && integrationIntent(message)) {
       try {
         const plan = await planIntegrationAction(message);
         if (plan.tool !== "none") {
@@ -1252,7 +1253,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (action === "research" || researchIntent(message)) {
+    if (!generationMode && (action === "research" || researchIntent(message))) {
       try {
         const researched = await webResearch(system, message, mode);
         learnStyle(ctx, message, profile);
@@ -1269,7 +1270,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (mode === "high") {
+    if (!generationMode && mode === "high") {
       try {
         const ensemble = await askHighEnsemble(system, message, history);
         if (ensemble.answer) {
