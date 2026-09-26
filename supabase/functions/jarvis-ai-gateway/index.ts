@@ -257,12 +257,12 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
   if (!key) throw new Error("route_unavailable");
 
   const configured = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
-  const candidates = [...new Set([
-    configured,
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.8-27b"
-  ])];
+  const preferred = mode === "high"
+    ? [configured, "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    : mode === "medium"
+      ? ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", configured, "openai/gpt-oss-120b"]
+      : ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", configured, "openai/gpt-oss-120b"];
+  const candidates = [...new Set(preferred)];
 
   let lastError = "route_failed";
   for (const model of candidates) {
@@ -275,7 +275,7 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
           model,
           messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          max_tokens: mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500
+          max_tokens: mode === "instant" ? 800 : mode === "high" ? 3200 : 1500
         })
       }, model.includes("120b") ? 4500 : 5500);
       if (!response.ok) {
