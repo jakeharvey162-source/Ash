@@ -4,6 +4,10 @@ import base64
 import io
 import os
 import time
+import platform
+import subprocess
+import webbrowser
+import shutil
 from dataclasses import dataclass
 from typing import Any
 
@@ -74,8 +78,66 @@ class AshComputerController:
         y = max(0, min(int(screen.height) - 1, int(self._number(action.get("y"), 0))))
         return x, y
 
+    def _launch_app(self, raw_name: str) -> dict[str, Any]:
+        name = str(raw_name or "").strip().lower()
+        aliases = {
+            "browser": "browser", "chrome": "chrome", "google chrome": "chrome",
+            "edge": "edge", "microsoft edge": "edge", "firefox": "firefox",
+            "notepad": "notepad", "text editor": "notepad", "calculator": "calculator",
+            "calc": "calculator", "file explorer": "files", "explorer": "files", "files": "files",
+            "terminal": "terminal", "command prompt": "terminal", "powershell": "terminal",
+            "vscode": "vscode", "visual studio code": "vscode"
+        }
+        app = aliases.get(name)
+        if not app:
+            raise ValueError("App is not in Ash's safe launch allowlist.")
+        system = platform.system().lower()
+        if app == "browser":
+            webbrowser.open("about:blank")
+            return {"type": "launch_app", "app": app}
+        candidates = {
+            "windows": {
+                "chrome": ["chrome.exe"], "edge": ["msedge.exe"], "firefox": ["firefox.exe"],
+                "notepad": ["notepad.exe"], "calculator": ["calc.exe"], "files": ["explorer.exe"],
+                "terminal": ["powershell.exe"], "vscode": ["code.cmd", "code.exe"],
+            },
+            "darwin": {
+                "chrome": ["open", "-a", "Google Chrome"], "edge": ["open", "-a", "Microsoft Edge"],
+                "firefox": ["open", "-a", "Firefox"], "notepad": ["open", "-a", "TextEdit"],
+                "calculator": ["open", "-a", "Calculator"], "files": ["open", "."],
+                "terminal": ["open", "-a", "Terminal"], "vscode": ["open", "-a", "Visual Studio Code"],
+            },
+            "linux": {
+                "chrome": ["google-chrome"], "edge": ["microsoft-edge"], "firefox": ["firefox"],
+                "notepad": ["gedit"], "calculator": ["gnome-calculator"], "files": ["xdg-open", "."],
+                "terminal": ["x-terminal-emulator"], "vscode": ["code"],
+            },
+        }
+        cmd = candidates.get(system, {}).get(app)
+        if not cmd:
+            raise ComputerControlUnavailable("Ash does not know how to launch that app on this operating system.")
+        executable = cmd[0]
+        if system == "linux" and executable not in {"xdg-open"} and shutil.which(executable) is None:
+            raise ComputerControlUnavailable("The requested app is not installed or not on PATH.")
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"type": "launch_app", "app": app}
+
+    @staticmethod
+    def _open_url(raw_url: str) -> dict[str, Any]:
+        url = str(raw_url or "").strip()
+        if not (url.startswith("https://") or url.startswith("http://")):
+            raise ValueError("Ash only opens http(s) URLs.")
+        if len(url) > 2048:
+            raise ValueError("URL is too long.")
+        webbrowser.open(url)
+        return {"type": "open_url", "url": url[:240]}
+
     def execute_action(self, action: dict[str, Any]) -> dict[str, Any]:
         kind = str(action.get("type") or "").strip().lower()
+        if kind == "launch_app":
+            return self._launch_app(str(action.get("app") or action.get("name") or ""))
+        if kind == "open_url":
+            return self._open_url(str(action.get("url") or ""))
         if kind == "move":
             x, y = self._point(action)
             self.pyautogui.moveTo(x, y, duration=0.18)
