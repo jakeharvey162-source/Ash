@@ -439,27 +439,47 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
   const key = Deno.env.get("NVIDIA_API_KEY");
   const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
+
   const configured = String(Deno.env.get("NVIDIA_MODEL") || "").trim();
   const deprecated = new Set(["meta/llama-3.3-70b-instruct", "meta/llama3-70b-instruct", "meta/llama-3.1-70b-instruct"]);
-  const model = !configured || deprecated.has(configured) ? "poolside/laguna-xs-2.1" : configured;
-  const response = await providerFetch("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
-      temperature: mode === "instant" ? 0.2 : 0.3,
-      max_tokens: generation ? 2800 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
-    })
-  }, generation ? 14000 : 7000);
-  if (!response.ok) {
-    console.warn("ash_nvidia_text_failed", response.status, model);
-    throw new Error("route_failed_" + response.status);
+  const candidates = [...new Set([
+    configured && !deprecated.has(configured) ? configured : "",
+    "poolside/laguna-xs-2.1",
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "google/gemma-4-31b-it"
+  ].filter(Boolean))];
+
+  let lastError = "route_failed";
+  for (const model of candidates) {
+    const routeKey = "nvidia_text_" + model.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+    try {
+      const response = await providerFetch(routeKey, "https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
+          temperature: mode === "instant" ? 0.2 : 0.3,
+          top_p: 0.95,
+          max_tokens: generation ? 2800 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
+        })
+      }, generation ? 14000 : 7000);
+      if (!response.ok) {
+        lastError = "route_failed_" + response.status;
+        console.warn("ash_nvidia_text_failed", response.status, model);
+        continue;
+      }
+      const data = await response.json();
+      const answer = String(data?.choices?.[0]?.message?.content || "").trim();
+      if (answer) return answer;
+      lastError = "route_empty";
+      console.warn("ash_nvidia_text_empty", model);
+    } catch (error) {
+      lastError = String((error as Error)?.message || "route_failed");
+      console.warn("ash_nvidia_text_error", model, lastError);
+    }
   }
-  const data = await response.json();
-  const answer = String(data?.choices?.[0]?.message?.content || "").trim();
-  if (!answer) console.warn("ash_nvidia_text_empty", model);
-  return answer;
+  throw new Error(lastError);
 }
 
 async function askBytez(system: string, message: string, history: ChatMessage[], mode: Mode) {
