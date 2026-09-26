@@ -24,7 +24,7 @@ jobs:
           node-version: "22"
       - name: Install app and Playwright
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npx playwright install --with-deps chromium
       - name: Run Jarvis-grade production acceptance
         env:
