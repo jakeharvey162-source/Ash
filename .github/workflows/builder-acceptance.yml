@@ -29,6 +29,7 @@ jobs:
         run: |
           python -m pip install -r desktop_worker/requirements.txt
           npm install --no-audit --no-fund
+          npm install --no-save playwright
           npx playwright install --with-deps chromium
       - name: Run real Ash Builder
         run: python scripts/builder-acceptance.py
