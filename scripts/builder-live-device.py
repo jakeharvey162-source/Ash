@@ -70,6 +70,7 @@ for slug,prompt in cases:
     if not result.ok:
         raise SystemExit(f"{slug}: builder failed: {result.output}")
     if "verified premium fallback used" in warning.lower():
+        print("BUILDER WARNING",slug,warning,flush=True)
         raise SystemExit(f"{slug}: cloud generation fell back instead of using live model")
     report["cases"].append({
         "slug":slug,
