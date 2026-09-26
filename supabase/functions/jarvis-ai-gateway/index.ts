@@ -452,10 +452,15 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
       max_tokens: generation ? 2800 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
     })
   }, generation ? 14000 : 7000);
-  if (!response.ok) throw new Error("route_failed");
+  if (!response.ok) {
+    console.warn("ash_nvidia_text_failed", response.status, model);
+    throw new Error("route_failed_" + response.status);
+  }
   const data = await response.json();
-  return data?.choices?.[0]?.message?.content || "";
-}
+  const answer = String(data?.choices?.[0]?.message?.content || "").trim();
+  if (!answer) console.warn("ash_nvidia_text_empty", model);
+  return answer;
+}}
 
 async function askBytez(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("BYTEZ_API_KEY");
