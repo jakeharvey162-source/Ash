@@ -74,7 +74,7 @@ class AshPythonAgent:
         prompt = "\n".join([
             "You are Ash Computer Control running locally on the user's own computer.",
             "Inspect the screenshot and choose the smallest safe next actions toward the goal.",
-            'Return ONE JSON object only using this schema: {"done":boolean,"summary":string,"actions":[{"type":"move|click|double_click|type_text|press|hotkey|scroll|wait","x":number,"y":number,"text":string,"key":string,"keys":[string],"amount":number,"seconds":number}]}',
+            'Return ONE JSON object only using this schema: {"done":boolean,"summary":string,"actions":[{"type":"launch_app|open_url|move|click|double_click|type_text|press|hotkey|scroll|wait","x":number,"y":number,"text":string,"key":string,"keys":[string],"amount":number,"seconds":number}]}',
             "Maximum 4 actions.",
             f"Coordinates are pixels within {int(width)}x{int(height)}.",
             "Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
@@ -101,7 +101,7 @@ class AshPythonAgent:
         data = self._extract_json(raw)
         if not isinstance(data, dict):
             raise RuntimeError("Local Ash vision returned an invalid plan.")
-        allowed = {"move", "click", "double_click", "type_text", "press", "hotkey", "scroll", "wait"}
+        allowed = {"launch_app", "open_url", "move", "click", "double_click", "type_text", "press", "hotkey", "scroll", "wait"}
         actions = [a for a in (data.get("actions") or []) if isinstance(a, dict) and str(a.get("type") or "") in allowed][:4]
         return {"done": data.get("done") is True, "summary": str(data.get("summary") or ""), "actions": actions, "vision_source": "local"}
 
