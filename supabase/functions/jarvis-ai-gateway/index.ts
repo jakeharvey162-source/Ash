@@ -399,7 +399,9 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
-      temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,\n      max_tokens: generation ? 2800 : (mode === "instant" ? 1200 : mode === "high" ? 3600 : 2200)\n    })
+      temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
+      max_tokens: generation ? 2800 : (mode === "instant" ? 1200 : mode === "high" ? 3600 : 2200)
+    })
   }, generation ? 14000 : 6500);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
