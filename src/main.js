@@ -1,5 +1,5 @@
 import { CONNECTOR_CATALOG } from './connectors.js';
-import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus } from './native.js';
+import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus, openBackgroundWakeBatterySettings } from './native.js';
 const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations",DEVICE_LINK=BASE+"/functions/v1/ash-device-link";
 const FALLBACK_VOICE_CATALOG=[
@@ -890,7 +890,7 @@ function settingsView(){
       <div class="formGrid"><label>Proactivity<select id="proactivity">${["quiet","balanced","proactive"].map(x=>`<option ${profile.behavior_config?.proactivity===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Humor<input id="humor" type="range" min="0" max="100" value="${Number(profile.behavior_config?.humor??20)}"></label></div>
       <label>Voice<div class="voicePickerRow"><select id="voice">${VOICE_CATALOG.map(voiceCatalogOption).join("")}</select><button type="button" id="previewVoice" class="secondary">Preview</button></div><small id="voiceDescription" class="voiceDescription">${esc(selectedVoiceMeta(profile.voice_config?.voice_id).label+" · "+selectedVoiceMeta(profile.voice_config?.voice_id).meta)}</small></label>
       <label>Voice pace<select id="voiceSpeed"><option value="1" ${Math.abs(Number(profile.voice_config?.speech_speed||1.07)-1)<.02?"selected":""}>Smooth · relaxed</option><option value="1.07" ${Math.abs(Number(profile.voice_config?.speech_speed||1.07)-1.07)<.03?"selected":""}>Natural · recommended</option><option value="1.13" ${Number(profile.voice_config?.speech_speed||1.07)>=1.10?"selected":""}>Quick · responsive</option></select></label>
-      <label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label><label class="check"><input id="handsFree" type="checkbox" ${handsFreeEnabled()?"checked":""}> Hands-free wake listening</label><p class="quiet voicePrivacy">When enabled, Ash keeps the microphone listener armed while the app is open and in the foreground. Say your wake word, then speak naturally. Say “stop listening” any time.</p>
+      <label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label><label class="check"><input id="handsFree" type="checkbox" ${handsFreeEnabled()?"checked":""}> Hands-free wake listening</label><p class="quiet voicePrivacy">On Android, Ash can hand listening to its native foreground microphone service while the app is backgrounded or the phone is locked. Keep the persistent Ash notification enabled and exempt Ash from aggressive battery optimization for best reliability. Say “stop listening” any time.</p><button type="button" id="wakeBatterySettings" class="secondary">Improve locked-screen wake reliability</button>
       <label>Custom instructions<textarea id="instructions" rows="5">${esc(profile.custom_instructions||"")}</textarea></label>
       <button id="save" class="primary wide">Save preferences</button>
     </div>
@@ -1111,6 +1111,13 @@ function bind(){
   document.querySelector("#voiceSpeed")?.addEventListener("change",()=>{profile.voice_config={...profile.voice_config,speech_speed:Number(document.querySelector("#voiceSpeed")?.value||1.07)}});
   document.querySelector("#previewVoice")?.addEventListener("click",previewSelectedVoice);
   document.querySelector("#handsFree")?.addEventListener("change",e=>persistHandsFree(e.target.checked,{requestPermission:e.target.checked}));
+  document.querySelector("#wakeBatterySettings")?.addEventListener("click",async()=>{
+    try{
+      if(!(await nativeAvailable())){toast("This setting is available in the Android app.");return}
+      await openBackgroundWakeBatterySettings();
+      toast("Allow Ash to keep running in the background for reliable lock-screen wake.");
+    }catch{toast("Could not open Android battery settings.");}
+  });
   document.querySelector("#linkDesktop")?.addEventListener("click",createDevicePairing);
   document.querySelector("#newPairCode")?.addEventListener("click",createDevicePairing);
   document.querySelector("#copyPairCode")?.addEventListener("click",async()=>{if(pairing?.code){await copyText(pairing.code);toast("Pairing code copied.")}});
