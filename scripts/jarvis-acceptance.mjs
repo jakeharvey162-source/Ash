@@ -404,14 +404,14 @@ try{
   // UI quality / responsive checks across core surfaces.
   const views=["home","builder","automation","settings","activity","connections","team"];
   for(const view of views){
-    await page.locator(`[data-view="${view}"]`).first().click();
+    await page.locator(`[data-view="${view}"]:visible`).first().click();
     await wait(180);
     if(!(await noOverflow()))throw new Error("Desktop horizontal overflow on "+view);
   }
   await snap("desktop-core");
   await page.setViewportSize({width:390,height:844});
   for(const view of views){
-    await page.locator(`[data-view="${view}"]`).first().click();
+    await page.locator(`[data-view="${view}"]:visible`).first().click();
     await wait(160);
     if(!(await noOverflow()))throw new Error("Mobile horizontal overflow on "+view);
   }
