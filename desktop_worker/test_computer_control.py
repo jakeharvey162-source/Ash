@@ -68,6 +68,17 @@ class ComputerControlSafetyTests(unittest.TestCase):
         self.assertEqual(result["x"], 1919)
         self.assertEqual(result["y"], 0)
 
+    def test_sensitive_goal_is_stopped_before_control(self):
+        c = self.controller()
+        result = c.run_goal("Please handle a payment in the browser", max_steps=2)
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["manual_required"])
+        self.assertEqual(result["steps"], 0)
+
+    def test_benign_goal_is_not_blocked_by_risk_gate(self):
+        c = self.controller()
+        self.assertEqual(c.risk_reason("Open my project dashboard and show the latest build"), "")
+
     def test_text_length_is_bounded(self):
         c = self.controller()
         with self.assertRaises(ValueError):
