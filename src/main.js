@@ -85,22 +85,49 @@ async function signup(email,password,name){
 }
 async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
 async function loadProfile(){if(!session)return;const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id)+"&select=*");if(r?.[0])profile={...profile,...r[0],behavior_config:{...profile.behavior_config,...(r[0].behavior_config||{})},voice_config:{...profile.voice_config,...(r[0].voice_config||{})}};const localVoice=localStorage.getItem("ash-voice-enabled");if(localVoice!==null)profile.voice_config={...profile.voice_config,auto_speak:localVoice==="1"};const localHands=localStorage.getItem("ash-hands-free-enabled");if(localHands!==null)profile.voice_config={...profile.voice_config,hands_free:localHands==="1"};mode=profile.preferred_mode||mode}
+async function browserVoiceCatalog(){
+  if(!("speechSynthesis" in window))return [];
+  let voices=typeof speechSynthesis.getVoices==="function"?speechSynthesis.getVoices():[];
+  if(!voices.length&&typeof speechSynthesis.addEventListener==="function"){
+    await new Promise(resolve=>{
+      const done=()=>{speechSynthesis.removeEventListener?.("voiceschanged",done);resolve()};
+      speechSynthesis.addEventListener("voiceschanged",done,{once:true});
+      setTimeout(done,500);
+    });
+    voices=typeof speechSynthesis.getVoices==="function"?speechSynthesis.getVoices():[];
+  }
+  const preferred=[...voices].sort((a,b)=>{
+    const ae=/^en/i.test(a.lang||"")?0:1,be=/^en/i.test(b.lang||"")?0:1;
+    return ae-be||Number(Boolean(b.default))-Number(Boolean(a.default))||String(a.name).localeCompare(String(b.name));
+  }).slice(0,32);
+  const out=preferred.map(v=>({id:"browser:"+v.voiceURI,name:v.name||"System voice",label:"Device voice",meta:(v.lang||"System")+" · works locally"}));
+  if(!out.length)out.push({id:"browser:default",name:"System default",label:"Device voice",meta:"Built-in browser speech"});
+  return out;
+}
 async function loadVoiceCatalog(){
   if(!session||!GATEWAY)return;
+  const selected=profile.voice_config?.voice_id;
   try{
+    const health=await authedFetch(GATEWAY+"?action=health",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    const hd=await health.json().catch(()=>({}));
+    if(!health.ok||hd.voice_ready!==true){
+      premiumVoiceUnavailable=true;
+      VOICE_CATALOG=await browserVoiceCatalog();
+      if(selected?.startsWith("browser:")&&!VOICE_CATALOG.some(v=>v.id===selected))VOICE_CATALOG.unshift({id:selected,name:"Saved device voice",label:"Device voice",meta:"Saved on this profile"});
+      return;
+    }
+    premiumVoiceUnavailable=false;
     const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"voices"})});
-    if(!r.ok)return;
+    if(!r.ok)throw new Error("voice_catalog_unavailable");
     const d=await r.json();
     const remote=Array.isArray(d?.voices)?d.voices.filter(v=>v?.id&&v?.name):[];
-    if(!remote.length)return;
-    const selected=profile.voice_config?.voice_id;
-    const merged=[...remote];
-    for(const fallback of FALLBACK_VOICE_CATALOG){
-      if(!merged.some(v=>v.id===fallback.id))merged.push(fallback);
-    }
-    VOICE_CATALOG=merged.slice(0,48);
-    if(selected&&!VOICE_CATALOG.some(v=>v.id===selected))VOICE_CATALOG.unshift({id:selected,name:"Saved voice",label:"Your saved Ash voice",meta:"Available to this profile"});
-  }catch{}
+    const local=await browserVoiceCatalog();
+    VOICE_CATALOG=[...remote,...local].slice(0,48);
+    if(selected&&!VOICE_CATALOG.some(v=>v.id===selected))VOICE_CATALOG.unshift({id:selected,name:"Saved voice",label:"Saved voice",meta:"Available to this profile"});
+  }catch{
+    premiumVoiceUnavailable=true;
+    VOICE_CATALOG=await browserVoiceCatalog();
+  }
 }
 async function loadOps(force=false){
   if(!session)return;
@@ -166,6 +193,16 @@ async function previewSelectedVoice(){
   button?.setAttribute("disabled","");
   try{
     stopVoicePlayback();
+    if(String(select.value).startsWith("browser:")){
+      if(!("speechSynthesis" in window))throw new Error("Device speech is unavailable.");
+      const u=new SpeechSynthesisUtterance("Hey, I'm "+(profile.assistant_name||"Ash")+". Ready when you are.");
+      if(select.value!=="browser:default"&&typeof speechSynthesis.getVoices==="function"){
+        const uri=select.value.slice(8),voice=speechSynthesis.getVoices().find(v=>v.voiceURI===uri);if(voice)u.voice=voice;
+      }
+      u.rate=Math.min(1.16,Math.max(.94,Number(document.querySelector("#voiceSpeed")?.value||profile.voice_config?.speech_speed||1.07)));
+      u.onend=u.onerror=()=>button?.removeAttribute("disabled");
+      speechSynthesis.speak(u);return;
+    }
     const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
       action:"speech",
       text:"Hey, I'm Ash. Ready when you are.",
@@ -1149,7 +1186,7 @@ function splitSpeechChunks(text){
 }
 
 async function fetchVoiceBlob(text,generation,previousText="",nextText=""){
-  if(!voiceEnabled()||generation!==voiceGeneration||premiumVoiceUnavailable)return null;
+  if(!voiceEnabled()||generation!==voiceGeneration||premiumVoiceUnavailable||String(profile.voice_config?.voice_id||"").startsWith("browser:"))return null;
   try{
     const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text,voice_id:profile.voice_config?.voice_id,voice_speed:Number(profile.voice_config?.speech_speed||1.07),previous_text:previousText,next_text:nextText})});
     if(r.ok&&r.headers.get("content-type")?.includes("audio"))return await r.blob();
@@ -1161,6 +1198,11 @@ function playBrowserSpeech(text,generation,onStarted){
   return new Promise(resolve=>{
     if(!voiceEnabled()||generation!==voiceGeneration||!("speechSynthesis"in window)){onStarted?.(false);resolve();return}
     const u=new SpeechSynthesisUtterance(text);
+    const selectedId=String(profile.voice_config?.voice_id||"");
+    if(selectedId.startsWith("browser:")&&selectedId!=="browser:default"&&typeof speechSynthesis.getVoices==="function"){
+      const uri=selectedId.slice(8),voice=speechSynthesis.getVoices().find(v=>v.voiceURI===uri);
+      if(voice)u.voice=voice;
+    }
     u.rate=Math.min(1.16,Math.max(.94,Number(profile.voice_config?.speech_speed||1.07)));u.pitch=1;
     u.onstart=()=>{setVoiceState(true,true);onStarted?.(true)};
     u.onend=()=>{setVoiceState(false);resolve()};
