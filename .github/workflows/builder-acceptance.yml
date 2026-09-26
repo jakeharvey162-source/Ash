@@ -1,0 +1,48 @@
+name: Builder Acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "desktop_worker/**"
+      - "scripts/builder-acceptance.py"
+      - "scripts/builder-visual-acceptance.mjs"
+      - ".github/workflows/builder-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install builder dependencies
+        run: |
+          python -m pip install -r desktop_worker/requirements.txt
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run real Ash Builder
+        run: python scripts/builder-acceptance.py
+      - name: Render and inspect generated design
+        run: node scripts/builder-visual-acceptance.mjs
+      - name: Upload builder evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: builder-acceptance
+          path: |
+            builder-acceptance.json
+            builder-visual-acceptance.json
+            builder-desktop.png
+            builder-mobile.png
+            builder-acceptance-output/
+          if-no-files-found: warn
