@@ -70,7 +70,7 @@ if(!pair.r.ok||!pair.d.code)fail("pair creation failed");
 const claim=await broker({action:"claim_pairing",code:pair.d.code,device_name:"Ash Pro Acceptance Desktop",platform:"test",app_version:"acceptance",capabilities:{builder:true,local_ai:true,offline_brain:true,verified_builds:true,voice_runtime:true}});
 if(!claim.r.ok||!claim.d.device_id||!claim.d.device_secret)fail("pair claim failed");
 const deviceId=claim.d.device_id,deviceSecret=claim.d.device_secret;
-const dh={"X-Ash-Device-ID":deviceId,"X-Ash-Device-Secret":deviceSecret};
+const dh={"X-Ash-Device-ID":deviceId,"X-Ash-Device-Secret":deviceSecret,apikey:key,Authorization:"Bearer "+key};
 const replay=await broker({action:"claim_pairing",code:pair.d.code,device_name:"Replay",platform:"test"});
 if(replay.r.ok)fail("pairing code replay was accepted");
 const badDevice=await broker({action:"heartbeat"},{"X-Ash-Device-ID":deviceId,"X-Ash-Device-Secret":"wrong-secret"});
