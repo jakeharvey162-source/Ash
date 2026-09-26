@@ -1079,6 +1079,22 @@ function clampVoiceSpeed(value: unknown, fallback: number) {
   return Math.min(1.16, Math.max(0.94, n));
 }
 
+function cleanModelAnswer(value: unknown) {
+  let text = String(value || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<\/?think>/gi, "")
+    .trim();
+  if (!text) return "";
+  const blocks = text.split(/\n{2,}/).map(x => x.trim()).filter(Boolean);
+  if (blocks.length >= 2 && blocks.length % 2 === 0) {
+    const half = blocks.length / 2;
+    const left = blocks.slice(0, half).join("\n\n").replace(/\s+/g, " ").trim();
+    const right = blocks.slice(half).join("\n\n").replace(/\s+/g, " ").trim();
+    if (left === right) text = blocks.slice(0, half).join("\n\n");
+  }
+  return text.trim();
+}
+
 async function premiumVoiceReady() {
   const key = Deno.env.get("ELEVENLABS_API_KEY");
   if (!key) return false;
@@ -1345,7 +1361,7 @@ Deno.serve(async (req: Request) => {
         const researched = await webResearch(system, message, mode);
         learnStyle(ctx, message, profile);
         return json({
-          answer: researched.answer,
+          answer: cleanModelAnswer(researched.answer),
           mode,
           assistant_name: profile?.assistant_name || "Ash",
           grounded: true,
@@ -1363,7 +1379,7 @@ Deno.serve(async (req: Request) => {
         if (ensemble.answer) {
           learnStyle(ctx, message, profile);
           return json({
-            answer: ensemble.answer,
+            answer: cleanModelAnswer(ensemble.answer),
             mode,
             assistant_name: profile?.assistant_name || "Ash",
             grounded: false,
@@ -1383,7 +1399,7 @@ Deno.serve(async (req: Request) => {
         const answer = await route(system, message, history, mode);
         if (answer) {
           learnStyle(ctx, message, profile);
-          return json({ answer, mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
+          return json({ answer: cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
         }
       } catch {}
     }
