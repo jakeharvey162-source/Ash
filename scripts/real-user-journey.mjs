@@ -44,9 +44,10 @@ async function ask(prompt,{mode="instant",research=false,validate=()=>true,timeo
   const replies=page.locator("article.ash");
   const last=replies.nth((await replies.count())-1);
   const answer=((await last.locator("p").first().textContent())||"").trim();
-  const sources=await last.locator(".answerSources a").count().catch(()=>0);
-  const ok=Boolean(answer) && validate(answer,{sources});
-  report.tasks.push({prompt,mode,research,ok,answer:answer.slice(0,1200),sources});
+  const sourceLinks=await last.locator(".answerSources a").evaluateAll(nodes=>nodes.map(a=>a.href)).catch(()=>[]);
+  const sources=sourceLinks.length;
+  const ok=Boolean(answer) && validate(answer,{sources,sourceLinks});
+  report.tasks.push({prompt,mode,research,ok,answer:answer.slice(0,1200),sources,sourceLinks});
   if(!ok) throw new Error("Task validation failed: "+prompt+"\nAnswer: "+answer.slice(0,800));
   return {answer,sources};
 }
@@ -66,7 +67,7 @@ try{
   report.checks.signup=true;
 
   await ask("Calculate 37 multiplied by 24. Give me the result and one short line showing the calculation.",{
-    validate:a=>/\b888\b/.test(a)
+    validate:(a,m)=>/\b888\b/.test(a) && m.sources===0
   });
 
   await ask("Write a short professional email to a lecturer asking for feedback on my submitted assignment. Keep it under 120 words.",{
@@ -90,7 +91,7 @@ try{
   await ask("Research the latest official OpenAI product update and summarize what changed. Include live sources.",{
     research:true,
     timeout:60000,
-    validate:(a,m)=>a.length>80 && m.sources>=1
+    validate:(a,m)=>a.length>80 && m.sources>=1 && m.sourceLinks.some(u=>/https?:\/\/([^/]+\.)?openai\.com\//i.test(u))
   });
 
   await ask("Compare REST APIs and GraphQL for a student building a small SaaS. Give trade-offs and when each makes sense.",{
