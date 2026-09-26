@@ -123,10 +123,33 @@ class AshComputerController:
             return {"type": kind, "seconds": seconds}
         raise ValueError("Unsupported computer action: " + kind)
 
+    @staticmethod
+    def risk_reason(goal: str) -> str:
+        text = " " + str(goal or "").lower() + " "
+        categories = [
+            ("payment or purchase", [" payment ", " purchase ", " checkout ", " banking "]),
+            ("credential or account-security change", [" password ", " otp ", " recovery code ", " two-factor "]),
+            ("permanent or bulk deletion", [" permanently ", " delete all ", " wipe "]),
+            ("administrator or permission change", [" administrator ", " permissions ", " privilege "]),
+        ]
+        for reason, markers in categories:
+            if any(marker in text for marker in markers):
+                return reason
+        return ""
+
     def run_goal(self, goal: str, max_steps: int = 12) -> dict[str, Any]:
         goal = str(goal or "").strip()
         if not goal:
             raise ValueError("Computer-control goal is empty.")
+        risk = self.risk_reason(goal)
+        if risk:
+            return {
+                "ok": False,
+                "summary": "Ash stopped before controlling the computer because this goal includes a sensitive " + risk + " step. Complete that step manually.",
+                "steps": 0,
+                "trace": [],
+                "manual_required": True,
+            }
 
         trace: list[dict[str, Any]] = []
         for step in range(max(1, min(max_steps, 16))):
