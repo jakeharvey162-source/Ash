@@ -595,6 +595,30 @@ async function openAiOfficialResearch(system: string, message: string, mode: Mod
   }
 
   if (!evidence.length) {
+    for (const source of directCandidates) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 7000);
+        try {
+          const proxyUrl = "https://r.jina.ai/" + source.url;
+          const response = await fetch(proxyUrl, {
+            headers: {
+              "User-Agent": "AshResearch/1.0",
+              "Accept": "text/plain,text/markdown"
+            },
+            signal: controller.signal
+          });
+          if (!response.ok) continue;
+          const text = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 24000);
+          if (text.length > 200) evidence.push({ title: source.title, url: source.url, snippet: text });
+        } finally {
+          clearTimeout(timer);
+        }
+      } catch {}
+    }
+  }
+
+  if (!evidence.length) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 7000);
