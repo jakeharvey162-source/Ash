@@ -2,7 +2,7 @@ import { CONNECTOR_CATALOG } from './connectors.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition } from './native.js';
 const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations",DEVICE_LINK=BASE+"/functions/v1/ash-device-link";
-const VOICE_CATALOG=[
+const FALLBACK_VOICE_CATALOG=[
   {id:"cjVigY5qzO86Huf0OWal",name:"Eric",label:"Smooth & trustworthy",meta:"American · warm male"},
   {id:"CwhRBWXzGAHq8TQ4Fs17",name:"Roger",label:"Relaxed & resonant",meta:"American · laid-back male"},
   {id:"onwK4e9ZLuTAKqWW03F9",name:"Daniel",label:"Steady & polished",meta:"British · broadcaster male"},
@@ -12,8 +12,9 @@ const VOICE_CATALOG=[
   {id:"Xb7hH8MSUJpSbSDYk0k2",name:"Alice",label:"Clear & engaging",meta:"British · educator female"},
   {id:"pFZP5JQG7iQjIQuC4Bku",name:"Lily",label:"Velvety & composed",meta:"British · confident female"}
 ];
+let VOICE_CATALOG=[...FALLBACK_VOICE_CATALOG];
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
-let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
+let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",speech_speed:1.07,hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
 let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0;
 let handsFreeRunning=false,handsFreePaused=false,handsFreeStarting=false,handsFreeProcessing=false,handsFreeRecognition=null,handsFreeNativeSession=null,handsFreeRestartTimer=null,handsFreeConversationTimer=null,handsFreeConversationUntil=0,handsFreeWakeUntil=0,lastWakeTriggerAt=0,lastFinalTranscript="",lastFinalAt=0,nativePartialTranscript="",micStream=null,micAudioCtx=null,micAnalyser=null,micWaveRaf=0;
@@ -84,6 +85,23 @@ async function signup(email,password,name){
 }
 async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
 async function loadProfile(){if(!session)return;const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id)+"&select=*");if(r?.[0])profile={...profile,...r[0],behavior_config:{...profile.behavior_config,...(r[0].behavior_config||{})},voice_config:{...profile.voice_config,...(r[0].voice_config||{})}};const localVoice=localStorage.getItem("ash-voice-enabled");if(localVoice!==null)profile.voice_config={...profile.voice_config,auto_speak:localVoice==="1"};const localHands=localStorage.getItem("ash-hands-free-enabled");if(localHands!==null)profile.voice_config={...profile.voice_config,hands_free:localHands==="1"};mode=profile.preferred_mode||mode}
+async function loadVoiceCatalog(){
+  if(!session||!GATEWAY)return;
+  try{
+    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"voices"})});
+    if(!r.ok)return;
+    const d=await r.json();
+    const remote=Array.isArray(d?.voices)?d.voices.filter(v=>v?.id&&v?.name):[];
+    if(!remote.length)return;
+    const selected=profile.voice_config?.voice_id;
+    const merged=[...remote];
+    for(const fallback of FALLBACK_VOICE_CATALOG){
+      if(!merged.some(v=>v.id===fallback.id))merged.push(fallback);
+    }
+    VOICE_CATALOG=merged.slice(0,48);
+    if(selected&&!VOICE_CATALOG.some(v=>v.id===selected))VOICE_CATALOG.unshift({id:selected,name:"Saved voice",label:"Your saved Ash voice",meta:"Available to this profile"});
+  }catch{}
+}
 async function loadOps(force=false){
   if(!session)return;
   if(!force&&Date.now()-opsLoadedAt<15000)return;
@@ -97,7 +115,7 @@ async function loadOps(force=false){
   automations=a||[];jobs=j||[];devices=d||[];integrations=i||[];opsLoadedAt=Date.now();
 }
 async function saveProfile(){
-  const body={assistant_name:document.querySelector("#assistantName").value.trim()||"Ash",wake_word:document.querySelector("#wakeWord").value.trim()||"Ash",personality_preset:document.querySelector("#personality").value,preferred_mode:mode,custom_instructions:document.querySelector("#instructions").value.trim(),behavior_config:{...profile.behavior_config,verbosity:document.querySelector("#verbosity").value,proactivity:document.querySelector("#proactivity").value,humor:Number(document.querySelector("#humor").value)},voice_config:{...profile.voice_config,auto_speak:document.querySelector("#speak").checked,voice_id:document.querySelector("#voice").value,hands_free:document.querySelector("#handsFree")?.checked??handsFreeEnabled(),wake_aliases:(document.querySelector("#wakeAliases")?.value||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)}};
+  const body={assistant_name:document.querySelector("#assistantName").value.trim()||"Ash",wake_word:document.querySelector("#wakeWord").value.trim()||"Ash",personality_preset:document.querySelector("#personality").value,preferred_mode:mode,custom_instructions:document.querySelector("#instructions").value.trim(),behavior_config:{...profile.behavior_config,verbosity:document.querySelector("#verbosity").value,proactivity:document.querySelector("#proactivity").value,humor:Number(document.querySelector("#humor").value)},voice_config:{...profile.voice_config,auto_speak:document.querySelector("#speak").checked,voice_id:document.querySelector("#voice").value,speech_speed:Number(document.querySelector("#voiceSpeed")?.value||profile.voice_config?.speech_speed||1.07),hands_free:document.querySelector("#handsFree")?.checked??handsFreeEnabled(),wake_aliases:(document.querySelector("#wakeAliases")?.value||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)}};
   const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id),{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(body)});
   profile={...profile,...(r?.[0]||body)};render();toast("Preferences saved");
 }
@@ -151,7 +169,8 @@ async function previewSelectedVoice(){
     const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
       action:"speech",
       text:"Hey, I'm Ash. Ready when you are.",
-      voice_id:select.value
+      voice_id:select.value,
+      voice_speed:Number(document.querySelector("#voiceSpeed")?.value||profile.voice_config?.speech_speed||1.07)
     })});
     if(!r.ok||!r.headers.get("content-type")?.includes("audio"))throw new Error("Voice preview is unavailable.");
     const blob=await r.blob(),url=URL.createObjectURL(blob),audio=new Audio(url);
@@ -786,6 +805,7 @@ function settingsView(){
       <div class="formGrid"><label>Personality<select id="personality">${["adaptive","executive","companion","builder","analyst","coach"].map(x=>`<option ${profile.personality_preset===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Verbosity<select id="verbosity">${["concise","balanced","detailed"].map(x=>`<option ${profile.behavior_config?.verbosity===x?"selected":""}>${x}</option>`).join("")}</select></label></div>
       <div class="formGrid"><label>Proactivity<select id="proactivity">${["quiet","balanced","proactive"].map(x=>`<option ${profile.behavior_config?.proactivity===x?"selected":""}>${x}</option>`).join("")}</select></label><label>Humor<input id="humor" type="range" min="0" max="100" value="${Number(profile.behavior_config?.humor??20)}"></label></div>
       <label>Voice<div class="voicePickerRow"><select id="voice">${VOICE_CATALOG.map(voiceCatalogOption).join("")}</select><button type="button" id="previewVoice" class="secondary">Preview</button></div><small id="voiceDescription" class="voiceDescription">${esc(selectedVoiceMeta(profile.voice_config?.voice_id).label+" · "+selectedVoiceMeta(profile.voice_config?.voice_id).meta)}</small></label>
+      <label>Voice pace<select id="voiceSpeed"><option value="1" ${Math.abs(Number(profile.voice_config?.speech_speed||1.07)-1)<.02?"selected":""}>Smooth · relaxed</option><option value="1.07" ${Math.abs(Number(profile.voice_config?.speech_speed||1.07)-1.07)<.03?"selected":""}>Natural · recommended</option><option value="1.13" ${Number(profile.voice_config?.speech_speed||1.07)>=1.10?"selected":""}>Quick · responsive</option></select></label>
       <label class="check"><input id="speak" type="checkbox" ${profile.voice_config?.auto_speak!==false?"checked":""}> Speak responses automatically</label><label class="check"><input id="handsFree" type="checkbox" ${handsFreeEnabled()?"checked":""}> Hands-free wake listening</label><p class="quiet voicePrivacy">When enabled, Ash keeps the microphone listener armed while the app is open and in the foreground. Say your wake word, then speak naturally. Say “stop listening” any time.</p>
       <label>Custom instructions<textarea id="instructions" rows="5">${esc(profile.custom_instructions||"")}</textarea></label>
       <button id="save" class="primary wide">Save preferences</button>
@@ -994,6 +1014,7 @@ function bind(){
   document.querySelector("#save")?.addEventListener("click",saveProfile);
   document.querySelector("#speak")?.addEventListener("change",e=>persistVoiceOutput(e.target.checked));
   document.querySelector("#voice")?.addEventListener("change",updateVoiceDescription);
+  document.querySelector("#voiceSpeed")?.addEventListener("change",()=>{profile.voice_config={...profile.voice_config,speech_speed:Number(document.querySelector("#voiceSpeed")?.value||1.07)}});
   document.querySelector("#previewVoice")?.addEventListener("click",previewSelectedVoice);
   document.querySelector("#handsFree")?.addEventListener("change",e=>persistHandsFree(e.target.checked,{requestPermission:e.target.checked}));
   document.querySelector("#linkDesktop")?.addEventListener("click",createDevicePairing);
@@ -1062,28 +1083,28 @@ function splitSpeechChunks(text){
   };
 
   const first=(sentences.shift()||"").trim();
-  if(first)out.push(...splitByWords(first,82));
+  if(first)out.push(...splitByWords(first,92));
 
   let bucket="";
   for(const sentence of sentences){
-    const s=sentence.trim();
-    const next=(bucket+" "+s).trim();
-    if(next.length<=205){bucket=next;continue}
+    const current=sentence.trim();
+    const next=(bucket+" "+current).trim();
+    if(next.length<=330){bucket=next;continue}
     if(bucket){out.push(bucket);bucket=""}
-    if(s.length<=205)bucket=s;
+    if(current.length<=330)bucket=current;
     else{
-      const pieces=splitByWords(s,185);
+      const pieces=splitByWords(current,300);
       if(pieces.length){out.push(...pieces.slice(0,-1));bucket=pieces.at(-1)||""}
     }
   }
   if(bucket)out.push(bucket);
-  return out.filter(Boolean).slice(0,24);
+  return out.filter(Boolean).slice(0,18);
 }
 
 async function fetchVoiceBlob(text,generation,previousText="",nextText=""){
   if(!voiceEnabled()||generation!==voiceGeneration)return null;
   try{
-    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text,voice_id:profile.voice_config?.voice_id,previous_text:previousText,next_text:nextText})});
+    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text,voice_id:profile.voice_config?.voice_id,voice_speed:Number(profile.voice_config?.speech_speed||1.07),previous_text:previousText,next_text:nextText})});
     if(r.ok&&r.headers.get("content-type")?.includes("audio"))return await r.blob();
   }catch{}
   return null;
@@ -1092,7 +1113,7 @@ function playBrowserSpeech(text,generation,onStarted){
   return new Promise(resolve=>{
     if(!voiceEnabled()||generation!==voiceGeneration||!("speechSynthesis"in window)){onStarted?.(false);resolve();return}
     const u=new SpeechSynthesisUtterance(text);
-    u.rate=1.18;u.pitch=1;
+    u.rate=Math.min(1.16,Math.max(.94,Number(profile.voice_config?.speech_speed||1.07)));u.pitch=1;
     u.onstart=()=>{setVoiceState(true,true);onStarted?.(true)};
     u.onend=()=>{setVoiceState(false);resolve()};
     u.onerror=()=>{onStarted?.(false);setVoiceState(false);resolve()};
@@ -1176,10 +1197,10 @@ function queueSpeech(text){
     text:chunk,
     previousText:i>0?chunks[i-1]:"",
     nextText:i<chunks.length-1?chunks[i+1]:"",
-    blobPromise:i<4?fetchVoiceBlob(chunk,generation,i>0?chunks[i-1]:"",i<chunks.length-1?chunks[i+1]:""):null
+    blobPromise:i<6?fetchVoiceBlob(chunk,generation,i>0?chunks[i-1]:"",i<chunks.length-1?chunks[i+1]:""):null
   }));
 
-  for(let i=4;i<voiceQueue.length;i++){
+  for(let i=6;i<voiceQueue.length;i++){
     Object.defineProperty(voiceQueue[i],"blobPromise",{configurable:true,enumerable:true,get(){
       const p=fetchVoiceBlob(this.text,generation,this.previousText,this.nextText);
       Object.defineProperty(this,"blobPromise",{value:p,writable:true,enumerable:true});
@@ -1266,7 +1287,7 @@ render();
   }
 
   if(session){
-    try{await Promise.all([loadProfile(),loadOps()]);await probeHealth(false)}catch{}
+    try{await Promise.all([loadProfile(),loadOps()]);await Promise.all([loadVoiceCatalog(),probeHealth(false)])}catch{}
   }
 
   render();
