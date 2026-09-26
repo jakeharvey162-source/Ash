@@ -723,6 +723,9 @@ async function openRouterLegacyResearch(system: string, message: string, mode: M
 
 async function webResearch(system: string, message: string, mode: Mode) {
   const researchedAt = new Date().toISOString();
+  if (/\bopenai\b/i.test(message) && /\bofficial\b/i.test(message)) {
+    return await openAiOfficialResearch(system, message, mode, researchedAt);
+  }
   const researchSystem = system + [
     "",
     "LIVE RESEARCH MODE.",
