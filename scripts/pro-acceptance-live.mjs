@@ -77,6 +77,25 @@ const badDevice=await broker({action:"heartbeat"},{"X-Ash-Device-ID":deviceId,"X
 if(badDevice.r.status!==401)fail("invalid device credential was not rejected");
 report.checks.deviceSecurity=true;
 
+const deviceAi=await jfetch(gateway,{
+  method:"POST",
+  headers:{"Content-Type":"application/json",...dh},
+  body:JSON.stringify({
+    action:"generate",
+    message:'Return exactly this JSON object and nothing else: {"paired_builder":"online","number":7}',
+    mode:"instant",
+    history:[]
+  })
+});
+report.details.pairedDeviceAi={status:deviceAi.r.status,answer:deviceAi.d?.answer||null};
+if(!deviceAi.r.ok)fail("paired-device AI gateway failed "+deviceAi.r.status+" "+JSON.stringify(deviceAi.d));
+if(!/"paired_builder"\s*:\s*"online"/i.test(String(deviceAi.d?.answer||"")))fail("paired-device generation was not live: "+deviceAi.d?.answer);
+report.checks.pairedDeviceAiGeneration=true;
+
+const unauth=await jfetch(gateway,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"chat",message:"hello"})});
+if(unauth.r.status!==401)fail("unauthenticated gateway request was not rejected");
+report.checks.gatewayCustomAuthGuard=true;
+
 const prefs=await broker({action:"preferences"},dh);
 if(!prefs.r.ok)fail("device preferences failed");
 report.details.devicePreferences=prefs.d;
