@@ -242,3 +242,11 @@ export async function backgroundWakeStatus() {
   const result = await plugin.status();
   return { available:true, ...(result||{}) };
 }
+
+
+export async function openBackgroundWakeBatterySettings() {
+  const plugin = await ashWakePlugin();
+  if (!plugin) return { available:false };
+  const result = await plugin.openBatterySettings();
+  return { available:true, ...(result||{}) };
+}
