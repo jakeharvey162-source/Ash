@@ -515,6 +515,72 @@ async function duckDuckGoResearch(system: string, message: string, mode: Mode, r
   }
 }
 
+
+function extractXmlTag(item: string, tag: string) {
+  const match = item.match(new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)<\\/" + tag + ">", "i"));
+  return match ? decodeHtml(match[1].replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")) : "";
+}
+
+function groundedFallbackAnswer(message: string, evidence: any[]) {
+  const top = evidence.slice(0, 5);
+  const lines = top.map((item: any, index: number) => {
+    const date = item.date ? ` — ${item.date}` : "";
+    const snippet = String(item.snippet || "").replace(/\\s+/g, " ").trim().slice(0, 320);
+    return `${index + 1}. ${item.title}${date}${snippet ? ` — ${snippet}` : ""}\n${item.url}`;
+  });
+  return [
+    "I checked live web results for: " + message,
+    "",
+    ...lines,
+    "",
+    "These are live search results, so I am keeping the summary tied to the retrieved evidence rather than guessing beyond it."
+  ].join("\n");
+}
+
+async function bingRssResearch(system: string, message: string, mode: Mode, researchedAt: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7000);
+  try {
+    const endpoint = "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(message);
+    const response = await fetch(endpoint, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; AshResearch/1.0)",
+        "Accept": "application/rss+xml,application/xml,text/xml"
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error("bing_rss_failed_" + response.status);
+    const xml = await response.text();
+    const itemRe = /<item>([\\s\\S]*?)<\\/item>/gi;
+    const evidence: any[] = [];
+    let match;
+    while ((match = itemRe.exec(xml)) && evidence.length < (mode === "high" ? 8 : 5)) {
+      const item = match[1];
+      const title = extractXmlTag(item, "title");
+      const url = cleanSourceUrl(extractXmlTag(item, "link"));
+      const snippet = extractXmlTag(item, "description");
+      const date = extractXmlTag(item, "pubDate");
+      if (url) evidence.push({ title: title || new URL(url).hostname, url, snippet, date });
+    }
+    const sources = uniqueSources(evidence);
+    if (!sources.length) throw new Error("bing_rss_no_results");
+
+    let answer = "";
+    try {
+      answer = await askGroq(
+        system + "\nYou are in live research mode. Use only the supplied live search evidence for factual claims. Never invent citations, dates or URLs.",
+        message + "\n\nLIVE SEARCH EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 18000),
+        [],
+        mode
+      );
+    } catch {}
+    if (!answer) answer = groundedFallbackAnswer(message, evidence);
+    return { answer, sources, source: "bing_rss", researched_at: researchedAt };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function serpApiResearch(system: string, message: string, mode: Mode, researchedAt: string) {
   const key = Deno.env.get("SERPAPI_API_KEY");
   if (!key) throw new Error("serpapi_unavailable");
@@ -605,6 +671,7 @@ async function webResearch(system: string, message: string, mode: Mode) {
   ].join("\n");
 
   const routes: Promise<any>[] = [];
+  routes.push(bingRssResearch(researchSystem, message, mode, researchedAt));
   routes.push(serpApiResearch(researchSystem, message, mode, researchedAt));
   routes.push(openRouterLegacyResearch(researchSystem, message, mode, researchedAt));
   routes.push(duckDuckGoResearch(researchSystem, message, mode, researchedAt));
@@ -874,7 +941,7 @@ Deno.serve(async (req: Request) => {
         Deno.env.get("BYTEZ_API_KEY")
       ),
       voice_ready: Boolean(Deno.env.get("ELEVENLABS_API_KEY")),
-      research_ready: Boolean(Deno.env.get("SERPAPI_API_KEY") || Deno.env.get("OPENROUTER_API_KEY") || Deno.env.get("GEMINI_API_KEY"))
+      research_ready: true
     });
   }
   if (url.searchParams.get("action") === "transcribe") {
