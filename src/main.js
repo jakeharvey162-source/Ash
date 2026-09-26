@@ -1,5 +1,5 @@
 import { CONNECTOR_CATALOG } from './connectors.js';
-import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition } from './native.js';
+import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus } from './native.js';
 const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations",DEVICE_LINK=BASE+"/functions/v1/ash-device-link";
 const FALLBACK_VOICE_CATALOG=[
@@ -144,7 +144,7 @@ async function loadOps(force=false){
 async function saveProfile(){
   const body={assistant_name:document.querySelector("#assistantName").value.trim()||"Ash",wake_word:document.querySelector("#wakeWord").value.trim()||"Ash",personality_preset:document.querySelector("#personality").value,preferred_mode:mode,custom_instructions:document.querySelector("#instructions").value.trim(),behavior_config:{...profile.behavior_config,verbosity:document.querySelector("#verbosity").value,proactivity:document.querySelector("#proactivity").value,humor:Number(document.querySelector("#humor").value)},voice_config:{...profile.voice_config,auto_speak:document.querySelector("#speak").checked,voice_id:document.querySelector("#voice").value,speech_speed:Number(document.querySelector("#voiceSpeed")?.value||profile.voice_config?.speech_speed||1.07),hands_free:document.querySelector("#handsFree")?.checked??handsFreeEnabled(),wake_aliases:(document.querySelector("#wakeAliases")?.value||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean)}};
   const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id),{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(body)});
-  profile={...profile,...(r?.[0]||body)};render();toast("Preferences saved");
+  profile={...profile,...(r?.[0]||body)};await syncBackgroundWakeService();render();toast("Preferences saved");
 }
 function fmt(t){if(!t)return"—";const d=new Date(t);return d.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
 function relative(t){if(!t)return"never";const s=Math.round((Date.now()-new Date(t).getTime())/1000);if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago"}
@@ -219,6 +219,28 @@ async function previewSelectedVoice(){
 }
 
 function handsFreeEnabled(){return profile.voice_config?.hands_free===true}
+async function syncBackgroundWakeService(){
+  if(!nativeState.available)return {available:false};
+  try{
+    return await configureBackgroundWake({
+      enabled:handsFreeEnabled(),
+      paused:!document.hidden,
+      wakeWord:profile.wake_word||profile.assistant_name||"Ash",
+      aliases:wakeAliases()
+    });
+  }catch{return {available:true,error:true}}
+}
+async function handleBackgroundWakeCommand(command){
+  if(!session||!handsFreeEnabled())return;
+  const clean=String(command||"").trim();
+  handsFreePaused=false;handsFreeWakeUntil=Date.now()+12000;handsFreeConversationUntil=Date.now()+22000;
+  if(clean)await submitVoiceCommand(clean);
+  else{
+    if(view!=="home"){view="home";render()}
+    setCoreState("listening","I'm listening — go ahead.");
+    await startHandsFreeListening(true).catch(()=>{});
+  }
+}
 function wakeAliases(){
   const wake=String(profile.wake_word||profile.assistant_name||"Ash").trim()||"Ash";
   const configured=Array.isArray(profile.voice_config?.wake_aliases)?profile.voice_config.wake_aliases:[];
@@ -252,6 +274,7 @@ function refreshHandsFreeUi(){
 }
 async function persistHandsFree(enabled,{requestPermission=true}={}){
   profile.voice_config={...profile.voice_config,hands_free:Boolean(enabled)};
+  await syncBackgroundWakeService();
   localStorage.setItem("ash-hands-free-enabled",enabled?"1":"0");refreshHandsFreeUi();
   if(enabled){
     try{
@@ -1372,8 +1395,21 @@ function listenOnce(){
   try{r.start()}catch{toast("The microphone is already busy.")}
 }
 document.addEventListener("visibilitychange",()=>{
-  if(document.hidden){if(handsFreeEnabled()){handsFreePaused=true;closeRecognitionSession().catch(()=>{})}}
-  else if(handsFreeEnabled()&&!speaking&&!sending){handsFreePaused=false;scheduleHandsFreeRestart(250)}
+  if(document.hidden){
+    if(handsFreeEnabled()){
+      handsFreePaused=true;
+      closeRecognitionSession().catch(()=>{});
+      pauseBackgroundWake(false).catch(()=>{});
+    }
+  }else if(handsFreeEnabled()&&!speaking&&!sending){
+    pauseBackgroundWake(true).catch(()=>{});
+    handsFreePaused=false;
+    scheduleHandsFreeRestart(250);
+    consumeBackgroundWakeCommand().then(x=>{if(x?.command!==undefined&&(x.command||x.at))handleBackgroundWakeCommand(x.command)}).catch(()=>{});
+  }
+});
+window.addEventListener('ash-background-wake',event=>{
+  handleBackgroundWakeCommand(event?.detail?.command||"").catch(()=>{});
 });
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 applyTheme();
@@ -1392,5 +1428,11 @@ render();
   }
 
   render();
-  if(session&&handsFreeEnabled()){handsFreePaused=false;setTimeout(()=>startHandsFreeListening(false).catch(()=>{}),250)}
+  if(session&&handsFreeEnabled()){
+    await syncBackgroundWakeService();
+    pauseBackgroundWake(true).catch(()=>{});
+    const pending=await consumeBackgroundWakeCommand().catch(()=>({command:"",at:0}));
+    if(pending?.command||pending?.at)setTimeout(()=>handleBackgroundWakeCommand(pending.command).catch(()=>{}),350);
+    else{handsFreePaused=false;setTimeout(()=>startHandsFreeListening(false).catch(()=>{}),250)}
+  }
 })();
