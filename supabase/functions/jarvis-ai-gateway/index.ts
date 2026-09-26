@@ -1046,7 +1046,15 @@ async function speech(text: string, voiceId?: string, previousText = "", nextTex
         body: JSON.stringify(payload)
       }
     );
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn("ash_speech_attempt_failed", JSON.stringify({
+        status: response.status,
+        model,
+        context: includeContext,
+        voice: voice === requestedVoice ? "requested" : "fallback"
+      }));
+      return null;
+    }
     return new Response(response.body, {
       status: 200,
       headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", ...cors }
