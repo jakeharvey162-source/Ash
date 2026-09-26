@@ -439,9 +439,9 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
   const key = Deno.env.get("NVIDIA_API_KEY");
   const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
-  const configured = Deno.env.get("NVIDIA_MODEL");
-  if (!configured || configured === "meta/llama-3.3-70b-instruct") throw new Error("route_unavailable");
-  const model = configured;
+  const configured = String(Deno.env.get("NVIDIA_MODEL") || "").trim();
+  const deprecated = new Set(["meta/llama-3.3-70b-instruct", "meta/llama3-70b-instruct", "meta/llama-3.1-70b-instruct"]);
+  const model = !configured || deprecated.has(configured) ? "poolside/laguna-xs-2.1" : configured;
   const response = await providerFetch("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -1655,7 +1655,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const routes = generationMode
-      ? [askGroq, askGemini, askOpenRouter, askAnthropic]
+      ? [askNvidia, askGroq, askGemini, askOpenRouter, askAnthropic]
       : mode === "instant"
         ? [askGroq, askGemini, askOpenRouter, askNvidia, askBytez, askAnthropic]
         : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
