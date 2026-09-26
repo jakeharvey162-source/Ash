@@ -111,3 +111,22 @@ jobs:
           echo "SECURITY_OPS=PASS"
           echo "LIVE_PAIRED_BUILDER=PASS"
           echo "ANDROID=PASS"
+
+  publish_prerelease:
+    name: Publish Free GitHub Prerelease
+    runs-on: ubuntu-latest
+    needs: [release_council, android]
+    permissions:
+      contents: write
+    steps:
+      - name: Download Android packages
+        uses: actions/download-artifact@v4
+        with:
+          name: ash-release-android
+          path: release/android
+      - name: Publish APK and AAB
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="ash-rc-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG"             release/android/apk/debug/app-debug.apk             release/android/bundle/debug/app-debug.aab             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --prerelease             --title "Ash Release Candidate ${GITHUB_RUN_NUMBER}"             --notes "Automated Ash release candidate. QA, Security & Operations, live paired Builder, and Android engineering gates all passed. APK is for direct Android installation; AAB is for store pipeline testing."
