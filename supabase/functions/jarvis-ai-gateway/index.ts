@@ -1345,8 +1345,9 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     ].filter(Boolean))];
     for (const model of modelCandidates) {
       try {
+        const routeKey = "computer_vision_" + model.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
         const response = await providerFetch(
-          "computer_vision_primary",
+          routeKey,
           "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent?key=" + geminiKey,
           {
             method: "POST",
