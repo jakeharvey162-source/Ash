@@ -1102,11 +1102,12 @@ function splitSpeechChunks(text){
 }
 
 async function fetchVoiceBlob(text,generation,previousText="",nextText=""){
-  if(!voiceEnabled()||generation!==voiceGeneration)return null;
+  if(!voiceEnabled()||generation!==voiceGeneration||premiumVoiceUnavailable)return null;
   try{
     const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"speech",text,voice_id:profile.voice_config?.voice_id,voice_speed:Number(profile.voice_config?.speech_speed||1.07),previous_text:previousText,next_text:nextText})});
     if(r.ok&&r.headers.get("content-type")?.includes("audio"))return await r.blob();
-  }catch{}
+    if(r.status===401||r.status===402||r.status===403||r.status===503)premiumVoiceUnavailable=true;
+  }catch{premiumVoiceUnavailable=true}
   return null;
 }
 function playBrowserSpeech(text,generation,onStarted){
