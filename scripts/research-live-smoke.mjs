@@ -1,0 +1,16 @@
+const base="https://ftsomveafuskrutqzsvs.supabase.co";
+const key="sb_publishable_x3SYM26ShPtf_JIYdvOkEg_kLXb2kIz";
+const gateway=base+"/functions/v1/jarvis-ai-gateway";
+const stamp=Date.now();
+const email="ash-research-smoke-"+stamp+"@example.com";
+const password="AshResearch!"+stamp+"#r7";
+const signup=await fetch(base+"/auth/v1/signup",{method:"POST",headers:{apikey:key,"Content-Type":"application/json"},body:JSON.stringify({email,password,data:{name:"Ash Research Smoke"}})});
+const s=await signup.json().catch(()=>({}));
+if(!signup.ok||!s.access_token) throw new Error("Signup failed "+signup.status);
+const r=await fetch(gateway,{method:"POST",headers:{apikey:key,Authorization:"Bearer "+s.access_token,"Content-Type":"application/json"},body:JSON.stringify({action:"research",message:"Research the latest official OpenAI product update and summarize what changed. Include live sources.",mode:"instant",history:[]})});
+const d=await r.json().catch(()=>({}));
+const urls=(Array.isArray(d.sources)?d.sources:[]).map(x=>String(x.url||""));
+console.log(JSON.stringify({status:r.status,grounded:d.grounded,sourceCount:urls.length,urls,answer:String(d.answer||"").slice(0,1200)},null,2));
+const official=urls.length>0&&urls.every(u=>{try{const h=new URL(u).hostname.toLowerCase();return h==="openai.com"||h.endsWith(".openai.com")}catch{return false}});
+if(!r.ok||d.grounded!==true||!official) throw new Error("Official research smoke failed");
+console.log("ASH OFFICIAL RESEARCH LIVE: PASS");
