@@ -29,6 +29,8 @@ class AshPythonAgent:
     def __init__(self) -> None:
         self.gateway_url = os.environ.get("ASH_GATEWAY_URL", "")
         self.access_token = os.environ.get("ASH_ACCESS_TOKEN", "")
+        self.device_id = os.environ.get("ASH_DEVICE_ID", "")
+        self.device_secret = os.environ.get("ASH_DEVICE_SECRET", "")
         self.publishable_key = os.environ.get("ASH_SUPABASE_PUBLISHABLE_KEY", "")
         self.ollama_url = os.environ.get("ASH_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
         self.ollama_model = os.environ.get("ASH_OLLAMA_MODEL", "qwen3-coder")
@@ -37,17 +39,24 @@ class AshPythonAgent:
         self.offline = AshOfflineBrain()
         self.timeout = httpx.Timeout(45.0, connect=6.0)
 
+    def set_device_credentials(self, device_id: str, device_secret: str) -> None:
+        self.device_id = str(device_id or "")
+        self.device_secret = str(device_secret or "")
+
     def _headers(self) -> dict[str, str]:
         h = {"Content-Type": "application/json"}
         if self.access_token:
             h["Authorization"] = f"Bearer {self.access_token}"
+        if self.device_id and self.device_secret:
+            h["X-Ash-Device-ID"] = self.device_id
+            h["X-Ash-Device-Secret"] = self.device_secret
         if self.publishable_key:
             h["apikey"] = self.publishable_key
         return h
 
     def _cloud(self, prompt: str, mode: str = "high", action: str = "chat") -> str:
-        if not self.gateway_url or not self.access_token:
-            raise RuntimeError("Ash cloud session is not configured.")
+        if not self.gateway_url or not (self.access_token or (self.device_id and self.device_secret)):
+            raise RuntimeError("Ash cloud or paired-device session is not configured.")
         with httpx.Client(timeout=self.timeout) as client:
             r = client.post(self.gateway_url, headers=self._headers(), json={"action": action, "message": prompt, "mode": mode, "history": []})
             r.raise_for_status()
@@ -55,6 +64,25 @@ class AshPythonAgent:
             if not answer:
                 raise RuntimeError("Ash gateway returned no answer.")
             return answer
+
+    def plan_computer(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
+        if not self.gateway_url or not (self.access_token or (self.device_id and self.device_secret)):
+            raise RuntimeError("Ash computer vision requires an authenticated Ash session or paired desktop.")
+        payload = {
+            "action": "computer_plan",
+            "message": str(goal or ""),
+            "screenshot_base64": str(screenshot_base64 or ""),
+            "screen_width": int(width),
+            "screen_height": int(height),
+        }
+        with httpx.Client(timeout=httpx.Timeout(18.0, connect=6.0)) as client:
+            r = client.post(self.gateway_url, headers=self._headers(), json=payload)
+            if r.status_code >= 400:
+                raise RuntimeError(f"Ash computer vision returned HTTP {r.status_code}: {r.text[:300]}")
+            data = r.json()
+        if not isinstance(data, dict):
+            raise RuntimeError("Ash computer vision returned an invalid plan.")
+        return data
 
     def _local(self, prompt: str) -> str:
         with httpx.Client(timeout=self.timeout) as client:
