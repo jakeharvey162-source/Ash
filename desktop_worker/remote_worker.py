@@ -35,7 +35,8 @@ class AshRemoteWorker:
         self.device_secret = ""
         self.pair_code = pair_code or os.environ.get("ASH_PAIR_CODE", "")
         self._load_device_config()
-        self.agent.set_device_credentials(self.device_id, self.device_secret)
+        if hasattr(self.agent, "set_device_credentials"):
+            self.agent.set_device_credentials(self.device_id, self.device_secret)
 
     def _load_device_config(self) -> None:
         try:
