@@ -557,6 +557,13 @@ function researchIntent(message: string) {
     || (/\b(who is|who's|what is|what's)\b/i.test(m) && /\b(openai|google|microsoft|apple|meta|anthropic|tesla|nvidia|samsung|netflix|spotify|github|vercel|supabase|chatgpt|gemini|claude|android|windows|iphone)\b/i.test(m));
 }
 
+function protectedInfrastructureRequest(message: string) {
+  const text = String(message || "").toLowerCase();
+  const protectedTopic = /(api\s*key|credential|hidden\s+(?:ai\s+)?provider|model\s+routing|routing\s+rules|backend\s+configuration|internal\s+infrastructure|system\s+prompt)/i;
+  const disclosureRequest = /(reveal|show|tell|list|give|expose|what|which|print|dump)/i;
+  return protectedTopic.test(text) && disclosureRequest.test(text);
+}
+
 function cleanSourceUrl(value: unknown) {
   const raw = String(value || "").trim();
   if (!/^https?:\/\//i.test(raw)) return "";
@@ -1429,6 +1436,14 @@ Deno.serve(async (req: Request) => {
     if (message.length > 20_000) return json({ error: "message_too_long" }, 413);
 
     const generationMode = action === "generate";
+    if (!generationMode && action === "chat" && protectedInfrastructureRequest(message)) {
+      return json({
+        answer: "I can’t disclose private provider routing, credentials, hidden infrastructure, or system configuration.",
+        mode,
+        assistant_name: profile?.assistant_name || "Ash",
+        protected_internal_details: true
+      });
+    }
     if (!generationMode && action === "chat") {
       const explicitMemory = explicitMemoryFromMessage(message);
       if (explicitMemory) {
