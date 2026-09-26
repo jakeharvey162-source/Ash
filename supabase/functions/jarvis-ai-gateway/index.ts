@@ -934,32 +934,59 @@ async function speech(text: string, voiceId?: string, previousText = "", nextTex
   const key = Deno.env.get("ELEVENLABS_API_KEY");
   if (!key) return null;
 
-  const voice = voiceId || Deno.env.get("ELEVENLABS_VOICE_ID") || "cjVigY5qzO86Huf0OWal";
-  const model = Deno.env.get("ELEVENLABS_MODEL") || "eleven_flash_v2_5";
-  const voiceProfile = VOICE_PROFILES[voice] || DEFAULT_VOICE_PROFILE;
-  const speechSpeed = clampVoiceSpeed(requestedSpeed, voiceProfile.speed);
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": key,
-      "Content-Type": "application/json",
-      Accept: "audio/mpeg"
-    },
-    body: JSON.stringify({
+  const requestedVoice = voiceId || Deno.env.get("ELEVENLABS_VOICE_ID") || "cjVigY5qzO86Huf0OWal";
+  const configuredModel = Deno.env.get("ELEVENLABS_MODEL") || "eleven_flash_v2_5";
+
+  async function attempt(voice: string, model: string, includeContext: boolean) {
+    const voiceProfile = VOICE_PROFILES[voice] || DEFAULT_VOICE_PROFILE;
+    const speechSpeed = clampVoiceSpeed(requestedSpeed, voiceProfile.speed);
+    const payload: any = {
       text: text.slice(0, 5000),
       model_id: model,
-      voice_settings: { ...voiceProfile, speed: speechSpeed, style: 0, use_speaker_boost: true },
-      previous_text: previousText.slice(-1000) || undefined,
-      next_text: nextText.slice(0, 1000) || undefined,
-      apply_text_normalization: "auto"
-    })
-  });
-  if (!response.ok) return null;
+      voice_settings: {
+        stability: voiceProfile.stability,
+        similarity_boost: voiceProfile.similarity_boost,
+        style: 0,
+        use_speaker_boost: true,
+        speed: speechSpeed
+      }
+    };
+    if (includeContext) {
+      if (previousText.trim()) payload.previous_text = previousText.slice(-1000);
+      if (nextText.trim()) payload.next_text = nextText.slice(0, 1000);
+    }
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": key,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg"
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+    if (!response.ok) return null;
+    return new Response(response.body, {
+      status: 200,
+      headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", ...cors }
+    });
+  }
 
-  return new Response(response.body, {
-    status: 200,
-    headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store", ...cors }
-  });
+  const primary = await attempt(requestedVoice, configuredModel, true).catch(() => null);
+  if (primary) return primary;
+
+  const minimal = await attempt(requestedVoice, "eleven_flash_v2_5", false).catch(() => null);
+  if (minimal) return minimal;
+
+  const voices = await listElevenVoices().catch(() => []);
+  const fallbackVoice = voices.find((v: any) => v.id && v.id !== requestedVoice)?.id;
+  if (fallbackVoice) {
+    const fallback = await attempt(fallbackVoice, "eleven_flash_v2_5", false).catch(() => null);
+    if (fallback) return fallback;
+  }
+  return null;
 }
 
 async function transcribe(req: Request) {
