@@ -263,12 +263,21 @@ try{
   await item.waitFor({state:"visible",timeout:10000});
   const toggle=item.locator("button");
   if((await toggle.textContent()).trim()!=="Pause")throw new Error("New automation is not enabled");
-  await toggle.click();await wait(600);
+  await toggle.click();
+  await page.waitForFunction(({pauseName})=>{
+    const rows=[...document.querySelectorAll(".autoItem")];
+    const row=rows.find(x=>(x.textContent||"").includes(pauseName));
+    return (row?.querySelector("button")?.textContent||"").trim()==="Resume";
+  },{pauseName},{timeout:8000});
   const resumed=page.locator(".autoItem").filter({hasText:pauseName}).first().locator("button");
-  if((await resumed.textContent()).trim()!=="Resume")throw new Error("Automation pause failed");
-  await resumed.click();await wait(600);
-  const pausedAgain=page.locator(".autoItem").filter({hasText:pauseName}).first().locator("button");
-  if((await pausedAgain.textContent()).trim()!=="Pause")throw new Error("Automation resume failed");
+  await resumed.click();
+  await page.waitForFunction(({pauseName})=>{
+    const rows=[...document.querySelectorAll(".autoItem")];
+    const row=rows.find(x=>(x.textContent||"").includes(pauseName));
+    return (row?.querySelector("button")?.textContent||"").trim()==="Pause";
+  },{pauseName},{timeout:8000});
+  const resumedState=await restGet("/rest/v1/jarvis_automations?name=eq."+encodeURIComponent(pauseName)+"&select=enabled");
+  if(resumedState.data?.[0]?.enabled!==true)throw new Error("Automation resume did not persist");
   report.checks.automationPauseResume=true;
 
   // Hands-free wake word through the same SpeechRecognition callbacks used by the app.
