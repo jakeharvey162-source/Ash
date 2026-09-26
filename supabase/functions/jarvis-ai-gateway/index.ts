@@ -294,7 +294,11 @@ async function providerFetch(name: string, url: string, init: RequestInit, timeo
     }
     return response;
   } catch (error) {
-    coolDown(name, 8_000);
+    const kind = String((error as Error)?.name || "");
+    // A client-side AbortController timeout only means this particular request
+    // exceeded its latency budget. It must not globally cool down the provider
+    // for unrelated users or normal chat traffic.
+    if (kind !== "AbortError") coolDown(name, 3_000);
     throw error;
   } finally {
     clearTimeout(timer);
