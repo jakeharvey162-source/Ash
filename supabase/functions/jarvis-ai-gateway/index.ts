@@ -538,11 +538,22 @@ function groundedFallbackAnswer(message: string, evidence: any[]) {
   ].join("\n");
 }
 
+function normalizeResearchQuery(message: string) {
+  let q = String(message || "").trim();
+  q = q.replace(/^\s*(research|search(?: the)?(?: web)?|look up|find online|verify|fact[- ]?check)\s+/i, "");
+  q = q.replace(/\b(include|with)\s+(live\s+)?sources?\.?$/i, "").trim();
+  if (/\bofficial\s+openai\b/i.test(q) || /\bopenai\b/i.test(q) && /\bofficial\b/i.test(q)) {
+    q = "site:openai.com " + q.replace(/\bofficial\b/ig, "").trim();
+  }
+  return q || message;
+}
+
 async function bingRssResearch(system: string, message: string, mode: Mode, researchedAt: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 7000);
   try {
-    const endpoint = "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(message);
+    const query = normalizeResearchQuery(message);
+    const endpoint = "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query);
     const response = await fetch(endpoint, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; AshResearch/1.0)",
@@ -570,7 +581,7 @@ async function bingRssResearch(system: string, message: string, mode: Mode, rese
     try {
       answer = await askGroq(
         system + "\nYou are in live research mode. Use only the supplied live search evidence for factual claims. Never invent citations, dates or URLs.",
-        message + "\n\nLIVE SEARCH EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 18000),
+        message + "\n\nSEARCH QUERY USED:\n" + query + "\n\nLIVE SEARCH EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 18000),
         [],
         mode
       );
