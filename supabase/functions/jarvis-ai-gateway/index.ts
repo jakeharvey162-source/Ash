@@ -303,6 +303,7 @@ async function providerFetch(name: string, url: string, init: RequestInit, timeo
 
 async function askGroq(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("GROQ_API_KEY");
+  const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
 
   const configured = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
@@ -324,9 +325,9 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
           model,
           messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          max_tokens: mode === "instant" ? 800 : mode === "high" ? 3200 : 1500
+          max_tokens: generation ? 6000 : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
         })
-      }, model.includes("120b") ? 4500 : 5500);
+      }, generation ? 18000 : (model.includes("120b") ? 4500 : 5500));
       if (!response.ok) {
         lastError = "route_failed_" + response.status;
         continue;
@@ -344,6 +345,7 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
 
 async function askGemini(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("GEMINI_API_KEY");
+  const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
   const configured = Deno.env.get("GEMINI_MODEL");
   const model = (!configured || configured === "gemini-2.5-flash") ? "gemini-3.8-flash" : configured;
@@ -366,11 +368,11 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
         contents,
         generationConfig: {
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          maxOutputTokens: mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500
+          maxOutputTokens: generation ? 6500 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500)
         }
       })
     },
-    6000
+    generation ? 20000 : 6000
   );
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
@@ -379,6 +381,7 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
 
 async function askOpenRouter(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("OPENROUTER_API_KEY");
+  const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
   const model = Deno.env.get("OPENROUTER_MODEL") || "openrouter/free";
   const response = await providerFetch("openrouter", "https://openrouter.ai/api/v1/chat/completions", {
@@ -393,7 +396,7 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
       temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3
     })
-  }, 6500);
+  }, generation ? 20000 : 6500);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || "";
@@ -401,6 +404,7 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
 
 async function askAnthropic(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
+  const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
   const model = Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-4-6";
   const workspace = Deno.env.get("ANTHROPIC_WORKSPACE_ID");
@@ -416,10 +420,10 @@ async function askAnthropic(system: string, message: string, history: ChatMessag
     body: JSON.stringify({
       model,
       system,
-      max_tokens: mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500,
+      max_tokens: generation ? 6500 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
       messages: [...history, { role: "user", content: message }]
     })
-  }, 8000);
+  }, generation ? 22000 : 8000);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return (data?.content || []).map((part: any) => part?.text || "").join("");
@@ -427,6 +431,7 @@ async function askAnthropic(system: string, message: string, history: ChatMessag
 
 async function askNvidia(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("NVIDIA_API_KEY");
+  const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
   const configured = Deno.env.get("NVIDIA_MODEL");
   const model = (!configured || configured === "meta/llama-3.3-70b-instruct" || configured === "deepseek-ai/deepseek-v4.1-flash") ? "z-ai/glm-5.3-flash" : configured;
@@ -437,9 +442,9 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
       model,
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
       temperature: mode === "instant" ? 0.2 : 0.3,
-      max_tokens: mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000
+      max_tokens: generation ? 6000 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
     })
-  }, 7000);
+  }, generation ? 20000 : 7000);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || "";
@@ -1529,7 +1534,7 @@ Deno.serve(async (req: Request) => {
       : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const routeBudgetMs = generationMode ? (mode === "high" ? 18000 : 12000) : (mode === "instant" ? 3600 : 4300);
+      const routeBudgetMs = generationMode ? (mode === "high" ? 28000 : 22000) : (mode === "instant" ? 3600 : 4300);
       const answer = await firstUsefulAnswer(routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
       if (answer) {
         learnStyle(ctx, message, profile);
