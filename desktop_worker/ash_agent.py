@@ -47,6 +47,10 @@ class AshPythonAgent:
         h = {"Content-Type": "application/json"}
         if self.access_token:
             h["Authorization"] = f"Bearer {self.access_token}"
+        elif self.device_id and self.device_secret and self.publishable_key:
+            # Supabase's edge transport expects an Authorization header even when
+            # Ash authenticates the principal with its own revocable device secret.
+            h["Authorization"] = f"Bearer {self.publishable_key}"
         if self.device_id and self.device_secret:
             h["X-Ash-Device-ID"] = self.device_id
             h["X-Ash-Device-Secret"] = self.device_secret
