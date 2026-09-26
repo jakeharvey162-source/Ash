@@ -289,7 +289,8 @@ async function providerFetch(name: string, url: string, init: RequestInit, timeo
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
     if (!response.ok) {
-      if ([400, 401, 403, 404, 410].includes(response.status)) coolDown(name, 10 * 60_000);
+      if ([401, 403, 404, 410].includes(response.status)) coolDown(name, 10 * 60_000);
+      else if (response.status === 400) coolDown(name, 1_000);
       else if ([429, 500, 502, 503, 504, 529].includes(response.status)) coolDown(name, 20_000);
     }
     return response;
@@ -312,10 +313,10 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
 
   const configured = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
   const preferred = mode === "high"
-    ? [configured, "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    ? [configured, "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     : mode === "medium"
-      ? ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", configured, "openai/gpt-oss-120b"]
-      : ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", configured, "openai/gpt-oss-120b"];
+      ? [configured, "openai/gpt-oss-20b", "openai/gpt-oss-120b"]
+      : [configured, "openai/gpt-oss-20b", "openai/gpt-oss-120b"];
   const candidates = [...new Set(preferred)];
 
   let lastError = "route_failed";
@@ -331,7 +332,7 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
           max_tokens: generation ? 6000 : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
         })
-      }, generation ? 18000 : (model.includes("120b") ? 4500 : 5500));
+      }, generation ? 14000 : (model.includes("120b") ? 4500 : 5500));
       if (!response.ok) {
         lastError = "route_failed_" + response.status;
         continue;
@@ -352,7 +353,7 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
   const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
   const configured = Deno.env.get("GEMINI_MODEL");
-  const model = (!configured || configured === "gemini-2.5-flash") ? "gemini-3.8-flash" : configured;
+  const model = configured || "gemini-2.5-flash";
   const contents = [
     ...history.map(item => ({
       role: item.role === "assistant" ? "model" : "user",
@@ -376,7 +377,7 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
         }
       })
     },
-    generation ? 20000 : 6000
+    generation ? 14000 : 6000
   );
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
@@ -400,7 +401,7 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
       temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3
     })
-  }, generation ? 20000 : 6500);
+  }, generation ? 14000 : 6500);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || "";
@@ -427,7 +428,7 @@ async function askAnthropic(system: string, message: string, history: ChatMessag
       max_tokens: generation ? 6500 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
       messages: [...history, { role: "user", content: message }]
     })
-  }, generation ? 22000 : 8000);
+  }, generation ? 15000 : 8000);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return (data?.content || []).map((part: any) => part?.text || "").join("");
@@ -438,7 +439,8 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
   const generation = system.includes("Internal generation mode:");
   if (!key) throw new Error("route_unavailable");
   const configured = Deno.env.get("NVIDIA_MODEL");
-  const model = (!configured || configured === "meta/llama-3.3-70b-instruct" || configured === "deepseek-ai/deepseek-v4.1-flash") ? "z-ai/glm-5.3-flash" : configured;
+  if (!configured || configured === "meta/llama-3.3-70b-instruct") throw new Error("route_unavailable");
+  const model = configured;
   const response = await providerFetch("nvidia", "https://integrate.api.nvidia.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -448,7 +450,7 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
       temperature: mode === "instant" ? 0.2 : 0.3,
       max_tokens: generation ? 6000 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
     })
-  }, generation ? 20000 : 7000);
+  }, generation ? 14000 : 7000);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || "";
@@ -1553,7 +1555,7 @@ Deno.serve(async (req: Request) => {
       : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const routeBudgetMs = generationMode ? (mode === "high" ? 28000 : 22000) : (mode === "instant" ? 3600 : 4300);
+      const routeBudgetMs = generationMode ? 16000 : (mode === "instant" ? 3600 : 4300);
       const answer = await firstUsefulAnswer(routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
       if (answer) {
         learnStyle(ctx, message, profile);
