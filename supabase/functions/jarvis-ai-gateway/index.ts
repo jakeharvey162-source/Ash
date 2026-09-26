@@ -330,7 +330,7 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
           model,
           messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          max_tokens: generation ? 6000 : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
+          max_tokens: generation ? 2600 : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
         })
       }, generation ? 14000 : (model.includes("120b") ? 4500 : 5500));
       if (!response.ok) {
@@ -373,7 +373,7 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
         contents,
         generationConfig: {
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          maxOutputTokens: generation ? 6500 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500)
+          maxOutputTokens: generation ? 2800 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500)
         }
       })
     },
@@ -399,8 +399,7 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
-      temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3
-    })
+      temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,\n      max_tokens: generation ? 2800 : (mode === "instant" ? 1200 : mode === "high" ? 3600 : 2200)\n    })
   }, generation ? 14000 : 6500);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
@@ -425,7 +424,7 @@ async function askAnthropic(system: string, message: string, history: ChatMessag
     body: JSON.stringify({
       model,
       system,
-      max_tokens: generation ? 6500 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
+      max_tokens: generation ? 2800 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
       messages: [...history, { role: "user", content: message }]
     })
   }, generation ? 15000 : 8000);
@@ -448,7 +447,7 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
       model,
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
       temperature: mode === "instant" ? 0.2 : 0.3,
-      max_tokens: generation ? 6000 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
+      max_tokens: generation ? 2800 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
     })
   }, generation ? 14000 : 7000);
   if (!response.ok) throw new Error("route_failed");
@@ -1460,7 +1459,8 @@ Deno.serve(async (req: Request) => {
       try {
         const plan = await planComputerFromScreenshot(system, goal, image, width, height);
         return json({ ...plan, assistant_name: profile?.assistant_name || "Ash" });
-      } catch {
+      } catch (error) {
+        console.error("ash_computer_vision_failure", String((error as Error)?.message || error));
         return json({ error: "computer_vision_temporarily_unavailable" }, 503);
       }
     }
@@ -1592,13 +1592,15 @@ Deno.serve(async (req: Request) => {
       } catch {}
     }
 
-    const routes = mode === "instant"
-      ? [askGroq, askGemini, askOpenRouter, askNvidia, askBytez, askAnthropic]
-      : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
+    const routes = generationMode
+      ? [askGroq, askGemini, askOpenRouter, askAnthropic]
+      : mode === "instant"
+        ? [askGroq, askGemini, askOpenRouter, askNvidia, askBytez, askAnthropic]
+        : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const routeBudgetMs = generationMode ? 16000 : (mode === "instant" ? 3600 : 4300);
-      const answer = await firstUsefulAnswer(routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
+      const routeBudgetMs = generationMode ? 23000 : (mode === "instant" ? 3600 : 4300);
+      const answer = await firstUsefulAnswer(generationMode ? routes : routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
       if (answer) {
         learnStyle(ctx, message, profile);
         return json({ answer: cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
