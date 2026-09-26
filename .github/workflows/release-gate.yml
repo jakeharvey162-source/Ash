@@ -1,0 +1,80 @@
+name: Ash Release Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ash-release-gate
+  cancel-in-progress: false
+
+jobs:
+  core:
+    name: Core quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: python -m unittest discover -s desktop_worker -p "test_*.py"
+
+  live:
+    name: Live organization acceptance
+    needs: core
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Research
+        run: node scripts/research-live-smoke.mjs
+      - run: sleep 15
+      - name: Voice health
+        run: node scripts/voice-live-smoke.mjs
+      - run: sleep 15
+      - name: Pro acceptance
+        run: node scripts/pro-acceptance-live.mjs
+      - run: sleep 20
+      - name: Jarvis acceptance
+        run: node scripts/jarvis-acceptance.mjs
+      - run: sleep 20
+      - name: Peak audit
+        run: node scripts/peak-jarvis-audit.mjs
+
+  desktop:
+    name: Desktop Builder and Operator
+    needs: live
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
+          pip install -r desktop_worker/requirements.txt
+          pip install Pillow
+      - name: Live paired-device Builder
+        run: python scripts/builder-live-device.py
+      - run: sleep 20
+      - name: Screenshot plan action verification
+        run: python scripts/computer-control-live.py
