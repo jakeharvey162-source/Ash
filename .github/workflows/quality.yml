@@ -31,6 +31,9 @@ jobs:
           python -m py_compile desktop_worker/ash_agent.py
           python -m py_compile desktop_worker/offline_brain.py
           python -m py_compile desktop_worker/remote_worker.py
+          python -m py_compile desktop_worker/ash_companion.py
+          python -m py_compile desktop_worker/companion_overlay.py
+          python -m py_compile desktop_worker/computer_control.py
           python -m py_compile desktop_worker/voice_runtime/__init__.py
           python -m py_compile desktop_worker/voice_runtime/events.py
           python -m py_compile desktop_worker/voice_runtime/wake.py
@@ -38,6 +41,6 @@ jobs:
           python -m py_compile desktop_worker/voice_runtime/listener.py
           python -m py_compile desktop_worker/voice_runtime/runtime.py
       - name: Test local voice and builder helpers
-        run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_voice_runtime.py desktop_worker/test_builder.py desktop_worker/test_offline_brain.py desktop_worker/test_remote_worker.py desktop_worker/test_computer_control.py
+        run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_voice_runtime.py desktop_worker/test_builder.py desktop_worker/test_offline_brain.py desktop_worker/test_remote_worker.py desktop_worker/test_computer_control.py desktop_worker/test_companion.py
       - name: Check public config exists
         run: test -f dist/config.js
