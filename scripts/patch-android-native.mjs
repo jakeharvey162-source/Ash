@@ -5,7 +5,7 @@ const root=process.cwd();
 const packageDir=path.join(root,"android","app","src","main","java","com","jakeharvey","ash");
 fs.mkdirSync(packageDir,{recursive:true});
 
-for(const name of ["AshWakePlugin.java","AshWakeService.java","MainActivity.java"]){
+for(const name of ["AshWakePlugin.java","AshWakeService.java","AshBootReceiver.java","MainActivity.java"]){
   fs.copyFileSync(path.join(root,"native","android",name),path.join(packageDir,name));
 }
 
@@ -16,12 +16,27 @@ const permissions=[
   "android.permission.FOREGROUND_SERVICE",
   "android.permission.FOREGROUND_SERVICE_MICROPHONE",
   "android.permission.POST_NOTIFICATIONS",
-  "android.permission.WAKE_LOCK"
+  "android.permission.WAKE_LOCK",
+  "android.permission.RECEIVE_BOOT_COMPLETED"
 ];
 for(const permission of permissions){
   if(!manifest.includes(permission)){
     manifest=manifest.replace("<application","<uses-permission android:name=\""+permission+"\" />\n\n    <application");
   }
+}
+if(!manifest.includes("AshBootReceiver")){
+  manifest=manifest.replace("</application>",
+    "        <receiver\n"+
+    "            android:name=\".AshBootReceiver\"\n"+
+    "            android:enabled=\"true\"\n"+
+    "            android:exported=\"false\">\n"+
+    "            <intent-filter>\n"+
+    "                <action android:name=\"android.intent.action.BOOT_COMPLETED\" />\n"+
+    "                <action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\" />\n"+
+    "                <action android:name=\"android.intent.action.QUICKBOOT_POWERON\" />\n"+
+    "            </intent-filter>\n"+
+    "        </receiver>\n"+
+    "    </application>");
 }
 if(!manifest.includes("AshWakeService")){
   manifest=manifest.replace("</application>",
