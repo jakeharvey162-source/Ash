@@ -111,6 +111,7 @@ try{
   await page.locator("#assistantName").fill("Orion");
   await page.locator("#wakeWord").fill("Nova");
   await page.locator("#wakeAliases").fill("hey nova, arise, sentinel");
+  await page.locator("#instructions").fill("When I ask for CUSTOM_INSTRUCTION_CHECK, answer exactly INSTRUCTION_OK.");
   const speak=page.locator("#speak"); if(await speak.isChecked()) await speak.uncheck();
   const hf=page.locator("#handsFree"); if(!(await hf.isChecked())) await hf.check();
   await page.locator("#save").click();
@@ -124,6 +125,25 @@ try{
   if((await page.locator("#wakeWord").inputValue())!=="Nova") fail("Stored wake word mismatch");
   report.checks.identity_persistence=true;
 
+  const identityAnswer=await ask("What is your current assistant name? Answer with only the name.");
+  if(!/\bOrion\b/i.test(identityAnswer.text)) fail("Renamed identity did not reach the AI system prompt: "+identityAnswer.text);
+  report.evidence.identity_answer=identityAnswer.text;
+  report.checks.renamed_identity_reaches_model=true;
+
+  const instructionAnswer=await ask("CUSTOM_INSTRUCTION_CHECK");
+  if(!/INSTRUCTION_OK/i.test(instructionAnswer.text)) fail("Custom instructions did not affect the model: "+instructionAnswer.text);
+  report.checks.custom_instructions=true;
+
+  // Durable memory must survive a reload with empty in-memory chat history.
+  const memorySave=await ask("Remember that my audit codename is Blue Lantern.");
+  if(!/remember/i.test(memorySave.text)) fail("Explicit memory save was not acknowledged");
+  await page.reload({waitUntil:"networkidle"});
+  await waitVisible(".shell");
+  const memoryRecall=await ask("What is my audit codename? Answer with only the codename.");
+  if(!/Blue Lantern/i.test(memoryRecall.text)) fail("Durable memory did not survive reload: "+memoryRecall.text);
+  report.evidence.memory_recall=memoryRecall.text;
+  report.checks.durable_memory=true;
+
   // Wake word: false positive first, then custom wake, then alias.
   await nav("home");
   await sleep(500);
@@ -133,16 +153,26 @@ try{
   if((await page.locator("article.mine").count())!==initialUser) fail("Wake matcher false-triggered on a substring");
   report.checks.wake_false_positive_guard=true;
 
+  const beforeWakeReplies=await page.locator("article.ash").count();
   await page.evaluate(()=>window.__ashRecognitions?.at(-1)?.__emit("Nova, calculate 5 plus 7 and answer only the number",true));
   await page.waitForFunction(({initialUser})=>document.querySelectorAll("article.mine").length>initialUser,{initialUser},{timeout:7000});
-  await page.waitForFunction(()=>[...document.querySelectorAll("article.ash")].some(x=>/\b12\b/.test(x.textContent||"")),{},{timeout:45000});
+  await page.waitForFunction(({beforeWakeReplies})=>document.querySelectorAll("article.ash").length>beforeWakeReplies,{beforeWakeReplies},{timeout:50000});
+  const wakeReplies=page.locator("article.ash");
+  const wakeText=((await wakeReplies.nth((await wakeReplies.count())-1).locator("p").first().textContent())||"").trim();
+  if(!/\b12\b|\btwelve\b/i.test(wakeText)) fail("Wake command submitted, but response was not correct: "+wakeText);
+  report.evidence.custom_wake_answer=wakeText;
   report.checks.custom_wake_word=true;
 
   const beforeAlias=await page.locator("article.mine").count();
+  const beforeAliasReplies=await page.locator("article.ash").count();
   await sleep(600);
   await page.evaluate(()=>window.__ashRecognitions?.at(-1)?.__emit("sentinel, say WAKE_ALIAS_OK exactly",true));
   await page.waitForFunction(({beforeAlias})=>document.querySelectorAll("article.mine").length>beforeAlias,{beforeAlias},{timeout:7000});
-  await page.waitForFunction(()=>[...document.querySelectorAll("article.ash")].some(x=>/WAKE_ALIAS_OK/i.test(x.textContent||"")),{},{timeout:45000});
+  await page.waitForFunction(({beforeAliasReplies})=>document.querySelectorAll("article.ash").length>beforeAliasReplies,{beforeAliasReplies},{timeout:50000});
+  const aliasReplies=page.locator("article.ash");
+  const aliasText=((await aliasReplies.nth((await aliasReplies.count())-1).locator("p").first().textContent())||"").trim();
+  if(!/WAKE_ALIAS_OK/i.test(aliasText)) fail("Wake alias submitted, but response was wrong: "+aliasText);
+  report.evidence.alias_answer=aliasText;
   report.checks.wake_alias=true;
 
   // Automations: once / interval / daily / weekly, one confirmation-protected.
@@ -264,6 +294,11 @@ try{
   if(secretPattern.test(apiBlob)) fail("Secret leaked from normal API response");
   if(/"provider"\s*:\s*"(groq|anthropic|openrouter|bytez|elevenlabs)"/i.test(apiBlob)) fail("Provider identity leaked in normal API response");
   report.checks.provider_identity_not_volunteered_by_api=true;
+
+  const styleState=await authedJson("/rest/v1/jarvis_style_signals?select=sample_count,summary");
+  if(!Array.isArray(styleState.data)||!styleState.data[0]||Number(styleState.data[0].sample_count)<1) fail("Style-learning signals were not persisted");
+  report.evidence.style_signals=styleState.data[0];
+  report.checks.style_learning=true;
 
   // Name should also be used in answer labels.
   await nav("home");
