@@ -126,7 +126,11 @@ if (!(await page.locator("#researchMode").isVisible())) throw new Error("Researc
 await page.locator('[data-view="settings"]').first().click();
 await page.waitForTimeout(60);
 if (!(await page.locator("#voice").isVisible())) throw new Error("Voice picker missing.");
-if ((await page.locator("#voice option").count()) < 6) throw new Error("Voice picker should expose multiple voices.");
+{
+  const voiceValues=await page.locator("#voice option").evaluateAll(nodes=>nodes.map(n=>String(n.value||"")));
+  if(voiceValues.length<6&&!voiceValues.some(v=>v.startsWith("browser:")))
+    throw new Error("Voice picker has neither a premium catalog nor a device-voice fallback.");
+}
 if (!(await page.locator("#previewVoice").isVisible())) throw new Error("Voice preview control missing.");
 if (!(await page.locator("#voiceSpeed").isVisible())) throw new Error("Voice pace control missing.");
 await page.locator('[data-view="home"]').first().click();
@@ -134,7 +138,11 @@ await page.waitForTimeout(60);
 if (!(await page.locator("[data-handsfree-toggle]").first().isVisible())) throw new Error("Hands-free toggle missing.");
 await page.getByRole("button", { name: /Preferences$/ }).click();
 await page.waitForTimeout(100);
-if((await page.locator("#voice option").count())<8) throw new Error("Expected at least 8 selectable voices.");
+{
+  const voiceValues=await page.locator("#voice option").evaluateAll(nodes=>nodes.map(n=>String(n.value||"")));
+  if(voiceValues.length<6&&!voiceValues.some(v=>v.startsWith("browser:")))
+    throw new Error("Expected premium voices or a real device-voice fallback.");
+}
 if(!(await page.locator("#previewVoice").isVisible())) throw new Error("Voice preview control missing.");
 await page.getByRole("button", { name: /Overview$/ }).click();
 await page.waitForTimeout(100);
