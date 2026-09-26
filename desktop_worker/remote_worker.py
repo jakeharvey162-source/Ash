@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from ash_agent import AshPythonAgent
+from computer_control import AshComputerController, ComputerControlUnavailable
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
 
@@ -34,6 +35,7 @@ class AshRemoteWorker:
         self.device_secret = ""
         self.pair_code = pair_code or os.environ.get("ASH_PAIR_CODE", "")
         self._load_device_config()
+        self.agent.set_device_credentials(self.device_id, self.device_secret)
 
     def _load_device_config(self) -> None:
         try:
@@ -62,6 +64,8 @@ class AshRemoteWorker:
             "verified_builds": True,
             "auto_repair": True,
             "voice_runtime": True,
+            "computer_control": os.environ.get("ASH_COMPUTER_CONTROL", "").strip().lower() in {"1", "true", "yes", "on"},
+            "screen_vision": True,
         }
 
     def broker(self, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -101,6 +105,7 @@ class AshRemoteWorker:
         if not self.device_id or not self.device_secret:
             raise RuntimeError("Ash did not return a device credential.")
         self._save_device_config()
+        self.agent.set_device_credentials(self.device_id, self.device_secret)
 
     def headers(self, prefer: str | None = None) -> dict[str, str]:
         h = {"apikey": self.key, "Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
@@ -252,6 +257,21 @@ class AshRemoteWorker:
                     "builder": True,
                 }
                 self.finish(job_id, ok=built.ok, result=result, error="" if built.ok else built.output)
+            elif kind in {"computer_control", "computer", "desktop_control"} or payload.get("computer_control") is True:
+                controller = AshComputerController(self.agent)
+                outcome = controller.run_goal(prompt)
+                self.finish(
+                    job_id,
+                    ok=bool(outcome.get("ok")),
+                    result={
+                        "summary": outcome.get("summary") or "Computer-control run finished.",
+                        "steps": outcome.get("steps"),
+                        "trace": outcome.get("trace", []),
+                        "completed_by": self.device_name,
+                        "computer_control": True,
+                    },
+                    error="" if outcome.get("ok") else str(outcome.get("summary") or "Computer task was not completed."),
+                )
             elif kind == "chat_fallback" or payload.get("rescue") is True:
                 mode = str(job.get("mode") or "high")
                 try:
