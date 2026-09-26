@@ -687,7 +687,7 @@ async function rescueThroughDesktop(message){
   throw new Error("Rescue Mode is still running on your desktop. Check Activity for the result.");
 }
 
-function activityView(){return `${topbar("Activity","ASH / OPERATIONS")}${healthPanel()}<section class="card activityPanel"><div class="activityHeader"><div><p class="kicker">EXECUTION LOG</p><h2>What Ash has been doing</h2></div><button id="refreshOps" class="secondary">Refresh</button></div>${jobs.length?jobs.map(j=>`<div class="activityRow"><div class="activityMark ${j.status}">${j.status==="completed"?"✓":j.status==="failed"?"!":"→"}</div><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><p>${esc(j.error||j.result?.summary||"")}</p><small>${fmt(j.created_at)} · ${esc(j.status)}</small></div><span class="badge">${esc(j.mode)}</span></div>`).join(""):`<div class="emptyState"><p>No activity yet.</p><small>Scheduled and remote tasks will appear here.</small></div>`}</section>`}
+function activityView(){return `${topbar("Activity","ASH / OPERATIONS")}${healthPanel()}<section class="card activityPanel"><div class="activityHeader"><div><p class="kicker">EXECUTION LOG</p><h2>What Ash has been doing</h2></div><button id="refreshOps" class="secondary">Refresh</button></div>${jobs.length?jobs.map(j=>`<div class="activityRow"><div class="activityMark ${j.status}">${j.status==="completed"?"✓":j.status==="failed"?"!":j.status==="waiting_for_confirmation"?"?":"→"}</div><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><p>${esc(j.error||j.result?.summary||(j.status==="waiting_for_confirmation"?"Approval required before this job can run.":""))}</p><small>${fmt(j.created_at)} · ${esc(j.status)}</small>${j.status==="waiting_for_confirmation"?`<div class="activityActions"><button class="primary" data-approve-job="${j.id}">Approve & run</button><button class="dangerGhost" data-cancel-job="${j.id}">Cancel</button></div>`:""}</div><span class="badge">${esc(j.mode)}</span></div>`).join(""):`<div class="emptyState"><p>No activity yet.</p><small>Scheduled and remote tasks will appear here.</small></div>`}</section>`}
 function integrationFor(key){return integrations.find(i=>i.integration_key===key)||null}
 function connectorStatus(c){if(c.builtIn&&c.native)return nativeState.available?"Available on Android":"Web fallback";const row=integrationFor(c.key);return row?.status||"Not connected"}
 function connectionsView(){
@@ -1038,6 +1038,8 @@ function bind(){
   document.querySelectorAll("[data-toggle-auto]").forEach(b=>b.onclick=()=>toggleAutomation(b.dataset.toggleAuto,b.dataset.enabled==="true"));
   document.querySelectorAll("[data-native-test]").forEach(b=>b.onclick=()=>testNativeConnector(b.dataset.nativeTest));
   document.querySelectorAll("[data-confirm-index]").forEach(b=>b.onclick=()=>confirmPendingAction(Number(b.dataset.confirmIndex)));
+  document.querySelectorAll("[data-approve-job]").forEach(b=>b.onclick=()=>approveRemoteJob(b.dataset.approveJob));
+  document.querySelectorAll("[data-cancel-job]").forEach(b=>b.onclick=()=>cancelRemoteJob(b.dataset.cancelJob));
   document.querySelectorAll("[data-connect]").forEach(b=>b.onclick=()=>connectCloudConnector(b.dataset.connect));
 }
 async function createAutomation(){
@@ -1067,6 +1069,26 @@ async function toggleAutomation(id,enabled){
     toast("Could not update automation. Try again.");
     throw e;
   }
+}
+async function approveRemoteJob(id){
+  try{
+    const rows=await supa("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(id)+"&status=eq.waiting_for_confirmation",{
+      method:"PATCH",headers:{Prefer:"return=representation"},
+      body:JSON.stringify({status:"queued",requires_confirmation:false,updated_at:new Date().toISOString()})
+    });
+    if(!rows?.length)throw new Error("Job is no longer waiting for approval.");
+    await loadOps(true);render();toast("Approved. Ash can run this job now.");
+  }catch(e){toast(e.message||"Could not approve job.")}
+}
+async function cancelRemoteJob(id){
+  try{
+    const rows=await supa("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(id)+"&status=eq.waiting_for_confirmation",{
+      method:"PATCH",headers:{Prefer:"return=representation"},
+      body:JSON.stringify({status:"cancelled",updated_at:new Date().toISOString()})
+    });
+    if(!rows?.length)throw new Error("Job is no longer waiting for approval.");
+    await loadOps(true);render();toast("Job cancelled.");
+  }catch(e){toast(e.message||"Could not cancel job.")}
 }
 async function confirmPendingAction(index){
   const m=messages[index]; if(!m?.action)return;
