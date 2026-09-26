@@ -281,8 +281,28 @@ createRoot(document.getElementById("root")).render(
         ]
         return not text or any(x in text for x in bad)
 
-    def _write_verified_fallback_site(self, root: pathlib.Path, request: str) -> list[str]:
-        brand = self._fallback_brand(request)
+    def _write_verified_fallback_site(self, root: pathlib.Path, request: str, plan: dict[str, Any] | None = None) -> list[str]:
+        plan = plan if isinstance(plan, dict) else {}
+        brand = str(plan.get("name") or self._fallback_brand(request)).strip()[:48] or self._fallback_brand(request)
+        content_plan = plan.get("content") if isinstance(plan.get("content"), dict) else {}
+        hero_title = str(content_plan.get("hero_title") or "Make the next move feel obvious.").strip()[:120]
+        hero_summary = str(content_plan.get("hero_summary") or f"{brand} turns scattered work into a calm, deliberate flow—so attention stays on the decision, not the interface.").strip()[:320]
+        primary_cta = str(content_plan.get("primary_cta") or f"Explore {brand}").strip()[:60]
+        planned_features = content_plan.get("features") if isinstance(content_plan.get("features"), list) else []
+        safe_features = []
+        for item in planned_features[:3]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()[:70]
+            body = str(item.get("body") or "").strip()[:220]
+            if title and body:
+                safe_features.append([f"{len(safe_features)+1:02d}", title, body])
+        if len(safe_features) != 3:
+            safe_features = [
+                ["01", "Clear by default", "The important action is always obvious, with calm hierarchy and no dashboard clutter."],
+                ["02", "Fast without noise", "Responsive interactions and focused content keep the experience feeling immediate."],
+                ["03", "Built to adapt", "The layout scales elegantly from a phone to a wide desktop without losing rhythm."],
+            ]
         package = """{
   "name": "ash-premium-fallback",
   "private": true,
@@ -328,11 +348,7 @@ createRoot(document.getElementById("root")).render(
 """
         app = f'''import React, {{ useEffect, useState }} from "react";
 
-const values = [
-  ["01", "Clear by default", "The important action is always obvious, with calm hierarchy and no dashboard clutter."],
-  ["02", "Fast without noise", "Responsive interactions and focused content keep the experience feeling immediate."],
-  ["03", "Built to adapt", "The layout scales elegantly from a phone to a wide desktop without losing rhythm."]
-];
+const values = {json.dumps(safe_features, ensure_ascii=False)};
 
 const workflow = [
   ["Capture", "Bring the work that matters into one clear place."],
@@ -368,9 +384,9 @@ export default function App() {{
     <main id="top">
       <section className="hero shell">
         <div className="eyebrow"><i /> Designed for focused work</div>
-        <h1>Make the next move<br/><em>feel obvious.</em></h1>
-        <p className="hero-copy">{brand} turns scattered work into a calm, deliberate flow—so attention stays on the decision, not the interface.</p>
-        <div className="hero-actions"><a className="button" href="#start">Explore {brand}<span>↗</span></a><a className="text-link" href="#product">See how it works →</a></div>
+        <h1>{hero_title}</h1>
+        <p className="hero-copy">{hero_summary}</p>
+        <div className="hero-actions"><a className="button" href="#start">{primary_cta}<span>↗</span></a><a className="text-link" href="#product">See how it works →</a></div>
         <div className="hero-frame" aria-label="Product preview">
           <div className="frame-top"><span/><span/><span/><b>{brand} / Workspace</b></div>
           <div className="frame-grid">
@@ -536,12 +552,13 @@ PROJECT REQUEST:
     def build_fullstack(self, request: str, workspace: str) -> AgentResult:
         root = self._safe_root(workspace)
         planner_prompt = """You are Ash's senior product architect and product designer. Design a production-minded web application that looks intentionally designed, not AI-generic.
-Return ONLY one compact JSON object with keys: name, stack, design_system, files, acceptance_tests.
-STRICT SIZE LIMIT: keep the entire JSON under 2600 characters. Do not include file contents in this planning response.
+Return ONLY one compact JSON object with keys: name, stack, design_system, content, files, acceptance_tests.
+STRICT SIZE LIMIT: keep the entire JSON under 3200 characters. Do not include file contents in this planning response.
 Rules:
 - Prefer React + Vite for standalone web experiences unless the user explicitly asks for another stack.
 - Keep stack to a short array of technologies.
 - design_system must use short string values for: direction, typography, spacing, surfaces, interaction, responsive.
+- content must contain: hero_title, hero_summary, primary_cta, and features. features must be exactly 3 objects with title and body, all specific to the user's requested product/business and containing no fabricated proof.
 - files must contain no more than 8 items and each item must contain only path and a one-sentence purpose.
 - package.json must include working dev, build and preview scripts when generated later.
 - Use realistic content. No lorem ipsum, fake testimonials, fake metrics, fake company claims or placeholder sections.
@@ -553,9 +570,11 @@ Rules:
 USER REQUEST:
 """ + request
         planner_warning = ""
+        live_plan = True
         try:
             plan = self.think_json(planner_prompt, attempts=3)
         except Exception as exc:
+            live_plan = False
             planner_warning = str(exc)
             plan = self._fallback_web_plan(request)
         specs = plan.get("files") if isinstance(plan, dict) else None
@@ -584,9 +603,13 @@ PURPOSE: {purpose}
             if content is None:
                 content = self._clean_generated_file(self.think(prompt, "high", action="generate"))
             if self._looks_like_generation_failure(content):
-                generated = self._write_verified_fallback_site(root, request)
-                plan = self._fallback_web_plan(request)
-                planner_warning = (planner_warning + " | " if planner_warning else "") + "Cloud file generation degraded; verified premium fallback used."
+                if live_plan:
+                    generated = self._write_verified_fallback_site(root, request, plan)
+                    planner_warning = (planner_warning + " | " if planner_warning else "") + "Live AI plan rendered through the verified production source renderer after the long-form source route degraded."
+                else:
+                    generated = self._write_verified_fallback_site(root, request)
+                    plan = self._fallback_web_plan(request)
+                    planner_warning = (planner_warning + " | " if planner_warning else "") + "Cloud planning and file generation degraded; verified premium fallback used."
                 break
             self._safe_write(root, rel, content)
             generated.append(rel)
@@ -599,9 +622,13 @@ PURPOSE: {purpose}
                 evidence.append({"command": "npm run build", "code": build.returncode, "stdout": build.stdout[-2000:], "stderr": build.stderr[-4000:]})
                 repaired = []
                 if build.returncode != 0:
-                    generated = self._write_verified_fallback_site(root, request)
-                    plan = self._fallback_web_plan(request)
-                    planner_warning = (planner_warning + " | " if planner_warning else "") + "Generated build failed; verified premium fallback used."
+                    if live_plan:
+                        generated = self._write_verified_fallback_site(root, request, plan)
+                        planner_warning = (planner_warning + " | " if planner_warning else "") + "Generated build failed; live AI plan was repaired through the verified production source renderer."
+                    else:
+                        generated = self._write_verified_fallback_site(root, request)
+                        plan = self._fallback_web_plan(request)
+                        planner_warning = (planner_warning + " | " if planner_warning else "") + "Generated build failed; verified premium fallback used."
                     install2 = self._run(root, ["npm", "install", "--no-audit", "--no-fund"], 300)
                     evidence.append({"command": "npm install (fallback)", "code": install2.returncode, "stderr": install2.stderr[-2000:]})
                     if install2.returncode == 0:
