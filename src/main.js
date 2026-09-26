@@ -1270,7 +1270,10 @@ async function send(){
   const forceResearch=box?.dataset.forceResearch==="1";
   const fresh=forceResearch||currentInfoIntent(message);
   box.value="";box.dataset.forceResearch="0";document.querySelector("#researchMode")?.classList.remove("active");
-  stopVoicePlayback();typeGeneration++;if(handsFreeEnabled()){handsFreeProcessing=true;await pauseHandsFreeForResponse();handsFreeProcessing=true;}
+  const voiceTurn=handsFreeProcessing;
+  stopVoicePlayback();typeGeneration++;
+  if(handsFreeEnabled())await pauseHandsFreeForResponse();
+  if(voiceTurn)handsFreeProcessing=true;
   const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);
   const replyIndex=messages.length;
   sending=true;setSendBusy(true);setCoreState("thinking",fresh?"Researching the live web and checking sources.":"Working the request across Ash intelligence.");
@@ -1305,7 +1308,11 @@ async function send(){
     appendAssistantPlaceholder(replyIndex,false);
     await typeAssistantReply(replyIndex,text,reply);
   }finally{
-    sending=false;setSendBusy(false);if(!speaking)setCoreState("idle");if(handsFreeEnabled()&&handsFreeProcessing&&!voiceQueueRunning&&!speaking)resumeHandsFreeAfterTurn().catch(()=>{})
+    sending=false;setSendBusy(false);if(!speaking)setCoreState("idle");
+    if(handsFreeEnabled()&&!voiceQueueRunning&&!speaking){
+      if(voiceTurn&&handsFreeProcessing)resumeHandsFreeAfterTurn().catch(()=>{});
+      else{handsFreeProcessing=false;handsFreePaused=false;startHandsFreeListening(false).catch(()=>{})}
+    }
   }
 }
 function listenOnce(){
