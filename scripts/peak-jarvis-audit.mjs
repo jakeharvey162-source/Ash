@@ -216,6 +216,50 @@ try{
   report.checks.automation_recurrence=true;
   report.checks.automation_confirmation_propagation=true;
 
+  // Pair a real mock desktop and prove a protected job cannot be claimed before approval.
+  const pairing=await page.evaluate(async()=>{
+    const cfg=window.JARVIS_CONFIG||{};
+    const s=JSON.parse(localStorage.getItem("ash-session")||"null");
+    const base=(cfg.SUPABASE_URL||"").replace(/\/$/,"");
+    const endpoint=base+"/functions/v1/ash-device-link";
+    const headers={apikey:cfg.SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+s.access_token,"Content-Type":"application/json"};
+    const a=await fetch(endpoint,{method:"POST",headers,body:JSON.stringify({action:"create_pairing"})});
+    const ad=await a.json();
+    const b=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"claim_pairing",code:ad.code,device_name:"Peak Audit Desktop",platform:"test",capabilities:{builder:true,automation:true}})});
+    const bd=await b.json();
+    return {endpoint,createStatus:a.status,claimStatus:b.status,...bd};
+  });
+  if(pairing.createStatus!==200||pairing.claimStatus!==200||!pairing.device_id||!pairing.device_secret) fail("Mock desktop pairing failed");
+
+  const protectedClaim=await page.evaluate(async({pairing,jobId})=>{
+    const r=await fetch(pairing.endpoint,{method:"POST",headers:{"Content-Type":"application/json","x-ash-device-id":pairing.device_id,"x-ash-device-secret":pairing.device_secret},body:JSON.stringify({action:"claim_job",job_id:jobId})});
+    return {status:r.status,data:await r.json()};
+  },{pairing,jobId:protectedJob.id});
+  if(protectedClaim.status!==200||protectedClaim.data?.job) fail("Protected automation job was claimable before approval");
+  if(protectedClaim.data?.waiting_for_confirmation!==true) fail("Protected job was not explicitly held for confirmation");
+  let protectedState=await authedJson("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(protectedJob.id)+"&select=*");
+  if(protectedState.data?.[0]?.status!=="waiting_for_confirmation") fail("Protected job did not enter waiting_for_confirmation");
+  report.checks.protected_job_blocked_before_approval=true;
+
+  await nav("activity");
+  const protectedRow=page.locator(".activityRow").filter({hasText:autoNames.daily}).first();
+  await protectedRow.locator("[data-approve-job]").click();
+  await sleep(500);
+  protectedState=await authedJson("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(protectedJob.id)+"&select=*");
+  if(protectedState.data?.[0]?.status!=="queued"||protectedState.data?.[0]?.requires_confirmation!==false) fail("Activity approval did not release protected job");
+
+  const approvedClaim=await page.evaluate(async({pairing,jobId})=>{
+    const r=await fetch(pairing.endpoint,{method:"POST",headers:{"Content-Type":"application/json","x-ash-device-id":pairing.device_id,"x-ash-device-secret":pairing.device_secret},body:JSON.stringify({action:"claim_job",job_id:jobId})});
+    return {status:r.status,data:await r.json()};
+  },{pairing,jobId:protectedJob.id});
+  if(approvedClaim.status!==200||approvedClaim.data?.job?.status!=="running") fail("Approved job could not be claimed by paired worker");
+  await page.evaluate(async({pairing,jobId})=>{
+    await fetch(pairing.endpoint,{method:"POST",headers:{"Content-Type":"application/json","x-ash-device-id":pairing.device_id,"x-ash-device-secret":pairing.device_secret},body:JSON.stringify({action:"finish_job",job_id:jobId,ok:true,result:{summary:"Peak audit approval path completed",completed_by:"Peak Audit Desktop"}})});
+  },{pairing,jobId:protectedJob.id});
+  protectedState=await authedJson("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(protectedJob.id)+"&select=*");
+  if(protectedState.data?.[0]?.status!=="completed") fail("Approved automation job did not complete after worker finish");
+  report.checks.protected_job_executes_only_after_approval=true;
+
   // Pause/resume one automation in UI.
   await nav("automation");
   const intervalRow=page.locator(".autoItem").filter({hasText:autoNames.interval}).first();
