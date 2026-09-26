@@ -1,0 +1,5 @@
+# Optional desktop screen-control stack.
+# Install only on a trusted desktop where the owner explicitly wants Ash computer control.
+pyautogui>=0.9.54,<1
+mss>=10,<11
+Pillow>=11,<12
