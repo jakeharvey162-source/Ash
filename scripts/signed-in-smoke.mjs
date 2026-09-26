@@ -205,7 +205,7 @@ for (const [w,h,label] of [
 const mobileButtons = await page.locator(".mobileNav button").count();
 await page.setViewportSize({width:390,height:844});
 await page.reload({waitUntil:"networkidle"});
-if (mobileButtons !== 5) throw new Error("Expected 5 mobile navigation actions, got " + mobileButtons);
+if (mobileButtons !== 7) throw new Error("Expected 7 mobile navigation actions, got " + mobileButtons);
 await page.screenshot({ path: "signed-in-smoke.png", fullPage: true });
 console.log("ASH SIGNED-IN UI SMOKE: PASS");
 await browser.close();
