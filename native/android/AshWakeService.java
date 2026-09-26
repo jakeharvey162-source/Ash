@@ -190,12 +190,12 @@ public class AshWakeService extends Service implements RecognitionListener {
         return new NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Ash background wake")
-            .setContentText("Listening for “" + wake + "” while Ash is in the background.")
+            .setContentText("Listening for “" + wake + "” in the background and while the screen is locked.")
             .setContentIntent(pending)
             .setOngoing(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_LOW)\n            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build();
     }
 
@@ -223,6 +223,15 @@ public class AshWakeService extends Service implements RecognitionListener {
     @Override public void onResults(Bundle results) { listening = false; inspectResults(results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)); restartSoon(350L); }
     @Override public void onPartialResults(Bundle partialResults) { inspectResults(partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)); }
     @Override public void onEvent(int eventType, Bundle params) {}
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // The foreground service is intentionally independent from the app task.
+        // Re-arm recognition when the user swipes Ash away so hands-free wake can
+        // continue while the device is locked or another app is foregrounded.
+        if (shouldListen()) restartSoon(350L);
+        super.onTaskRemoved(rootIntent);
+    }
 
     @Override
     public void onDestroy() {
