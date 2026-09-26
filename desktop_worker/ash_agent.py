@@ -105,6 +105,21 @@ class AshPythonAgent:
             on_narration(answer)
         return answer
 
+    def think_json(self, prompt: str, attempts: int = 3) -> Any:
+        errors: list[str] = []
+        modes = ["medium", "instant", "high"]
+        for attempt in range(max(1, attempts)):
+            mode = modes[min(attempt, len(modes) - 1)]
+            suffix = ""
+            if attempt:
+                suffix = "\n\nIMPORTANT: Your previous attempt was not valid JSON. Return one valid JSON object only. No prose, no markdown fences, no explanation."
+            raw = self.think(prompt + suffix, mode)
+            try:
+                return self._extract_json(raw)
+            except Exception as exc:
+                errors.append(f"{mode}: {exc}")
+        raise ValueError("Structured response failed after retries: " + " | ".join(errors))
+
     @staticmethod
     def _extract_json(text: str) -> Any:
         fenced = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S | re.I)
@@ -142,8 +157,7 @@ class AshPythonAgent:
             last = evidence[-1] if evidence else {}
             if last.get("code") == 0:
                 break
-            diagnosis = self.think(
-                """You are Ash's senior debugging engineer.
+            diagnosis_prompt = """You are Ash's senior debugging engineer.
 A generated web application failed its build. Diagnose the failure and return ONLY JSON:
 {"files":[{"path":"relative/path","content":"complete replacement contents"}],"reason":"short explanation"}
 Rules:
@@ -156,10 +170,9 @@ Rules:
 PROJECT REQUEST:
 """ + request + "\n\nARCHITECTURE:\n" + json.dumps(plan, indent=2)[:12000] +
                 "\n\nBUILD EVIDENCE:\n" + json.dumps(evidence[-4:], indent=2)[:12000],
-                "high",
-            )
+                
             try:
-                patch = self._extract_json(diagnosis)
+                patch = self.think_json(diagnosis_prompt, attempts=2)
             except Exception:
                 break
             files = patch.get("files") if isinstance(patch, dict) else None
@@ -187,7 +200,7 @@ PROJECT REQUEST:
 
     def build_fullstack(self, request: str, workspace: str) -> AgentResult:
         root = self._safe_root(workspace)
-        planner = self.think("""You are Ash's senior product architect and product designer. Design a production-minded web application that looks intentionally designed, not AI-generic.
+        planner_prompt = """You are Ash's senior product architect and product designer. Design a production-minded web application that looks intentionally designed, not AI-generic.
 Return ONLY JSON with keys: name, stack, design_system, files, acceptance_tests.
 Rules:
 - Prefer React + Vite for standalone web experiences unless the user explicitly asks for another stack.
@@ -200,11 +213,11 @@ Rules:
 - Each files entry must have path and purpose. Use relative paths. Never include secrets.
 - Acceptance tests must include build success, mobile layout, desktop layout, no horizontal overflow, no console errors and no fabricated content.
 USER REQUEST:
-""" + request, "high")
+""" + request
         try:
-            plan = self._extract_json(planner)
+            plan = self.think_json(planner_prompt, attempts=3)
         except Exception as exc:
-            return AgentResult(False, "Planning did not return valid JSON.", {"error": str(exc)})
+            return AgentResult(False, "Planning did not return valid JSON after structured retries.", {"error": str(exc)})
         specs = plan.get("files") if isinstance(plan, dict) else None
         if not isinstance(specs, list) or not specs:
             return AgentResult(False, "Plan contained no files.", {"plan": plan})
