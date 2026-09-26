@@ -255,20 +255,42 @@ async function providerFetch(name: string, url: string, init: RequestInit, timeo
 async function askGroq(system: string, message: string, history: ChatMessage[], mode: Mode) {
   const key = Deno.env.get("GROQ_API_KEY");
   if (!key) throw new Error("route_unavailable");
-  const model = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
-  const response = await providerFetch("groq", "https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
-      temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-      max_tokens: mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500
-    })
-  }, 4500);
-  if (!response.ok) throw new Error("route_failed");
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || "";
+
+  const configured = Deno.env.get("GROQ_MODEL") || "openai/gpt-oss-120b";
+  const candidates = [...new Set([
+    configured,
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b"
+  ])];
+
+  let lastError = "route_failed";
+  for (const model of candidates) {
+    const routeName = "groq_" + model.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+    try {
+      const response = await providerFetch(routeName, "https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
+          temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
+          max_tokens: mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500
+        })
+      }, model.includes("120b") ? 4500 : 5500);
+      if (!response.ok) {
+        lastError = "route_failed_" + response.status;
+        continue;
+      }
+      const data = await response.json();
+      const answer = String(data?.choices?.[0]?.message?.content || "").trim();
+      if (answer) return answer;
+      lastError = "route_empty";
+    } catch (error) {
+      lastError = String((error as Error)?.message || "route_failed");
+    }
+  }
+  throw new Error(lastError);
 }
 
 async function askGemini(system: string, message: string, history: ChatMessage[], mode: Mode) {
