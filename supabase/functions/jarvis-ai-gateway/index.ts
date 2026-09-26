@@ -466,6 +466,25 @@ async function askBytez(system: string, message: string, history: ChatMessage[],
 }
 
 
+async function firstUsefulAnswer(
+  routes: Array<(system: string, message: string, history: ChatMessage[], mode: Mode) => Promise<string>>,
+  system: string,
+  message: string,
+  history: ChatMessage[],
+  mode: Mode,
+  timeoutMs = 4200
+) {
+  const attempts = routes.map(async route => {
+    const answer = String(await route(system, message, history, mode) || "").trim();
+    if (!answer) throw new Error("route_empty");
+    return answer;
+  });
+  const timeout = new Promise<string>((_resolve, reject) =>
+    setTimeout(() => reject(new Error("route_budget_exhausted")), timeoutMs)
+  );
+  return await Promise.race([Promise.any(attempts), timeout]);
+}
+
 async function askHighEnsemble(system: string, message: string, history: ChatMessage[]) {
   const specialists = [
     { role: "architect", run: askGemini },
@@ -514,13 +533,11 @@ async function askHighEnsemble(system: string, message: string, history: ChatMes
     JSON.stringify(candidates).slice(0, 28000)
   ].join("\n");
 
-  const synthesizers = [askGemini, askAnthropic, askGroq, askOpenRouter, askNvidia];
-  for (const synth of synthesizers) {
-    try {
-      const answer = await synth(system, synthesis, [], "high");
-      if (answer) return { answer, agents: candidates.map((item: any) => item.role) };
-    } catch {}
-  }
+  const synthesizers = [askGemini, askGroq, askOpenRouter, askNvidia, askAnthropic];
+  try {
+    const answer = await firstUsefulAnswer(synthesizers.slice(0, 4), system, synthesis, [], "high", 3200);
+    if (answer) return { answer, agents: candidates.map((item: any) => item.role) };
+  } catch {}
 
   return { answer: candidates[0].answer, agents: candidates.map((item: any) => item.role) };
 }
@@ -1511,16 +1528,14 @@ Deno.serve(async (req: Request) => {
       ? [askGroq, askGemini, askOpenRouter, askNvidia, askBytez, askAnthropic]
       : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
-    for (const route of routes) {
-      try {
-        const answer = await route(system, message, history, mode);
-        if (answer) {
-          learnStyle(ctx, message, profile);
-          return json({ answer: cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
-        }
-      } catch {}
-    }
-    return json({ error: "Cloud intelligence is not configured yet." }, 503);
+    try {
+      const answer = await firstUsefulAnswer(routes.slice(0, 5), system, message, history, mode, mode === "instant" ? 3600 : 4300);
+      if (answer) {
+        learnStyle(ctx, message, profile);
+        return json({ answer: cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
+      }
+    } catch {}
+    return json({ error: "Cloud intelligence is temporarily unavailable." }, 503);
   } catch {
     return json({ error: "invalid_request" }, 400);
   }
