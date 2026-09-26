@@ -1333,6 +1333,46 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
   ].join("\n");
 
   let raw = "";
+  if (!raw) {
+    const nvidiaKey = Deno.env.get("NVIDIA_API_KEY");
+    if (nvidiaKey) {
+      try {
+        const response = await providerFetch(
+          "computer_vision_nvidia",
+          "https://integrate.api.nvidia.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + nvidiaKey,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: Deno.env.get("NVIDIA_VISION_MODEL") || "meta/llama-3.2-11b-vision-instruct",
+              messages: [{
+                role: "user",
+                content: [
+                  { type: "text", text: prompt },
+                  { type: "image_url", image_url: { url: "data:image/jpeg;base64," + screenshotBase64 } }
+                ]
+              }],
+              temperature: 0.1,
+              max_tokens: 1200
+            })
+          },
+          12000
+        );
+        if (response.ok) {
+          const data = await response.json();
+          raw = String(data?.choices?.[0]?.message?.content || "").trim();
+        } else {
+          console.warn("ash_computer_vision_nvidia_failed", response.status);
+        }
+      } catch (error) {
+        console.warn("ash_computer_vision_nvidia_error", String((error as Error)?.message || error));
+      }
+    }
+  }
+
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (geminiKey) {
     const configured = String(Deno.env.get("GEMINI_VISION_MODEL") || Deno.env.get("GEMINI_MODEL") || "").trim();
@@ -1379,46 +1419,6 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
         console.warn("ash_computer_vision_model_empty", model);
       } catch (error) {
         console.warn("ash_computer_vision_model_error", model, String((error as Error)?.message || error));
-      }
-    }
-  }
-
-  if (!raw) {
-    const nvidiaKey = Deno.env.get("NVIDIA_API_KEY");
-    if (nvidiaKey) {
-      try {
-        const response = await providerFetch(
-          "computer_vision_nvidia",
-          "https://integrate.api.nvidia.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer " + nvidiaKey,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              model: Deno.env.get("NVIDIA_VISION_MODEL") || "meta/llama-3.2-90b-vision-instruct",
-              messages: [{
-                role: "user",
-                content: [
-                  { type: "text", text: prompt },
-                  { type: "image_url", image_url: { url: "data:image/jpeg;base64," + screenshotBase64 } }
-                ]
-              }],
-              temperature: 0.1,
-              max_tokens: 1200
-            })
-          },
-          12000
-        );
-        if (response.ok) {
-          const data = await response.json();
-          raw = String(data?.choices?.[0]?.message?.content || "").trim();
-        } else {
-          console.warn("ash_computer_vision_nvidia_failed", response.status);
-        }
-      } catch (error) {
-        console.warn("ash_computer_vision_nvidia_error", String((error as Error)?.message || error));
       }
     }
   }
