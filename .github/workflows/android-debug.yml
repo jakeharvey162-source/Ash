@@ -11,6 +11,8 @@ on:
       - "package.json"
       - "capacitor.config.ts"
       - "manifest.webmanifest"
+      - "native/android/**"
+      - "scripts/patch-android-native.mjs"
 
 permissions:
   contents: read
@@ -46,15 +48,25 @@ jobs:
       - name: Sync native project
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Add Ash native wake service
+        run: node scripts/patch-android-native.mjs
+
+      - name: Build APK and AAB
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug bundleDebug
 
-      - name: Upload APK
+      - name: Verify Android artifacts
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          test -s android/app/build/outputs/bundle/debug/app-debug.aab
+
+      - name: Upload Android release candidates
         uses: actions/upload-artifact@v4
         with:
-          name: ash-android-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ash-android-installers
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
