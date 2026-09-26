@@ -276,8 +276,13 @@ try{
     const row=rows.find(x=>(x.textContent||"").includes(pauseName));
     return (row?.querySelector("button")?.textContent||"").trim()==="Pause";
   },{pauseName},{timeout:8000});
-  const resumedState=await restGet("/rest/v1/jarvis_automations?name=eq."+encodeURIComponent(pauseName)+"&select=enabled");
-  if(resumedState.data?.[0]?.enabled!==true)throw new Error("Automation resume did not persist");
+  let resumedPersisted=false;
+  for(let i=0;i<12;i++){
+    const resumedState=await restGet("/rest/v1/jarvis_automations?name=eq."+encodeURIComponent(pauseName)+"&select=enabled");
+    if(resumedState.data?.[0]?.enabled===true){resumedPersisted=true;break}
+    await wait(250);
+  }
+  if(!resumedPersisted)throw new Error("Automation resume did not persist");
   report.checks.automationPauseResume=true;
 
   // Hands-free wake word through the same SpeechRecognition callbacks used by the app.
