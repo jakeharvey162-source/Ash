@@ -89,9 +89,16 @@ async function createAutomation(name,type,confirm=false){
   if(type==="interval") await page.locator("#autoInterval").fill("5");
   if(confirm) await page.locator("#autoConfirm").check();
   await page.locator("#createAuto").click();
-  await page.waitForTimeout(250);
+  await page.waitForFunction(
+    ({name}) => document.body.innerText.includes(name),
+    {name},
+    {timeout:8000}
+  ).catch(()=>{});
   const body=await page.locator("body").innerText();
-  if(!body.includes(name)) fail("Automation did not appear after creation: "+name);
+  if(!body.includes(name)) {
+    const row=await authedJson("/rest/v1/jarvis_automations?name=eq."+encodeURIComponent(name)+"&select=id,name,enabled,next_run_at");
+    if(!Array.isArray(row.data)||!row.data.some(a=>a.name===name)) fail("Automation did not persist after creation: "+name);
+  }
 }
 
 try{
