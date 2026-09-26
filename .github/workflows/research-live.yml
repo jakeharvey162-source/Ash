@@ -1,0 +1,25 @@
+name: Ash Research Live
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/research-live-smoke.mjs"
+      - "supabase/functions/jarvis-ai-gateway/**"
+      - ".github/workflows/research-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test official live research
+        run: node scripts/research-live-smoke.mjs
