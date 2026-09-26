@@ -1,5 +1,6 @@
 Ash release candidate
 Date: 2026-09-26
+Revision: paired desktop transport auth + long-form live Builder
 Includes:
 - Android foreground background-wake service
 - always-on-top desktop companion with live voice state
