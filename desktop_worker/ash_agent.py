@@ -187,9 +187,18 @@ PROJECT REQUEST:
 
     def build_fullstack(self, request: str, workspace: str) -> AgentResult:
         root = self._safe_root(workspace)
-        planner = self.think("""You are Ash's senior product architect. Design a production-minded full-stack web app.
-Return ONLY JSON with keys: name, stack, files, acceptance_tests.
-Each files entry must have path and purpose. Use relative paths. Never include secrets.
+        planner = self.think("""You are Ash's senior product architect and product designer. Design a production-minded web application that looks intentionally designed, not AI-generic.
+Return ONLY JSON with keys: name, stack, design_system, files, acceptance_tests.
+Rules:
+- Prefer React + Vite for standalone web experiences unless the user explicitly asks for another stack.
+- package.json must include working dev, build and preview scripts.
+- design_system must define typography, spacing, surface treatment, interaction states, responsive behavior and a clear visual direction.
+- Use realistic content. No lorem ipsum, fake testimonials, fake metrics, fake company claims or placeholder sections.
+- The interface must have strong hierarchy, accessible contrast, deliberate spacing, responsive layouts and polished hover/focus/loading states.
+- Avoid generic neon/cyber aesthetics unless the user explicitly requests them.
+- Include a complete responsive stylesheet or equivalent design implementation.
+- Each files entry must have path and purpose. Use relative paths. Never include secrets.
+- Acceptance tests must include build success, mobile layout, desktop layout, no horizontal overflow, no console errors and no fabricated content.
 USER REQUEST:
 """ + request, "high")
         try:
@@ -208,6 +217,7 @@ USER REQUEST:
             prompt = f"""You are Ash's implementation engineer.
 Generate the COMPLETE contents of exactly one file.
 No markdown fences. No commentary. No fake test results. No secrets.
+Implement the architecture and design system faithfully. The finished UI must look intentionally designed and production-ready, with responsive behavior, accessible states, strong spacing and typography, and realistic copy. Do not fall back to generic AI-dashboard styling unless the request calls for it.
 PROJECT REQUEST:
 {request}
 
