@@ -3,7 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 type Mode = "instant" | "medium" | "high";
 type ChatMessage = { role?: string; content?: string };
 type ChatBody = {
-  action?: "chat" | "generate" | "speech" | "research" | "voices";
+  action?: "chat" | "generate" | "speech" | "research" | "voices" | "computer_plan";
   message?: string;
   mode?: Mode;
   history?: ChatMessage[];
@@ -12,11 +12,14 @@ type ChatBody = {
   previous_text?: string;
   next_text?: string;
   voice_speed?: number;
+  screenshot_base64?: string;
+  screen_width?: number;
+  screen_height?: number;
 };
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-ash-device-id, x-ash-device-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
@@ -45,6 +48,52 @@ async function requireUser(req: Request) {
   if (!response.ok) return null;
 
   return { user: await response.json(), auth, url, anon };
+}
+
+async function sha256Hex(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function requireDevicePrincipal(req: Request) {
+  const deviceId = String(req.headers.get("x-ash-device-id") || "").trim();
+  const secret = String(req.headers.get("x-ash-device-secret") || "").trim();
+  const url = Deno.env.get("SUPABASE_URL");
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!deviceId || !secret || !url || !service) return null;
+
+  const headers = { Authorization: "Bearer " + service, apikey: service };
+  const credential = await fetch(
+    url + "/rest/v1/jarvis_device_credentials?device_id=eq." + encodeURIComponent(deviceId) + "&select=device_id,secret_hash&limit=1",
+    { headers }
+  );
+  if (!credential.ok) return null;
+  const credentialRows = await credential.json().catch(() => []);
+  const row = credentialRows?.[0];
+  if (!row?.secret_hash || await sha256Hex(secret) !== String(row.secret_hash)) return null;
+
+  const deviceResponse = await fetch(
+    url + "/rest/v1/jarvis_devices?id=eq." + encodeURIComponent(deviceId) + "&select=id,user_id,is_trusted&limit=1",
+    { headers }
+  );
+  if (!deviceResponse.ok) return null;
+  const devices = await deviceResponse.json().catch(() => []);
+  const device = devices?.[0];
+  if (!device?.user_id || device.is_trusted === false) return null;
+
+  return {
+    user: { id: device.user_id },
+    auth: "Bearer " + service,
+    url,
+    anon: service,
+    device_id: deviceId,
+    device_authenticated: true
+  };
+}
+
+async function requirePrincipal(req: Request) {
+  return await requireUser(req) || await requireDevicePrincipal(req);
 }
 
 async function getProfile(ctx: { user: any; auth: string; url: string; anon: string }) {
@@ -1228,11 +1277,63 @@ async function transcribe(req: Request) {
   return json({ text: String(data.text || "") });
 }
 
+async function planComputerFromScreenshot(system: string, goal: string, screenshotBase64: string, screenWidth: number, screenHeight: number) {
+  const key = Deno.env.get("GEMINI_API_KEY");
+  if (!key) throw new Error("computer_vision_unavailable");
+  const configured = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+  const prompt = [
+    system,
+    "",
+    "You are Ash Computer Control. The user explicitly approved control of their own computer.",
+    "Inspect the screenshot and choose the smallest safe next actions toward the goal.",
+    "Return ONE JSON object only.",
+    "Schema: {\"done\":boolean,\"summary\":string,\"actions\":[{\"type\":\"move|click|double_click|type_text|press|hotkey|scroll|wait\",\"x\":number,\"y\":number,\"text\":string,\"key\":string,\"keys\":[string],\"amount\":number,\"seconds\":number}]}",
+    "Rules:",
+    "- Maximum 4 actions.",
+    "- Coordinates are pixels within " + screenWidth + "x" + screenHeight + ".",
+    "- Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
+    "- Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
+    "- If a sensitive/manual step is required, return done=true with a summary asking the user to do that step.",
+    "- Do not claim success unless the screenshot proves it.",
+    "",
+    "GOAL: " + goal
+  ].join("\n");
+  const response = await providerFetch(
+    "gemini_computer_vision",
+    "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(configured) + ":generateContent?key=" + key,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType: "image/jpeg", data: screenshotBase64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1200, responseMimeType: "application/json" }
+      })
+    },
+    10000
+  );
+  if (!response.ok) throw new Error("computer_vision_failed_" + response.status);
+  const data = await response.json();
+  const raw = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || "").join("").trim() || "";
+  const start = raw.indexOf("{");
+  const parsed = JSON.parse(start >= 0 ? raw.slice(start) : raw);
+  const allowed = new Set(["move","click","double_click","type_text","press","hotkey","scroll","wait"]);
+  const actions = Array.isArray(parsed?.actions) ? parsed.actions
+    .filter((a: any) => allowed.has(String(a?.type || "")))
+    .slice(0, 4) : [];
+  return { done: parsed?.done === true, summary: String(parsed?.summary || ""), actions };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
-  const ctx = await requireUser(req);
+  const ctx = await requirePrincipal(req);
   if (!ctx) return json({ error: "unauthorized" }, 401);
 
   const url = new URL(req.url);
@@ -1269,6 +1370,22 @@ Deno.serve(async (req: Request) => {
     if (action === "voices") {
       const voices = await listElevenVoices();
       return json({ voices });
+    }
+
+    if (action === "computer_plan") {
+      const goal = String(body.message || "").trim();
+      const image = String(body.screenshot_base64 || "").trim();
+      const width = Math.max(1, Math.min(10000, Number(body.screen_width || 1)));
+      const height = Math.max(1, Math.min(10000, Number(body.screen_height || 1)));
+      if (!goal || !image) return json({ error: "computer_plan_input_required" }, 400);
+      if (image.length > 5_500_000) return json({ error: "screenshot_too_large" }, 413);
+      const system = buildSystemPrompt(profile, style, memories);
+      try {
+        const plan = await planComputerFromScreenshot(system, goal, image, width, height);
+        return json({ ...plan, assistant_name: profile?.assistant_name || "Ash" });
+      } catch {
+        return json({ error: "computer_vision_temporarily_unavailable" }, 503);
+      }
     }
 
     if (action === "speech") {
