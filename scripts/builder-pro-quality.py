@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, pathlib, shutil, sys
+import json, pathlib, shutil, sys, os
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "desktop_worker"))
 from ash_agent import AshPythonAgent
 
@@ -35,6 +35,9 @@ for case in cases:
         "summary": result.output[:1800],
     }
     report["cases"].append(entry)
+    if os.environ.get("ASH_REQUIRE_LIVE_BUILDER", "").strip().lower() in {"1","true","yes","on"} and "fallback" in str(entry.get("planner_warning") or "").lower():
+        print(json.dumps(report, indent=2))
+        raise SystemExit("Live paired Builder fell back instead of using Ash intelligence: " + case["slug"])
     if not result.ok:
         print(json.dumps(report, indent=2))
         raise SystemExit("Builder failed case: " + case["slug"])
