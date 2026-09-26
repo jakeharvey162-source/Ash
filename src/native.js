@@ -202,3 +202,43 @@ export async function startNativeSpeechRecognition(options = {}, handlers = {}) 
 
   return { stop, removeListeners };
 }
+
+
+async function ashWakePlugin() {
+  const core = await nativeCore();
+  if (!core || core.Capacitor.getPlatform?.() !== 'android') return null;
+  try { return core.registerPlugin('AshWake'); } catch { return null; }
+}
+
+export async function configureBackgroundWake({ enabled=false, paused=true, wakeWord='Ash', aliases=[] } = {}) {
+  const plugin = await ashWakePlugin();
+  if (!plugin) return { available:false };
+  const result = await plugin.configure({
+    enabled:Boolean(enabled),
+    paused:Boolean(paused),
+    wakeWord:String(wakeWord || 'Ash'),
+    aliases:Array.isArray(aliases) ? aliases.map(x=>String(x)) : []
+  });
+  return { available:true, ...(result||{}) };
+}
+
+export async function pauseBackgroundWake(paused=true) {
+  const plugin = await ashWakePlugin();
+  if (!plugin) return { available:false };
+  const result = await plugin.setPaused({ paused:Boolean(paused) });
+  return { available:true, ...(result||{}) };
+}
+
+export async function consumeBackgroundWakeCommand() {
+  const plugin = await ashWakePlugin();
+  if (!plugin) return { available:false, command:'' };
+  const result = await plugin.consumePending();
+  return { available:true, command:String(result?.command||''), at:Number(result?.at||0) };
+}
+
+export async function backgroundWakeStatus() {
+  const plugin = await ashWakePlugin();
+  if (!plugin) return { available:false };
+  const result = await plugin.status();
+  return { available:true, ...(result||{}) };
+}
