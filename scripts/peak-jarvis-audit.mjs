@@ -208,6 +208,10 @@ try{
     if(ids.size===4 && dispatched.length>=4) break;
     await sleep(5000);
   }
+  // Refresh after observing dispatched jobs so schedule-state assertions do not use
+  // automation rows fetched just before the same cron transaction committed.
+  const refreshedAutos=await authedJson("/rest/v1/jarvis_automations?name=like.Peak%25&order=created_at.desc&limit=20");
+  autos=Array.isArray(refreshedAutos.data)?refreshedAutos.data:autos;
   const ours=autos.filter(a=>Object.values(autoNames).includes(a.name));
   const ourIds=new Set(ours.map(a=>a.id));
   const dispatched=jobs.filter(j=>ourIds.has(j.payload?.automation_id));
