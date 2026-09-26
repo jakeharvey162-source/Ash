@@ -1,0 +1,41 @@
+name: Jarvis Acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/jarvis-acceptance.mjs"
+      - "supabase/functions/jarvis-ai-gateway/**"
+      - ".github/workflows/jarvis-acceptance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install app and Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run Jarvis-grade production acceptance
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/jarvis-acceptance.mjs
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-acceptance
+          path: |
+            jarvis-acceptance.json
+            jarvis-*.png
+          if-no-files-found: warn
