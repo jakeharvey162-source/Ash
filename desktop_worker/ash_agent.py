@@ -117,7 +117,8 @@ class AshPythonAgent:
             try:
                 return self._extract_json(raw)
             except Exception as exc:
-                errors.append(f"{mode}: {exc}")
+                preview = re.sub(r"\\s+", " ", str(raw)).strip()[:320]
+                errors.append(f"{mode}: {exc}; response={preview!r}")
         raise ValueError("Structured response failed after retries: " + " | ".join(errors))
 
     @staticmethod
