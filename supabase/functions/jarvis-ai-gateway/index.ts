@@ -1313,9 +1313,6 @@ async function transcribe(req: Request) {
 }
 
 async function planComputerFromScreenshot(system: string, goal: string, screenshotBase64: string, screenWidth: number, screenHeight: number) {
-  const key = Deno.env.get("GEMINI_API_KEY");
-  if (!key) throw new Error("computer_vision_unavailable");
-  const configured = Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
   const prompt = [
     system,
     "",
@@ -1333,28 +1330,73 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     "",
     "GOAL: " + goal
   ].join("\n");
-  const response = await providerFetch(
-    "gemini_computer_vision",
-    "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(configured) + ":generateContent?key=" + key,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType: "image/jpeg", data: screenshotBase64 } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1200, responseMimeType: "application/json" }
-      })
-    },
-    10000
-  );
-  if (!response.ok) throw new Error("computer_vision_failed_" + response.status);
-  const data = await response.json();
-  const raw = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || "").join("").trim() || "";
+
+  let raw = "";
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (geminiKey) {
+    const configured = Deno.env.get("GEMINI_VISION_MODEL") || Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash";
+    try {
+      const response = await providerFetch(
+        "computer_vision_primary",
+        "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(configured) + ":generateContent?key=" + geminiKey,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType: "image/jpeg", data: screenshotBase64 } }
+              ]
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 1200, responseMimeType: "application/json" }
+          })
+        },
+        10000
+      );
+      if (response.ok) {
+        const data = await response.json();
+        raw = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || "").join("").trim() || "";
+      }
+    } catch {}
+  }
+
+  if (!raw) {
+    const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!openRouterKey) throw new Error("computer_vision_unavailable");
+    const visionModel = Deno.env.get("OPENROUTER_VISION_MODEL") || "google/gemini-3-flash-preview";
+    const response = await providerFetch(
+      "computer_vision_fallback",
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + openRouterKey,
+          "Content-Type": "application/json",
+          "X-Title": "Ash"
+        },
+        body: JSON.stringify({
+          model: visionModel,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: "data:image/jpeg;base64," + screenshotBase64 } }
+            ]
+          }],
+          provider: { data_collection: "deny" },
+          temperature: 0.1,
+          max_tokens: 1200
+        })
+      },
+      12000
+    );
+    if (!response.ok) throw new Error("computer_vision_fallback_failed_" + response.status);
+    const data = await response.json();
+    raw = String(data?.choices?.[0]?.message?.content || "").trim();
+  }
+
   const start = raw.indexOf("{");
   const parsed = JSON.parse(start >= 0 ? raw.slice(start) : raw);
   const allowed = new Set(["move","click","double_click","type_text","press","hotkey","scroll","wait"]);
