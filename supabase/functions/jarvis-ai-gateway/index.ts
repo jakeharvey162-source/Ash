@@ -517,16 +517,17 @@ async function duckDuckGoResearch(system: string, message: string, mode: Mode, r
 
 
 function extractXmlTag(item: string, tag: string) {
-  const match = item.match(new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)<\\/" + tag + ">", "i"));
-  return match ? decodeHtml(match[1].replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1")) : "";
+  const pattern = new RegExp("<" + tag + "[^>]*>([\\s\\S]*?)<\\/" + tag + ">", "i");
+  const match = item.match(pattern);
+  return match ? decodeHtml(match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")) : "";
 }
 
 function groundedFallbackAnswer(message: string, evidence: any[]) {
   const top = evidence.slice(0, 5);
   const lines = top.map((item: any, index: number) => {
-    const date = item.date ? ` — ${item.date}` : "";
-    const snippet = String(item.snippet || "").replace(/\\s+/g, " ").trim().slice(0, 320);
-    return `${index + 1}. ${item.title}${date}${snippet ? ` — ${snippet}` : ""}\n${item.url}`;
+    const date = item.date ? \` — \${item.date}\` : "";
+    const snippet = String(item.snippet || "").replace(/\s+/g, " ").trim().slice(0, 320);
+    return \`\${index + 1}. \${item.title}\${date}\${snippet ? \` — \${snippet}\` : ""}\\n\${item.url}\`;
   });
   return [
     "I checked live web results for: " + message,
@@ -534,7 +535,7 @@ function groundedFallbackAnswer(message: string, evidence: any[]) {
     ...lines,
     "",
     "These are live search results, so I am keeping the summary tied to the retrieved evidence rather than guessing beyond it."
-  ].join("\n");
+  ].join("\\n");
 }
 
 async function bingRssResearch(system: string, message: string, mode: Mode, researchedAt: string) {
@@ -551,7 +552,7 @@ async function bingRssResearch(system: string, message: string, mode: Mode, rese
     });
     if (!response.ok) throw new Error("bing_rss_failed_" + response.status);
     const xml = await response.text();
-    const itemRe = /<item>([\\s\\S]*?)<\\/item>/gi;
+    const itemRe = new RegExp("<item>([\\\\s\\\\S]*?)<\\\\/item>", "gi");
     const evidence: any[] = [];
     let match;
     while ((match = itemRe.exec(xml)) && evidence.length < (mode === "high" ? 8 : 5)) {
@@ -568,8 +569,8 @@ async function bingRssResearch(system: string, message: string, mode: Mode, rese
     let answer = "";
     try {
       answer = await askGroq(
-        system + "\nYou are in live research mode. Use only the supplied live search evidence for factual claims. Never invent citations, dates or URLs.",
-        message + "\n\nLIVE SEARCH EVIDENCE:\n" + JSON.stringify(evidence).slice(0, 18000),
+        system + "\\nYou are in live research mode. Use only the supplied live search evidence for factual claims. Never invent citations, dates or URLs.",
+        message + "\\n\\nLIVE SEARCH EVIDENCE:\\n" + JSON.stringify(evidence).slice(0, 18000),
         [],
         mode
       );
