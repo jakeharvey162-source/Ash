@@ -459,12 +459,14 @@ button:hover{transform:translateY(-1px);border-color:var(--line-strong)}
 @media(max-width:900px){
   .shell{display:block}.rail{display:none}.workspace{padding:20px 14px 96px}
   .mobileNav{
-    display:grid;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);
-    width:min(94%,520px);grid-template-columns:repeat(4,1fr);gap:4px;padding:7px;
+    display:flex;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);
+    width:min(94%,620px);gap:4px;padding:7px;overflow-x:auto;overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;scrollbar-width:none;
     background:color-mix(in srgb,var(--surface-solid) 92%,transparent);border:1px solid var(--line);
     border-radius:17px;backdrop-filter:blur(20px);z-index:100
   }
-  .mobileNav button{border:0;background:transparent;color:var(--muted);padding:7px 4px}.mobileNav button.selected{color:var(--text);background:var(--surface-2)}
+  .mobileNav::-webkit-scrollbar{display:none}
+  .mobileNav button{flex:1 0 62px;min-width:62px;scroll-snap-align:center;border:0;background:transparent;color:var(--muted);padding:7px 4px}.mobileNav button.selected{color:var(--text);background:var(--surface-2)}
   .mobileNav span,.mobileNav small{display:block}.mobileNav small{font-size:.62rem;margin-top:2px}
   .voiceCore{grid-template-columns:125px 1fr}.reactor{width:120px;height:120px}.voiceState{display:none}
   .stats,.split{grid-template-columns:1fr}
