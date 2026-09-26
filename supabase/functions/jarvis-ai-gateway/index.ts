@@ -1009,6 +1009,24 @@ function clampVoiceSpeed(value: unknown, fallback: number) {
   return Math.min(1.16, Math.max(0.94, n));
 }
 
+async function premiumVoiceReady() {
+  const key = Deno.env.get("ELEVENLABS_API_KEY");
+  if (!key) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch("https://api.elevenlabs.io/v1/user", {
+      headers: { "xi-api-key": key, Accept: "application/json" },
+      signal: controller.signal
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function listElevenVoices() {
   const key = Deno.env.get("ELEVENLABS_API_KEY");
   if (!key) return [];
@@ -1133,6 +1151,7 @@ Deno.serve(async (req: Request) => {
 
   const url = new URL(req.url);
   if (url.searchParams.get("action") === "health") {
+    const voiceReady = await premiumVoiceReady();
     return json({
       ok: true,
       service: "jarvis-ai-gateway",
@@ -1144,7 +1163,8 @@ Deno.serve(async (req: Request) => {
         Deno.env.get("NVIDIA_API_KEY") ||
         Deno.env.get("BYTEZ_API_KEY")
       ),
-      voice_ready: Boolean(Deno.env.get("ELEVENLABS_API_KEY")),
+      voice_ready: voiceReady,
+      voice_configured: Boolean(Deno.env.get("ELEVENLABS_API_KEY")),
       research_ready: true
     });
   }
