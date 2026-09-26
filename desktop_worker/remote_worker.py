@@ -26,6 +26,7 @@ class AshRemoteWorker:
         self.workspace_root = pathlib.Path(os.environ.get("ASH_WORKSPACE_ROOT", str(pathlib.Path.home() / "AshWorkspaces"))).expanduser().resolve()
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         self.config_path = pathlib.Path(os.environ.get("ASH_DEVICE_CONFIG", str(pathlib.Path.home() / ".ash" / "device.json"))).expanduser()
+        self.preferences_path = pathlib.Path(os.environ.get("ASH_PREFERENCES_FILE", str(pathlib.Path.home() / ".ash" / "preferences.json"))).expanduser()
         self.client = httpx.Client(timeout=httpx.Timeout(45.0, connect=8.0))
         self.agent = AshPythonAgent()
         self.user_id = ""
@@ -154,11 +155,30 @@ class AshRemoteWorker:
                 raise RuntimeError("Could not register Ash desktop worker.")
             self.device_id = str(created[0]["id"])
 
+    def sync_preferences(self) -> None:
+        if not (self.device_id and self.device_secret):
+            return
+        data = self.broker("preferences")
+        payload = {
+            "assistant_name": str(data.get("assistant_name") or "Ash"),
+            "wake_word": str(data.get("wake_word") or data.get("assistant_name") or "Ash"),
+            "wake_aliases": [str(x).strip() for x in (data.get("wake_aliases") or []) if str(x).strip()],
+            "updated_at": data.get("updated_at"),
+        }
+        self.preferences_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.preferences_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        tmp.replace(self.preferences_path)
+
     def heartbeat(self) -> None:
         if not self.device_id:
             return
         if self.device_secret:
             self.broker("heartbeat")
+            try:
+                self.sync_preferences()
+            except Exception:
+                pass
             return
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         self.rest("jarvis_devices", method="PATCH", params={"id": f"eq.{self.device_id}"}, body={"last_seen_at": now})
