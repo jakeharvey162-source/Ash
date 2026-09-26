@@ -1042,7 +1042,26 @@ async function createAutomation(){
   await supa("/rest/v1/jarvis_automations",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({user_id:session.user.id,name,description:prompt,trigger_type:type,trigger_config:config,action_config:action,enabled:true,next_run_at:new Date(when).toISOString()})});
   await loadOps(true);render();toast("Automation created");
 }
-async function toggleAutomation(id,enabled){await supa("/rest/v1/jarvis_automations?id=eq."+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({enabled:!enabled,updated_at:new Date().toISOString()})});await loadOps(true);render()}
+async function toggleAutomation(id,enabled){
+  const next=!enabled;
+  const previous=automations.map(a=>({...a}));
+  automations=automations.map(a=>a.id===id?{...a,enabled:next,updated_at:new Date().toISOString()}:a);
+  render();
+  try{
+    await supa("/rest/v1/jarvis_automations?id=eq."+encodeURIComponent(id),{
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({enabled:next,updated_at:new Date().toISOString()})
+    });
+    await loadOps(true);
+    render();
+  }catch(e){
+    automations=previous;
+    render();
+    toast("Could not update automation. Try again.");
+    throw e;
+  }
+}
 async function confirmPendingAction(index){
   const m=messages[index]; if(!m?.action)return;
   const tool=m.action.tool,args=m.action.args||{};
