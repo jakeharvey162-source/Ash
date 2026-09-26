@@ -7,7 +7,7 @@ const report={cases:[]};
 const banned=/\b(lorem ipsum|placeholder|fake testimonial|trusted by 10,000|award[- ]winning|#1 rated)\b/i;
 
 function startPreview(dir,port){
-  const cp=spawn("npm",["run","preview","--","--host","127.0.0.1","--port",String(port)],{cwd:dir,stdio:["ignore","pipe","pipe"]});
+  const cp=spawn(process.execPath,["node_modules/vite/bin/vite.js","preview","--host","127.0.0.1","--port",String(port)],{cwd:dir,stdio:["ignore","pipe","pipe"]});
   return cp;
 }
 async function waitHttp(url,timeout=20000){
@@ -56,7 +56,8 @@ try{
       report.cases.push({slug,desktop:true,mobile:true,theme:true,noOverflow:true,noFabrication:true,noConsoleErrors:true});
       await page.close();
     }finally{
-      cp.kill("SIGTERM");
+      cp.kill("SIGKILL");
+      await new Promise(resolve=>cp.once("close",resolve));
     }
   }
 }finally{await browser.close()}
