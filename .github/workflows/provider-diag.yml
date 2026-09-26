@@ -1,0 +1,26 @@
+name: Provider Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/provider-diag.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger sanitized provider diagnostic
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          u="https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-provider-debug"
+          with urllib.request.urlopen(u, timeout=30) as r:
+              print("STATUS", r.status)
+              print(r.read().decode()[:1000])
+          PY
