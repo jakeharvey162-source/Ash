@@ -55,6 +55,12 @@ os.environ["ASH_SUPABASE_PUBLISHABLE_KEY"]=key
 agent=AshPythonAgent()
 agent.set_device_credentials(device_id,device_secret)
 
+try:
+    probe=agent._cloud("Return only the JSON object {\"ok\":true}.",mode="instant",action="generate")
+    print("CLOUD PREFLIGHT",probe[:300],flush=True)
+except Exception as exc:
+    raise SystemExit("Paired-device cloud preflight failed: "+repr(exc))
+
 root=ROOT/"builder-live-acceptance"
 if root.exists():
     shutil.rmtree(root)
