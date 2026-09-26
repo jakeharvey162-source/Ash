@@ -464,13 +464,13 @@ function authView(){
       <article class="publicSection" id="product">
         <p class="kicker">PRODUCT</p>
         <h2>Ash is an AI command center, not a single model.</h2>
-        <p>Ash combines conversational AI, software building, automation, connected tools, voice interaction and optional local AI in one interface. Cloud features use configured providers and Supabase services; local features require the Ash desktop worker and a supported local model.</p>
+        <p>Ash combines conversational AI, software building, automation, connected tools, voice interaction and optional local AI in one interface. Cloud intelligence is routed securely through Ash services; local features require the Ash desktop worker and a supported local model.</p>
       </article>
       <article class="publicSection" id="capabilities">
         <p class="kicker">CAPABILITIES</p>
         <h2>What Ash can actually do today.</h2>
         <div class="publicGrid">
-          <span><b>Reason & chat</b><small>Adaptive and multi-agent cloud reasoning when providers are available.</small></span>
+          <span><b>Reason & chat</b><small>Adaptive and multi-agent cloud reasoning through Ash secure routing.</small></span>
           <span><b>Build software</b><small>Generate projects, install dependencies, run builds, repair failures and report evidence through a linked desktop.</small></span>
           <span><b>Automate work</b><small>Schedule supported jobs and dispatch them through Ash's cloud/desktop workflow.</small></span>
           <span><b>Work locally</b><small>Use Ollama or Ash's direct offline Python/GGUF fallback when configured on your computer.</small></span>
@@ -488,7 +488,7 @@ function authView(){
         <p class="kicker">COMPANY / PROJECT</p>
         <h2>Independent software project.</h2>
         <p>Ash is an independent project developed by Jake Harvey. This page does not claim that Ash is a registered company unless and until a legal entity is formally established.</p>
-        <p class="publicFine">Ash is not affiliated with or endorsed by OpenAI, Anthropic, Google, Microsoft, Meta, Marvel, or other third-party model, platform or media brands unless an official partnership is explicitly announced. Third-party names are used only to identify compatible services or integrations.</p>
+        <p class="publicFine">Ash uses permissioned integrations and secure service routing. Private service credentials are never exposed in the browser or mobile app.</p>
       </article>
       <footer class="publicFooter">
         <span>© 2026 Ash project.</span>
@@ -720,7 +720,7 @@ async function connectCloudConnector(key){
   const body={user_id:session.user.id,integration_key:key,display_name:item.name,status:"disconnected",config:{requested_scopes:item.permissions,platform:nativeState.available?"android":"web",oauth_required:true}};
   await supa("/rest/v1/jarvis_integrations",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify(body)}).catch(()=>{});
   await loadOps(true);render();
-  toast(item.name+" connector is ready for provider-specific OAuth.");
+  toast(item.name+" connector is ready for secure authorization.");
 }
 async function deviceLink(body){
   const r=await authedFetch(DEVICE_LINK,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
