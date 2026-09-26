@@ -1485,7 +1485,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
 
   const start = raw.indexOf("{");
   const parsed = JSON.parse(start >= 0 ? raw.slice(start) : raw);
-  const allowed = new Set(["move","click","double_click","type_text","press","hotkey","scroll","wait"]);
+  const allowed = new Set(["launch_app","open_url","move","click","double_click","type_text","press","hotkey","scroll","wait"]);
   const actions = Array.isArray(parsed?.actions) ? parsed.actions
     .filter((a: any) => allowed.has(String(a?.type || "")))
     .slice(0, 4) : [];
