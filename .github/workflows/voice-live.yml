@@ -1,0 +1,25 @@
+name: Ash Voice Live
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/voice-live-smoke.mjs"
+      - "supabase/functions/jarvis-ai-gateway/**"
+      - ".github/workflows/voice-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test live voice generation
+        run: node scripts/voice-live-smoke.mjs
