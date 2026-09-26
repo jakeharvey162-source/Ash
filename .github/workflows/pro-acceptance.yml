@@ -1,0 +1,29 @@
+name: Ash Pro Acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/pro-acceptance-live.mjs"
+      - ".github/workflows/pro-acceptance.yml"
+      - "src/**"
+      - "desktop_worker/**"
+      - "supabase/functions/**"
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run live pro acceptance
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/pro-acceptance-live.mjs
