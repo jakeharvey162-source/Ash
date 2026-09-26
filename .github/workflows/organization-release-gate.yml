@@ -1,0 +1,105 @@
+name: Ash Organization Release Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/organization-release-gate.yml"
+      - "RELEASE_CANDIDATE"
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    name: QA Engineering
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: pip install -r desktop_worker/requirements.txt
+      - name: Desktop unit and safety tests
+        run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_voice_runtime.py desktop_worker/test_builder.py desktop_worker/test_offline_brain.py desktop_worker/test_remote_worker.py desktop_worker/test_computer_control.py
+
+  security_ops:
+    name: Security & Operations
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Live auth, device, automation and privacy acceptance
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/pro-acceptance-live.mjs
+
+  product_builder:
+    name: Product & Builder
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: |
+          pip install -r desktop_worker/requirements.txt
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Pair a real Ash desktop identity
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/pair-ci-desktop.mjs
+      - name: Live AI Builder generation and production builds
+        run: python scripts/builder-pro-quality.py
+      - name: Desktop and mobile visual audit
+        run: node scripts/builder-visual-audit.mjs
+
+  android:
+    name: Android Engineering
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - run: npx cap add android
+      - run: npx cap sync android
+      - run: node scripts/patch-android-native.mjs
+      - name: Compile APK and AAB
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug bundleDebug
+      - name: Verify Android outputs
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          test -s android/app/build/outputs/bundle/debug/app-debug.aab
+
+  release_council:
+    name: Release Council Decision
+    runs-on: ubuntu-latest
+    needs: [qa, security_ops, product_builder, android]
+    steps:
+      - name: Council verdict
+        run: |
+          echo "ASH RELEASE COUNCIL: ENGINEERING GATES PASSED"
+          echo "QA=PASS"
+          echo "SECURITY_OPS=PASS"
+          echo "LIVE_PAIRED_BUILDER=PASS"
+          echo "ANDROID=PASS"
