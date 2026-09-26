@@ -1,0 +1,40 @@
+name: Ash Live Device Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "desktop_worker/ash_agent.py"
+      - "desktop_worker/remote_worker.py"
+      - "scripts/builder-live-device.py"
+      - ".github/workflows/builder-live-device.yml"
+      - "supabase/functions/jarvis-ai-gateway/**"
+
+permissions:
+  contents: read
+
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install desktop worker dependencies
+        run: pip install -r desktop_worker/requirements.txt
+      - name: Run live paired-device Builder
+        env:
+          ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: python scripts/builder-live-device.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ash-live-device-builder
+          path: builder-live-acceptance/report.json
+          if-no-files-found: ignore
