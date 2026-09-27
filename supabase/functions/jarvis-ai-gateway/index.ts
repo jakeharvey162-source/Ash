@@ -315,8 +315,8 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
   const preferred = mode === "high"
     ? [configured, "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     : mode === "medium"
-      ? [configured, "openai/gpt-oss-20b", "openai/gpt-oss-120b"]
-      : [configured, "openai/gpt-oss-20b", "openai/gpt-oss-120b"];
+      ? ["openai/gpt-oss-20b", configured, "openai/gpt-oss-120b"]
+      : ["openai/gpt-oss-20b", configured, "openai/gpt-oss-120b"];
   const candidates = [...new Set(preferred)];
 
   let lastError = "route_failed";
