@@ -1256,6 +1256,9 @@ async function fetchVoiceBlob(text,generation,previousText="",nextText=""){
 function playBrowserSpeech(text,generation,onStarted){
   return new Promise(resolve=>{
     if(!voiceEnabled()||generation!==voiceGeneration||!("speechSynthesis"in window)){onStarted?.(false);resolve();return}
+    // Android WebView can leave speechSynthesis paused or in a stale speaking
+    // state after remote TTS fails. Reset it before every local fallback turn.
+    try{speechSynthesis.cancel();speechSynthesis.resume?.()}catch{}
     const u=new SpeechSynthesisUtterance(text);
     const selectedId=String(profile.voice_config?.voice_id||"");
     if(selectedId.startsWith("browser:")&&selectedId!=="browser:default"&&typeof speechSynthesis.getVoices==="function"){
@@ -1317,7 +1320,7 @@ async function runVoiceQueue(generation,onFirstStarted){
             item.blobPromise,
             new Promise(resolve=>setTimeout(()=>resolve(null),900))
           ]);
-          if(!blob)browserOnly=true;
+          if(!blob){browserOnly=true;premiumVoiceUnavailable=true;}
         }else blob=await item.blobPromise;
       }
 
