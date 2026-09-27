@@ -49,3 +49,39 @@ if(!manifest.includes("AshWakeService")){
 }
 fs.writeFileSync(manifestPath,manifest);
 console.log("Ash Android native wake service patched.");
+
+
+/* Google Play release hardening. The Android project is generated in CI, so
+   keep store requirements reproducible here instead of editing generated files. */
+const variablesPath=path.join(root,"android","variables.gradle");
+if(fs.existsSync(variablesPath)){
+  let variables=fs.readFileSync(variablesPath,"utf8");
+  variables=variables.replace(/compileSdkVersion\s*=\s*\d+/,"compileSdkVersion = 36");
+  variables=variables.replace(/targetSdkVersion\s*=\s*\d+/,"targetSdkVersion = 36");
+  fs.writeFileSync(variablesPath,variables);
+}
+
+const appGradlePath=path.join(root,"android","app","build.gradle");
+if(fs.existsSync(appGradlePath)){
+  let gradle=fs.readFileSync(appGradlePath,"utf8");
+  const versionCode=Math.max(1,Number.parseInt(process.env.ASH_VERSION_CODE || process.env.GITHUB_RUN_NUMBER || "1",10) || 1);
+  const versionName=(process.env.ASH_VERSION_NAME || process.env.npm_package_version || "1.1.1").replace(/[^0-9A-Za-z._-]/g,"");
+  gradle=gradle.replace(/versionCode\s+\d+/,"versionCode "+versionCode);
+  gradle=gradle.replace(/versionName\s+["'][^"']+["']/,'versionName "'+versionName+'"');
+
+  if(process.env.ASH_RELEASE_STORE_FILE && !gradle.includes("ASH_RELEASE_STORE_FILE")){
+    gradle=gradle.replace("android {", `android {
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("ASH_RELEASE_STORE_FILE"))
+            storePassword System.getenv("ASH_RELEASE_STORE_PASSWORD")
+            keyAlias System.getenv("ASH_RELEASE_KEY_ALIAS")
+            keyPassword System.getenv("ASH_RELEASE_KEY_PASSWORD")
+        }
+    }`);
+    gradle=gradle.replace(/release\s*\{/, `release {
+            signingConfig signingConfigs.release`);
+  }
+  fs.writeFileSync(appGradlePath,gradle);
+}
+console.log("Ash Android Play configuration enforced: target/compile SDK 36, deterministic versioning, optional release signing.");
