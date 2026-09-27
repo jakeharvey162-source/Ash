@@ -1,0 +1,95 @@
+name: Build Android Play Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Release version (for example 1.1.2)"
+        required: true
+        default: "1.1.2"
+
+permissions:
+  contents: read
+
+jobs:
+  play-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ASH_VERSION_NAME: ${{ inputs.version_name }}
+      ASH_VERSION_CODE: ${{ github.run_number }}
+      ASH_RELEASE_STORE_FILE: ${{ github.workspace }}/ash-upload.jks
+      ASH_RELEASE_STORE_PASSWORD: ${{ secrets.ASH_ANDROID_STORE_PASSWORD }}
+      ASH_RELEASE_KEY_ALIAS: ${{ secrets.ASH_ANDROID_KEY_ALIAS }}
+      ASH_RELEASE_KEY_PASSWORD: ${{ secrets.ASH_ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Require release signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ASH_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "::error::Missing ASH_ANDROID_KEYSTORE_BASE64"; exit 1; }
+          test -n "$ASH_RELEASE_STORE_PASSWORD" || { echo "::error::Missing ASH_ANDROID_STORE_PASSWORD"; exit 1; }
+          test -n "$ASH_RELEASE_KEY_ALIAS" || { echo "::error::Missing ASH_ANDROID_KEY_ALIAS"; exit 1; }
+          test -n "$ASH_RELEASE_KEY_PASSWORD" || { echo "::error::Missing ASH_ANDROID_KEY_PASSWORD"; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$ASH_RELEASE_STORE_FILE"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build web bundle
+        run: npm run build
+
+      - name: Generate Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+          node scripts/patch-android-native.mjs
+
+      - name: Verify Play configuration
+        run: |
+          grep -Eq 'compileSdkVersion = 36' android/variables.gradle
+          grep -Eq 'targetSdkVersion = 36' android/variables.gradle
+          grep -Eq 'versionCode [1-9][0-9]*' android/app/build.gradle
+          grep -Fq 'signingConfig signingConfigs.release' android/app/build.gradle
+
+      - name: Build signed release APK and AAB
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew clean assembleRelease bundleRelease
+
+      - name: Verify artifacts and APK signature
+        run: |
+          test -s android/app/build/outputs/apk/release/app-release.apk
+          test -s android/app/build/outputs/bundle/release/app-release.aab
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+          jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload Play release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ash-google-play-release-${{ github.run_number }}
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove upload keystore
+        if: always()
+        run: rm -f "$ASH_RELEASE_STORE_FILE"
