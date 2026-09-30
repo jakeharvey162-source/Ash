@@ -1490,7 +1490,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
   }
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  if (geminiKey) {
+  if (!raw && geminiKey) {
     const configured = String(Deno.env.get("GEMINI_VISION_MODEL") || Deno.env.get("GEMINI_MODEL") || "").trim();
     const modelCandidates = [...new Set([
       configured,

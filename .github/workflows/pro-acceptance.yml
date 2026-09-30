@@ -1,15 +1,9 @@
 name: Ash Pro Acceptance
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/pro-acceptance-live.mjs"
-      - ".github/workflows/pro-acceptance.yml"
-      - "src/**"
-      - "desktop_worker/**"
-      - "supabase/functions/**"
 
 permissions:
   contents: read

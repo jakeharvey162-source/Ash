@@ -1,15 +1,9 @@
 name: Ash Computer Control Live
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "desktop_worker/computer_control.py"
-      - "desktop_worker/ash_agent.py"
-      - "scripts/computer-control-live.py"
-      - ".github/workflows/computer-control-live.yml"
-      - "supabase/functions/jarvis-ai-gateway/**"
 
 permissions:
   contents: read

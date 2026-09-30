@@ -1,14 +1,9 @@
 name: Jarvis Acceptance
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "scripts/jarvis-acceptance.mjs"
-      - "supabase/functions/jarvis-ai-gateway/**"
-      - ".github/workflows/jarvis-acceptance.yml"
 
 permissions:
   contents: read

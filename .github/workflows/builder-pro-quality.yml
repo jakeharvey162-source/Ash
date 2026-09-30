@@ -1,16 +1,9 @@
 name: Ash Builder Pro Quality
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "desktop_worker/ash_agent.py"
-      - "desktop_worker/offline_brain.py"
-      - "scripts/builder-pro-quality.py"
-      - "scripts/pair-ci-desktop.mjs"
-      - "scripts/builder-visual-audit.mjs"
-      - ".github/workflows/builder-pro-quality.yml"
 
 permissions:
   contents: read

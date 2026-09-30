@@ -1,15 +1,9 @@
 name: Ash Live Device Builder
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "desktop_worker/ash_agent.py"
-      - "desktop_worker/remote_worker.py"
-      - "scripts/builder-live-device.py"
-      - ".github/workflows/builder-live-device.yml"
-      - "supabase/functions/jarvis-ai-gateway/**"
 
 permissions:
   contents: read

@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -183,15 +184,29 @@ class AshPythonAgent:
                 "screen_height": int(height),
             }
             try:
-                with httpx.Client(timeout=httpx.Timeout(42.0, connect=6.0)) as client:
-                    r = client.post(self.gateway_url, headers=self._headers(), json=payload)
-                    if r.status_code >= 400:
-                        raise RuntimeError(f"Ash computer vision returned HTTP {r.status_code}: {r.text[:300]}")
-                    data = r.json()
-                if not isinstance(data, dict):
-                    raise RuntimeError("Ash computer vision returned an invalid plan.")
-                data.setdefault("vision_source", "cloud")
-                return self._map_plan_coordinates(data, width, height)
+                last_error: Exception | None = None
+                for attempt in range(2):
+                    try:
+                        with httpx.Client(timeout=httpx.Timeout(42.0, connect=6.0)) as client:
+                            r = client.post(self.gateway_url, headers=self._headers(), json=payload)
+                            if r.status_code >= 400:
+                                raise RuntimeError(f"Ash computer vision returned HTTP {r.status_code}: {r.text[:300]}")
+                            data = r.json()
+                        if not isinstance(data, dict):
+                            raise RuntimeError("Ash computer vision returned an invalid plan.")
+                        data.setdefault("vision_source", "cloud")
+                        return self._map_plan_coordinates(data, width, height)
+                    except Exception as exc:
+                        last_error = exc
+                        transient = isinstance(exc, httpx.TransportError) or any(
+                            f"HTTP {status}" in str(exc) for status in (429, 502, 503, 504)
+                        )
+                        if attempt == 0 and transient:
+                            time.sleep(4)
+                            continue
+                        raise
+                if last_error is not None:
+                    raise last_error
             except Exception as exc:
                 cloud_error = exc
 

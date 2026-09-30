@@ -1,13 +1,9 @@
 name: Ash Research Live
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/research-live-smoke.mjs"
-      - "supabase/functions/jarvis-ai-gateway/**"
-      - ".github/workflows/research-live.yml"
 
 permissions:
   contents: read

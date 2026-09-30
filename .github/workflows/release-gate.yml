@@ -5,7 +5,25 @@ on:
   push:
     branches: [main]
     paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "vercel.json"
+      - "desktop_worker/**"
+      - "scripts/**"
+      - "supabase/functions/**"
       - ".github/workflows/release-gate.yml"
+      - ".github/workflows/builder-live-device.yml"
+      - ".github/workflows/builder-pro-quality.yml"
+      - ".github/workflows/computer-control-live.yml"
+      - ".github/workflows/jarvis-acceptance.yml"
+      - ".github/workflows/live-audit.yml"
+      - ".github/workflows/peak-jarvis-audit.yml"
+      - ".github/workflows/pro-acceptance.yml"
+      - ".github/workflows/research-live.yml"
+      - ".github/workflows/voice-live.yml"
 
 permissions:
   contents: read
@@ -18,7 +36,7 @@ jobs:
   core:
     name: Core quality
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,14 +47,15 @@ jobs:
           python-version: "3.11"
       - run: npm install --no-audit --no-fund
       - run: npm run build
+      - run: npm run test:builder
       - run: pip install -r desktop_worker/requirements.txt
       - run: PYTHONPATH=desktop_worker python -m unittest discover -s desktop_worker -p "test_*.py"
 
   live:
-    name: Live organization acceptance
+    name: Live web and agent acceptance
     needs: core
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
     env:
       ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
     steps:
@@ -46,8 +65,30 @@ jobs:
           node-version: "22"
       - run: |
           npm install --no-audit --no-fund
-          npm install --no-save playwright
+          npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Start local preview
+        run: |
+          npx vite preview --host 127.0.0.1 --port 4173 > /tmp/ash-vite.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:4173/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/ash-vite.log
+          exit 1
+      - name: Local authentication UI
+        run: node scripts/auth-smoke.mjs
+      - name: Local signed-in UI
+        run: node scripts/signed-in-smoke.mjs
+      - name: Cloudflare deployment
+        env:
+          ASH_DEPLOY_URL: https://meet-ash.jakeharvey162.workers.dev/
+        run: node scripts/deployment-smoke.mjs
+      - name: Vercel deployment
+        env:
+          ASH_DEPLOY_URL: https://ash-f4.vercel.app/
+        run: node scripts/deployment-smoke.mjs
       - name: Research
         run: node scripts/research-live-smoke.mjs
       - run: sleep 15
@@ -62,12 +103,34 @@ jobs:
       - run: sleep 20
       - name: Peak audit
         run: node scripts/peak-jarvis-audit.mjs
+      - run: sleep 20
+      - name: Real user journey
+        run: node scripts/real-user-journey.mjs
+      - run: sleep 15
+      - name: Worker auth end to end
+        run: node scripts/worker-auth-e2e.mjs
+      - run: sleep 15
+      - name: Production audit
+        run: node scripts/live-audit.mjs
+      - name: Upload web evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ash-release-gate-web
+          path: |
+            live-audit.json
+            audit-desktop.png
+            audit-mobile.png
+            signed-in-smoke.png
+            worker-auth-e2e.json
+            worker-auth-*.png
+          if-no-files-found: ignore
 
   desktop:
     name: Desktop Builder and Operator
     needs: live
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       ASH_LIVE_URL: https://meet-ash.jakeharvey162.workers.dev/
     steps:

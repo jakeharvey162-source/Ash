@@ -1,18 +1,9 @@
 name: Ash Live Audit
 
+# Targeted runs stay available here. Automatic provider-heavy checks are
+# serialized in release-gate.yml to avoid quota storms and false 503 failures.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "public/**"
-      - "index.html"
-      - "package.json"
-      - "vercel.json"
-      - "scripts/*.mjs"
-      - "supabase/functions/**"
-      - ".github/workflows/live-audit.yml"
 
 permissions:
   contents: read
