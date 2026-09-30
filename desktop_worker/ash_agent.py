@@ -103,13 +103,39 @@ class AshPythonAgent:
         except RuntimeError as exc:
             raise RuntimeError("Source generation unavailable: " + str(exc)) from exc
 
+    @staticmethod
+    def _map_plan_coordinates(data: dict[str, Any], width: int, height: int) -> dict[str, Any]:
+        """Convert model-normalized pointer coordinates to real screen pixels."""
+        if not isinstance(data, dict):
+            raise RuntimeError("Ash computer vision returned an invalid plan.")
+        space = str(data.get("coordinate_space") or "").strip().lower()
+        actions = []
+        for raw in list(data.get("actions") or [])[:4]:
+            if not isinstance(raw, dict):
+                continue
+            action = dict(raw)
+            if space == "normalized_1000" and str(action.get("type") or "") in {"move", "click", "double_click"}:
+                try:
+                    nx = max(0.0, min(1000.0, float(action.get("x", 0))))
+                    ny = max(0.0, min(1000.0, float(action.get("y", 0))))
+                    action["x"] = round(nx / 1000.0 * max(1, int(width) - 1))
+                    action["y"] = round(ny / 1000.0 * max(1, int(height) - 1))
+                except Exception:
+                    pass
+            actions.append(action)
+        return {
+            **data,
+            "actions": actions,
+            "coordinate_space": "screen_pixels",
+        }
+
     def _local_computer_plan(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
         prompt = "\n".join([
             "You are Ash Computer Control running locally on the user's own computer.",
             "Inspect the screenshot and choose the smallest safe next actions toward the goal.",
-            'Return ONE JSON object only using this schema: {"done":boolean,"summary":string,"actions":[{"type":"launch_app|open_url|move|click|double_click|type_text|press|hotkey|scroll|wait","x":number,"y":number,"text":string,"key":string,"keys":[string],"amount":number,"seconds":number}]}',
+            'Return ONE JSON object only using this schema: {"done":boolean,"summary":string,"coordinate_space":"normalized_1000","actions":[{"type":"launch_app|open_url|move|click|double_click|type_text|press|hotkey|scroll|wait","x":number,"y":number,"text":string,"key":string,"keys":[string],"amount":number,"seconds":number}]}',
             "Maximum 4 actions.",
-            f"Coordinates are pixels within {int(width)}x{int(height)}.",
+            "For pointer actions, x and y MUST use normalized 0-1000 coordinates: 0,0 is top-left and 1000,1000 is bottom-right regardless of screenshot size.",
             "For click or double-click targets, aim near the visual center of the target with a clear margin from its edges.",
             "Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
             "Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
@@ -137,7 +163,14 @@ class AshPythonAgent:
             raise RuntimeError("Local Ash vision returned an invalid plan.")
         allowed = {"launch_app", "open_url", "move", "click", "double_click", "type_text", "press", "hotkey", "scroll", "wait"}
         actions = [a for a in (data.get("actions") or []) if isinstance(a, dict) and str(a.get("type") or "") in allowed][:4]
-        return {"done": data.get("done") is True, "summary": str(data.get("summary") or ""), "actions": actions, "vision_source": "local"}
+        mapped = self._map_plan_coordinates({
+            "done": data.get("done") is True,
+            "summary": str(data.get("summary") or ""),
+            "coordinate_space": str(data.get("coordinate_space") or ""),
+            "actions": actions,
+            "vision_source": "local",
+        }, width, height)
+        return mapped
 
     def plan_computer(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
         cloud_error: Exception | None = None
@@ -158,7 +191,7 @@ class AshPythonAgent:
                 if not isinstance(data, dict):
                     raise RuntimeError("Ash computer vision returned an invalid plan.")
                 data.setdefault("vision_source", "cloud")
-                return data
+                return self._map_plan_coordinates(data, width, height)
             except Exception as exc:
                 cloud_error = exc
 
