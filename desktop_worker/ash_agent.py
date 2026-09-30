@@ -14,6 +14,7 @@ import httpx
 
 from voice_runtime.claude_cli import ClaudeCodeBackend
 from offline_brain import AshOfflineBrain
+from agent_kernel import AgentKernel
 
 
 @dataclass
@@ -38,6 +39,7 @@ class AshPythonAgent:
         self.claude_cli_enabled = os.environ.get("ASH_CLAUDE_CLI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
         self.claude_backend = ClaudeCodeBackend() if self.claude_cli_enabled else None
         self.offline = AshOfflineBrain()
+        self.kernel = AgentKernel()
         self.timeout = httpx.Timeout(45.0, connect=6.0)
 
     def set_device_credentials(self, device_id: str, device_secret: str) -> None:
@@ -77,16 +79,21 @@ class AshPythonAgent:
             return answer
 
     def _generate_source(self, prompt: str) -> str:
-        failures = []
-        for generate in (lambda: self._cloud(prompt, mode="high", action="generate"), lambda: self._local(prompt)):
-            try:
-                source = self._clean_generated_file(generate())
-                if self._looks_like_generation_failure(source):
-                    raise RuntimeError("Provider returned an assistant fallback instead of source.")
-                return source
-            except Exception as exc:
-                failures.append(type(exc).__name__)
-        raise RuntimeError("Source generation unavailable: " + ", ".join(failures))
+        def checked(generate):
+            source = self._clean_generated_file(generate())
+            if self._looks_like_generation_failure(source):
+                raise RuntimeError("Provider returned an assistant fallback instead of source.")
+            return source
+
+        return self.kernel.route(
+            prompt,
+            [
+                ("cloud", lambda: checked(lambda: self._cloud(prompt, mode="high", action="generate")), 12.0),
+                ("ollama", lambda: checked(lambda: self._local(prompt)), 8.0),
+            ],
+            action="generate",
+            mode="high",
+        )
 
     def _local_computer_plan(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
         prompt = "\n".join([
@@ -169,25 +176,30 @@ class AshPythonAgent:
             return answer
 
     def think(self, prompt: str, mode: str = "high", action: str = "chat") -> str:
-        try:
-            return self._cloud(prompt, mode=mode, action=action)
-        except Exception:
-            pass
-
+        prepared = self.kernel.prepare_prompt(prompt, action=action)
+        candidates = [
+            ("cloud", lambda: self._cloud(prepared, mode=mode, action=action), 12.0),
+        ]
         if self.claude_backend is not None:
-            try:
-                return self.claude_backend.process(prompt)
-            except Exception:
-                pass
-
-        try:
-            return self._local(prompt)
-        except Exception:
-            return self.offline.respond(prompt, mode=mode)
+            candidates.append(("claude_cli", lambda: self.claude_backend.process(prepared), 20.0))
+        candidates.extend([
+            ("ollama", lambda: self._local(prepared), 8.0),
+            ("offline", lambda: self.offline.respond(prompt, mode=mode), 0.0),
+        ])
+        return self.kernel.route(prompt, candidates, action=action, mode=mode)
 
     def think_stream(self, prompt: str, mode: str = "high", on_narration=None) -> str:
+        prepared = self.kernel.prepare_prompt(prompt, action="chat")
+
         try:
-            answer = self._cloud(prompt, mode=mode)
+            answer = self.kernel.invoke(
+                "cloud",
+                lambda: self._cloud(prepared, mode=mode),
+                prompt=prompt,
+                action="chat",
+                mode=mode,
+                cooldown_seconds=12.0,
+            )
             if on_narration:
                 on_narration(answer)
             return answer
@@ -196,14 +208,35 @@ class AshPythonAgent:
 
         if self.claude_backend is not None:
             try:
-                return self.claude_backend.process(prompt, on_narration=on_narration)
+                return self.kernel.invoke(
+                    "claude_cli",
+                    lambda: self.claude_backend.process(prepared, on_narration=on_narration),
+                    prompt=prompt,
+                    action="chat",
+                    mode=mode,
+                    cooldown_seconds=20.0,
+                )
             except Exception:
                 pass
 
         try:
-            answer = self._local(prompt)
+            answer = self.kernel.invoke(
+                "ollama",
+                lambda: self._local(prepared),
+                prompt=prompt,
+                action="chat",
+                mode=mode,
+                cooldown_seconds=8.0,
+            )
         except Exception:
-            answer = self.offline.respond(prompt, mode=mode)
+            answer = self.kernel.invoke(
+                "offline",
+                lambda: self.offline.respond(prompt, mode=mode),
+                prompt=prompt,
+                action="chat",
+                mode=mode,
+                cooldown_seconds=0.0,
+            )
         if on_narration:
             on_narration(answer)
         return answer

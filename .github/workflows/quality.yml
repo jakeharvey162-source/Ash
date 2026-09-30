@@ -30,6 +30,7 @@ jobs:
         run: pip install -r desktop_worker/requirements.txt
       - name: Compile Python specialist
         run: |
+          python -m py_compile desktop_worker/agent_kernel.py
           python -m py_compile desktop_worker/ash_agent.py
           python -m py_compile desktop_worker/offline_brain.py
           python -m py_compile desktop_worker/remote_worker.py
@@ -43,6 +44,6 @@ jobs:
           python -m py_compile desktop_worker/voice_runtime/listener.py
           python -m py_compile desktop_worker/voice_runtime/runtime.py
       - name: Test local voice and builder helpers
-        run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_voice_runtime.py desktop_worker/test_builder.py desktop_worker/test_offline_brain.py desktop_worker/test_remote_worker.py desktop_worker/test_computer_control.py desktop_worker/test_companion.py
+        run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_agent_kernel.py desktop_worker/test_voice_runtime.py desktop_worker/test_builder.py desktop_worker/test_offline_brain.py desktop_worker/test_remote_worker.py desktop_worker/test_computer_control.py desktop_worker/test_companion.py
       - name: Check public config exists
         run: test -f dist/config.js

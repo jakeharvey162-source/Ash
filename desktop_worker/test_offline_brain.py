@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 
-from offline_brain import AshOfflineBrain
+from offline_brain import AshOfflineBrain, LocalMemory
 
 
 class OfflineBrainTests(unittest.TestCase):
@@ -31,6 +31,15 @@ class OfflineBrainTests(unittest.TestCase):
             finally:
                 if old is None: os.environ.pop('ASH_LOCAL_HOME', None)
                 else: os.environ['ASH_LOCAL_HOME'] = old
+
+    def test_memory_search_prefers_relevant_full_text_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            memory = LocalMemory(pathlib.Path(tmp) / "memory.sqlite3")
+            memory.add("We discussed lunch and transport costs.", "note")
+            memory.add("Project Blackbird release codename is Nightglass.", "note")
+            results = memory.search("Blackbird release codename")
+            self.assertTrue(results)
+            self.assertIn("Nightglass", results[0])
 
     def test_status_is_local(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -35,3 +35,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+## OpenJarvis
+
+Ash's September 2026 desktop intelligence upgrade was informed by the modular
+routing, registry, local-memory and trace-oriented architecture in OpenJarvis:
+
+- Project: https://github.com/open-jarvis/OpenJarvis
+- License: Apache-2.0
+- Integration approach: Ash-specific implementation; the OpenJarvis Python
+  package is not vendored or required at runtime.
+
+The implementation keeps Ash's existing security model, device pairing,
+provider gateway, builder, computer-control confirmations and voice runtime
+rather than replacing them with OpenJarvis defaults.
