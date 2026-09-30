@@ -217,6 +217,19 @@ class AshPythonAgent:
                 raise RuntimeError("Local model returned no answer.")
             return answer
 
+    @staticmethod
+    def _openjarvis_profile_for(prompt: str, action: str = "chat") -> str:
+        if action == "research":
+            return "research"
+        text = str(prompt or "").lower()
+        if len(text) > 14000 or any(k in text for k in ("long document", "large document", "many files", "recursive", "decompose")):
+            return "long_context"
+        if any(k in text for k in ("debug", "traceback", "why is this failing", "root cause", "diagnose", "regression")):
+            return "react"
+        if any(k in text for k in ("research", "investigate", "compare sources", "fact check", "deep dive")):
+            return "research"
+        return "orchestrator"
+
     def think(self, prompt: str, mode: str = "high", action: str = "chat") -> str:
         prepared = self.kernel.prepare_prompt(prompt, action=action)
         candidates = [
@@ -225,7 +238,8 @@ class AshPythonAgent:
         if self.claude_backend is not None:
             candidates.append(("claude_cli", lambda: self.claude_backend.process(prepared), 20.0))
         if self.openjarvis.available:
-            candidates.append(("openjarvis", lambda: self.openjarvis.ask(prepared), 20.0))
+            oj_profile = self._openjarvis_profile_for(prompt, action)
+            candidates.append(("openjarvis", lambda: self.openjarvis.ask(prepared, profile=oj_profile), 20.0))
         candidates.extend([
             ("ollama", lambda: self._local(prepared), 8.0),
             ("offline", lambda: self.offline.respond(prompt, mode=mode), 0.0),
@@ -269,9 +283,10 @@ class AshPythonAgent:
 
         if self.openjarvis.available:
             try:
+                oj_profile = self._openjarvis_profile_for(prompt, "chat")
                 answer = self.kernel.invoke(
                     "openjarvis",
-                    lambda: self.openjarvis.ask(prepared),
+                    lambda: self.openjarvis.ask(prepared, profile=oj_profile),
                     prompt=prompt,
                     action="chat",
                     mode=mode,
