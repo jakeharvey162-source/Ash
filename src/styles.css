@@ -884,3 +884,13 @@ html,body{overflow-y:auto!important}
   .ashHoloBuddy canvas{inset:-34px -52px -35px -52px;width:294px;height:253px}
   .holoIdentity{bottom:-6px}
 }
+
+.heroDownload{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 15px;border:1px solid color-mix(in srgb,var(--line) 74%,transparent);border-radius:12px;background:color-mix(in srgb,var(--panel) 74%,transparent);color:inherit;text-decoration:none;backdrop-filter:blur(12px);transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.heroDownload:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 58%,var(--line));background:color-mix(in srgb,var(--panel) 92%,transparent)}
+.heroDownload .downloadGlyph{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);font-weight:800}
+.heroDownload b{font-size:.78rem;white-space:nowrap}.heroDownload small{font-size:.64rem;color:var(--muted);padding-left:3px}
+.publicDownloadButton{display:inline-flex;align-items:center;gap:22px;margin-top:18px;padding:13px 18px;border-radius:12px;background:var(--text);color:var(--bg);text-decoration:none;font-weight:750;letter-spacing:.01em}
+.publicDownloadButton:hover{transform:translateY(-1px)}
+.desktopDownloadSection{position:relative;overflow:hidden}
+.desktopDownloadSection:after{content:"";position:absolute;right:-80px;top:-120px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 16%,transparent),transparent 68%);pointer-events:none}
+@media(max-width:720px){.heroActions{gap:10px;flex-wrap:wrap}.heroDownload{min-height:42px}.heroDownload small{display:none}}

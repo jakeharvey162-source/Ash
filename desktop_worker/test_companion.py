@@ -2,7 +2,14 @@ import os
 import unittest
 from unittest.mock import patch
 
+from companion_overlay import AshHologramCompanion
+
 class CompanionContractTests(unittest.TestCase):
+    def test_release_version_comparison_is_semantic(self):
+        self.assertEqual(AshHologramCompanion._version_tuple("v0.3.12"), (0, 3, 12))
+        self.assertGreater(AshHologramCompanion._version_tuple("1.0.0"), AshHologramCompanion._version_tuple("0.99.99"))
+        self.assertEqual(AshHologramCompanion._version_tuple("dev"), (0, 0, 0))
+
     def test_companion_source_keeps_permissioned_control_separate(self):
         path=os.path.join(os.path.dirname(__file__),"companion_overlay.py")
         text=open(path,encoding="utf-8").read()
