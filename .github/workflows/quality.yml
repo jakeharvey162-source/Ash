@@ -49,6 +49,9 @@ jobs:
           python -m py_compile desktop_worker/voice_runtime/wake.py
           python -m py_compile desktop_worker/voice_runtime/claude_cli.py
           python -m py_compile desktop_worker/voice_runtime/listener.py
+          python -m py_compile desktop_worker/voice_runtime/windows_speech.py
+          python -m py_compile desktop_worker/voice_runtime/lite_runtime.py
+          python -m py_compile desktop_worker/voice_lite_entry.py
           python -m py_compile desktop_worker/voice_runtime/runtime.py
       - name: Test local voice and builder helpers
         run: PYTHONPATH=desktop_worker python -m unittest desktop_worker/test_agent_kernel.py desktop_worker/test_agent_runtime.py desktop_worker/test_openjarvis_bridge.py desktop_worker/test_local_scheduler.py desktop_worker/test_voice_runtime.py desktop_worker/test_builder.py desktop_worker/test_offline_brain.py desktop_worker/test_remote_worker.py desktop_worker/test_site_reference.py desktop_worker/test_computer_control.py desktop_worker/test_companion.py
