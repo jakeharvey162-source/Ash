@@ -41,12 +41,47 @@ class AgentKernel:
             os.environ.get("ASH_AGENT_TRACE", str(root / "agent-traces.jsonl"))
         ).expanduser()
         self.trace_path.parent.mkdir(parents=True, exist_ok=True)
+        self.stats_path = root / "routing-stats.json"
         self.skill_dirs = [
             pathlib.Path(__file__).resolve().with_name("skills"),
             root / "skills",
         ]
         self._health: dict[str, BackendHealth] = {}
         self._lock = threading.Lock()
+        self._load_stats()
+
+    def _load_stats(self) -> None:
+        try:
+            raw = json.loads(self.stats_path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        if not isinstance(raw, dict):
+            return
+        for name, data in raw.items():
+            if not isinstance(data, dict):
+                continue
+            self._health[str(name)] = BackendHealth(
+                name=str(name),
+                successes=max(0, int(data.get("successes") or 0)),
+                failures=max(0, int(data.get("failures") or 0)),
+                avg_latency_ms=max(0.0, float(data.get("avg_latency_ms") or 0.0)),
+            )
+
+    def _save_stats(self) -> None:
+        try:
+            payload = {
+                name: {
+                    "successes": state.successes,
+                    "failures": state.failures,
+                    "avg_latency_ms": round(state.avg_latency_ms, 1),
+                }
+                for name, state in self._health.items()
+            }
+            tmp = self.stats_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            tmp.replace(self.stats_path)
+        except OSError:
+            pass
 
     @staticmethod
     def _prompt_fingerprint(prompt: str) -> str:
@@ -107,6 +142,7 @@ class AgentKernel:
                 state.failures += 1
                 state.last_error = f"{type(exc).__name__}: {exc}"[:240]
                 state.cooldown_until = time.time() + max(0.0, float(cooldown_seconds))
+                self._save_stats()
             self._trace(
                 prompt=prompt, backend=name, action=action, mode=mode,
                 ok=False, latency_ms=latency, error=state.last_error,
@@ -122,11 +158,30 @@ class AgentKernel:
             ) / total
             state.cooldown_until = 0.0
             state.last_error = ""
+            self._save_stats()
         self._trace(
             prompt=prompt, backend=name, action=action, mode=mode,
             ok=True, latency_ms=latency,
         )
         return answer
+
+    def _rank_candidates(self, candidates: Iterable[tuple[str, Callable[[], str], float]], action: str):
+        items = list(candidates)
+        if action != "chat" or len(items) < 3:
+            return items
+        # Keep Ash cloud as the preferred primary when present. Among local/optional
+        # fallbacks, use observed reliability and latency after enough samples.
+        head = [item for item in items if item[0] == "cloud"]
+        rest = [item for item in items if item[0] != "cloud"]
+        def score(item):
+            state = self._state(item[0])
+            samples = state.successes + state.failures
+            if samples < 3:
+                return (1, 0.0, 0.0)
+            reliability = state.successes / max(1, samples)
+            latency = state.avg_latency_ms or 999999.0
+            return (0, -reliability, latency)
+        return head + sorted(rest, key=score)
 
     def route(
         self,
@@ -139,7 +194,7 @@ class AgentKernel:
     ) -> str:
         errors: list[str] = []
         attempted = False
-        for name, call, cooldown in candidates:
+        for name, call, cooldown in self._rank_candidates(candidates, action):
             state = self._state(name)
             if state.cooling_down:
                 errors.append(f"{name}: cooling down")
