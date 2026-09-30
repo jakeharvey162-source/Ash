@@ -843,3 +843,5 @@ html,body{overflow-y:auto!important}
 .studioSource{font-family:monospace;font-size:12px;white-space:pre;line-height:1.6}
 #studioEvidence,#studioStatus{margin:14px 0;line-height:1.6}
 @media(max-width:600px){.studioHeading{display:block}.studioHeading>.badge{display:inline-block;margin-top:12px}.studioActions button{flex-grow:1}.studioPreview{padding:0}.studioPreview.mobile iframe{width:360px;max-width:none}.studioToolbar label{width:100%;min-width:0}.studioPreview iframe{height:640px}}
+
+.studioWorkspace{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:20px 0}.studioWorkspace label{flex:1;min-width:180px}.studioWorkspace input,.studioWorkspace select{width:100%}.studioImport input{font-size:12px}

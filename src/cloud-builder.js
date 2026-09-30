@@ -23,8 +23,8 @@ export function generationPrompt(request, previous = '', repair = '') {
   if (!brief || brief.length > MAX_REQUEST) throw new Error(`Describe the project in 1–${MAX_REQUEST} characters.`);
   if (previous.length > 14500) throw new Error('This revision is too large for a safe full-source edit. Download it and use Desktop build to continue.');
   return `You are Ash's implementation engineer. Return ONLY a complete <!doctype html> document ending with </html>, no Markdown or commentary. Keep the ENTIRE document under 14000 characters so it can be edited later.
-Build a finished standalone website or small application using embedded CSS and vanilla JavaScript. No external libraries, scripts, fonts, images, network calls, imports or dependencies. Use inline SVG and CSS artwork. Use semantic HTML, visible focus states, accessible labels, deliberate typography, responsive layouts at 360px and 1440px, and no horizontal overflow.
-Implement the requested interactions fully. Use integer cents for currency arithmetic. Validate form inputs. Render user data with textContent, never innerHTML. Use localStorage for local persistence and never claim it is cloud sync. Mock bookings must clearly say they are saved locally and not sent. Do not invent testimonials, awards, proof, backend functionality or test results. Do not include credentials. Escape user data in CSV exports. Keep all links local section anchors unless the brief explicitly gives a destination.
+Build a finished standalone website or small application using embedded CSS and vanilla JavaScript. No external libraries, scripts, fonts, images, network calls, imports or dependencies. Use inline SVG and CSS artwork. Choose a clear visual direction specific to the brief: use an intentional type scale, restrained accent palette, generous whitespace, strong composition and purposeful inline SVG artwork. Avoid emoji branding, default browser controls, flat generic tables and fabricated proof. Style every input and button. Use semantic HTML, visible focus states, accessible labels, deliberate typography, responsive layouts at 360px and 1440px, and no horizontal overflow.
+Implement the requested interactions fully. Use integer cents for currency arithmetic. Validate form inputs with visible inline messages. Include useful empty states, keyboard-friendly dialogs, and cancel actions for editing. Render user data with textContent, never innerHTML. Use localStorage for local persistence and never claim it is cloud sync. Mock bookings must clearly say they are saved locally and not sent. Do not invent testimonials, awards, proof, backend functionality or test results. Do not include credentials. Escape user data in CSV exports. Keep all links local section anchors unless the brief explicitly gives a destination.
 ${previous ? 'EDIT the existing project below. Preserve working functionality, localStorage keys and saved-data compatibility. Make the smallest requested change, then return the entire updated document.' : 'Build the requested project from scratch.'}
 USER REQUEST:\n${brief}
 ${repair ? `REPAIR THESE OBSERVED ERRORS:\n${repair.slice(0,1000)}\n` : ''}${previous ? `EXISTING PROJECT:\n${previous}` : ''}`;
@@ -93,7 +93,7 @@ export function saveProject(storage, userId, project) {
 
 export function addRevision(project, request, html) {
   const revision = { id: crypto.randomUUID(), request, html: normalizeArtifact(html), createdAt: new Date().toISOString() };
-  return { id: project?.id || crypto.randomUUID(), revisions: [...(project?.revisions || []), revision].slice(-MAX_REVISIONS), activeId: revision.id, data: project?.data || {} };
+  return { title:project?.title||String(request).slice(0,60), id: project?.id || crypto.randomUUID(), revisions: [...(project?.revisions || []), revision].slice(-MAX_REVISIONS), activeId: revision.id, data: project?.data || {} };
 }
 
 export function activeRevision(project) {
@@ -106,4 +106,40 @@ export async function generateArtifact({ request, previous = '', repair = '', fe
   const data = await response.json();
   if (!response.ok) throw new Error(response.status===401 ? 'Your session expired. Sign in again.' : data.error || `Generation failed (${response.status}). Your previous revision is safe.`);
   return normalizeArtifact(data.answer);
+}
+
+export const MAX_PROJECTS = 12;
+export function validateProject(value) {
+  if (!value || !Array.isArray(value.revisions) || !value.revisions.length) throw new Error('This is not an Ash project backup.');
+  const revisions = value.revisions.slice(-MAX_REVISIONS).map(r => ({
+    id: String(r.id || crypto.randomUUID()).slice(0,100), request: String(r.request || 'Imported project').slice(0,MAX_REQUEST),
+    html: normalizeArtifact(r.html), createdAt: String(r.createdAt || new Date().toISOString()).slice(0,100)
+  }));
+  return {id:String(value.id || crypto.randomUUID()).slice(0,100), title:String(value.title || revisions[0].request).slice(0,80), revisions,
+    activeId:revisions.some(r=>r.id===value.activeId)?value.activeId:revisions.at(-1).id, data:safePreviewData(value.data)};
+}
+export function restoreWorkspace(storage,userId) {
+  try {
+    const raw=JSON.parse(storage.getItem('ash-browser-workspace:'+userId)||'null');
+    if(raw?.version===1&&Array.isArray(raw.projects)) {
+      const projects=raw.projects.slice(0,MAX_PROJECTS).flatMap(p=>{try{return [validateProject(p)]}catch{return []}});
+      return {projects,activeId:raw.activeId===null?null:projects.some(p=>p.id===raw.activeId)?raw.activeId:projects[0]?.id||null};
+    }
+  } catch {}
+  const legacy=restoreProject(storage,userId);
+  try{return {projects:legacy?[validateProject(legacy)]:[],activeId:legacy?.id||null}}catch{return {projects:[],activeId:null}};
+}
+export function saveWorkspace(storage,userId,projects,activeId) {
+  if(projects.length>MAX_PROJECTS) throw new Error('Keep up to 12 projects in this browser. Export a backup before removing one.');
+  storage.setItem('ash-browser-workspace:'+userId,JSON.stringify({version:1,projects,activeId}));
+}
+export function projectBackup(project) {
+  return JSON.stringify({format:'ash-project',version:1,project:validateProject(project)},null,2);
+}
+export function importProjectBackup(text) {
+  if(typeof text!=='string'||text.length>1000000)throw new Error('Project backups must be under 1 MB.');
+  let value;try{value=JSON.parse(text)}catch{throw new Error('Choose a valid Ash JSON backup.');}
+  if(value.format!=='ash-project'||value.version!==1)throw new Error('Choose an Ash project backup exported by Builder.');
+  const project=validateProject(value.project);
+  return {...project,id:crypto.randomUUID(),title:project.title+' (imported)'};
 }

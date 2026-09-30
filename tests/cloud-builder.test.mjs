@@ -103,3 +103,40 @@ test('backend rejects truncated code and preserves complete code verbatim',()=>{
   assert.throws(()=>completeHTMLArtifact(html.slice(0,-20)),/incomplete_html_artifact/);
   assert.throws(()=>completeHTMLArtifact('Here is your website:\n'+html),/incomplete_html_artifact/);
 });
+
+const {restoreWorkspace,saveWorkspace,projectBackup,importProjectBackup}=await import('../src/cloud-builder.js');
+test('workspace migrates a legacy project without losing data or revisions',()=>{
+  const store=storage(),project=addRevision(null,'Old project',html);project.data={expenses:'[1,2]'};saveProject(store,'alice',project);
+  const workspace=restoreWorkspace(store,'alice');assert.equal(workspace.activeId,project.id);assert.deepEqual({...workspace.projects[0].data},project.data);
+  saveWorkspace(store,'alice',workspace.projects,workspace.activeId);assert.equal(restoreWorkspace(store,'alice').projects.length,1);
+});
+test('new builds preserve separate projects and isolated data',async()=>{
+  const studio=makeStudio(async()=>({ok:true,json:async()=>({answer:html})}));
+  studio.draft='Expense app';await studio.generate();const original=studio.project;original.data={entries:'saved'};studio.persist();
+  studio.draft='Coffee site';await studio.generate({fresh:true});assert.equal(studio.projects.length,2);assert.notEqual(studio.project.id,original.id);
+  assert.deepEqual(studio.project.data,{});assert.equal(studio.projects[0].data.entries,'saved');
+  const workspace=restoreWorkspace(localStorage,'alice');assert.equal(workspace.projects.length,2);assert.equal(workspace.activeId,studio.project.id);
+  assert.equal(restoreWorkspace(localStorage,'bob').projects.length,0);
+});
+test('backup round trip keeps revisions and data while import creates a distinct project',()=>{
+  const original=addRevision(addRevision(null,'First',html),'Second',html);original.title='Budget';original.data={entries:'saved'};
+  const imported=importProjectBackup(projectBackup(original));assert.notEqual(imported.id,original.id);assert.equal(imported.revisions.length,2);
+  assert.equal(activeRevision(imported).request,'Second');assert.equal(imported.data.entries,'saved');
+});
+test('hostile or invalid backups are rejected before preview',()=>{
+  assert.throws(()=>importProjectBackup('not json'),/valid/);
+  assert.throws(()=>importProjectBackup(JSON.stringify({format:'ash-project',version:1,project:{revisions:[{html:'<script>alert(1)</script>'}]}})),/incomplete/);
+  assert.throws(()=>importProjectBackup('x'.repeat(1000001)),/1 MB/);
+});
+test('workspace handles corrupt entries without breaking valid projects',()=>{
+  const store=storage(),project=addRevision(null,'Valid',html);
+  store.setItem('ash-browser-workspace:alice',JSON.stringify({version:1,projects:[{},project],activeId:null}));
+  assert.equal(restoreWorkspace(store,'alice').projects.length,1);assert.equal(restoreWorkspace(store,'alice').activeId,null);
+});
+
+const {sourceArtifact}=await import('../supabase/functions/jarvis-ai-gateway/artifact-validation.js');
+test('source route rejects assistant fallback prose and preserves complete code',()=>{
+  assert.equal(sourceArtifact('```jsx\nexport default function App(){return <h1>Hi</h1>}\n```'),'export default function App(){return <h1>Hi</h1>}');
+  assert.throws(()=>sourceArtifact('Sorry, I cannot build that.'),/invalid_source/);
+  assert.throws(()=>sourceArtifact('Offline Python core is active'),/invalid_source/);
+});

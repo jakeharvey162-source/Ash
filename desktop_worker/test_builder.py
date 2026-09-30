@@ -11,6 +11,15 @@ class BuilderSafetyTests(unittest.TestCase):
     def setUp(self):
         self.agent = AshPythonAgent()
 
+    def test_source_generation_never_uses_offline_chat_as_code(self):
+        with patch.object(self.agent, "_cloud", side_effect=RuntimeError("unavailable")), patch.object(self.agent, "_local", side_effect=RuntimeError("not installed")), patch.object(self.agent.offline, "respond", side_effect=AssertionError("offline prose is not source")):
+            with self.assertRaisesRegex(RuntimeError, "Source generation unavailable"):
+                self.agent._generate_source("Generate file")
+
+    def test_source_generation_uses_real_local_code_when_cloud_fails(self):
+        with patch.object(self.agent, "_cloud", side_effect=RuntimeError("unavailable")), patch.object(self.agent, "_local", return_value="```js\nexport default 1;\n```"):
+            self.assertEqual(self.agent._generate_source("Generate file"), "export default 1;\n")
+
     def test_safe_write_stays_inside_workspace(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp).resolve()

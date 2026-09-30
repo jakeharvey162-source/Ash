@@ -62,13 +62,31 @@ class AshPythonAgent:
     def _cloud(self, prompt: str, mode: str = "high", action: str = "chat") -> str:
         if not self.gateway_url or not (self.access_token or (self.device_id and self.device_secret)):
             raise RuntimeError("Ash cloud or paired-device session is not configured.")
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.post(self.gateway_url, headers=self._headers(), json={"action": action, "message": prompt, "mode": mode, "history": []})
+        source_mode = action == "generate" and prompt.startswith("You are Ash's implementation engineer.\nGenerate the COMPLETE contents of exactly one file.")
+        payload = {"action": action, "message": prompt, "mode": mode, "history": []}
+        if source_mode:
+            payload["output_format"] = "source"
+        # The source route has a 65-second budget; do not abandon it at 45 seconds.
+        timeout = httpx.Timeout(70.0, connect=6.0) if source_mode else self.timeout
+        with httpx.Client(timeout=timeout) as client:
+            r = client.post(self.gateway_url, headers=self._headers(), json=payload)
             r.raise_for_status()
             answer = str(r.json().get("answer") or "").strip()
             if not answer:
                 raise RuntimeError("Ash gateway returned no answer.")
             return answer
+
+    def _generate_source(self, prompt: str) -> str:
+        failures = []
+        for generate in (lambda: self._cloud(prompt, mode="high", action="generate"), lambda: self._local(prompt)):
+            try:
+                source = self._clean_generated_file(generate())
+                if self._looks_like_generation_failure(source):
+                    raise RuntimeError("Provider returned an assistant fallback instead of source.")
+                return source
+            except Exception as exc:
+                failures.append(type(exc).__name__)
+        raise RuntimeError("Source generation unavailable: " + ", ".join(failures))
 
     def _local_computer_plan(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
         prompt = "\n".join([
@@ -653,6 +671,7 @@ USER REQUEST:
             purpose = str((spec or {}).get("purpose") or "")
             prompt = f"""You are Ash's implementation engineer.
 Generate the COMPLETE contents of exactly one file.
+Keep source concise and under 14000 characters. Finish all components, functions and delimiters.
 No markdown fences. No commentary. No fake test results. No secrets.
 Implement the architecture and design system faithfully. The finished UI must look intentionally designed and production-ready, with responsive behavior, accessible states, strong spacing and typography, and realistic copy. Do not fall back to generic AI-dashboard styling unless the request calls for it.
 PROJECT REQUEST:
@@ -666,7 +685,11 @@ PURPOSE: {purpose}
 """
             content = self._scaffold_file(rel)
             if content is None:
-                content = self._clean_generated_file(self.think(prompt, "high", action="generate"))
+                try:
+                    content = self._generate_source(prompt)
+                except Exception as exc:
+                    planner_warning = (planner_warning + " | " if planner_warning else "") + str(exc)
+                    content = ""
             if self._looks_like_generation_failure(content):
                 generation_mode = "recovery_renderer" if live_plan else "fallback_scaffold"
                 if live_plan:
