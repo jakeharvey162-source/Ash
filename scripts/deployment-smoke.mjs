@@ -13,17 +13,41 @@ const forbiddenProviderNames = [
   "gemini"
 ];
 
-const response = await fetch(url, { redirect: "follow" });
-if (!response.ok) throw new Error(`Deployment returned HTTP ${response.status}`);
-const html = await response.text();
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const scriptSrcs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => m[1]);
-let bundleText = "";
-for (const src of scriptSrcs) {
-  const assetUrl = new URL(src, response.url).toString();
-  const asset = await fetch(assetUrl);
-  if (asset.ok) bundleText += "\n" + await asset.text();
+async function coherentDeployment() {
+  let lastError;
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    try {
+      const browserUrl = new URL(url);
+      browserUrl.searchParams.set("ash_deploy_check", String(Date.now()));
+      const response = await fetch(browserUrl, {
+        redirect: "follow",
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      if (!response.ok) throw new Error(`Deployment returned HTTP ${response.status}`);
+      const html = await response.text();
+      const scriptSrcs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => m[1]);
+      let bundleText = "";
+      for (const src of scriptSrcs) {
+        const assetUrl = new URL(src, response.url).toString();
+        const asset = await fetch(assetUrl, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
+        const contentType = asset.headers.get("content-type") || "";
+        if (!asset.ok) throw new Error(`Asset ${assetUrl} returned HTTP ${asset.status}`);
+        if (/text\/html/i.test(contentType)) throw new Error(`Asset ${assetUrl} returned ${contentType}`);
+        bundleText += "\n" + await asset.text();
+      }
+      return { response, html, bundleText, browserUrl: browserUrl.toString() };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 6) await wait(10_000);
+    }
+  }
+  throw new Error("Deployment never became coherent: " + String(lastError?.message || lastError));
 }
+
+const { response, html, bundleText, browserUrl } = await coherentDeployment();
 
 const exposed = forbiddenProviderNames.filter(name => new RegExp("\\b" + name + "\\b", "i").test(bundleText));
 if (exposed.length) throw new Error("Public frontend bundle exposes backend provider names: " + exposed.join(", "));
@@ -36,7 +60,7 @@ page.on("console", msg => { if (msg.type() === "error") consoleErrors.push(msg.t
 page.on("requestfailed", req => failedRequests.push(req.url()));
 
 try {
-  const nav = await page.goto(url, { waitUntil: "networkidle", timeout: 45000 });
+  const nav = await page.goto(browserUrl, { waitUntil: "networkidle", timeout: 45000 });
   if (!nav || nav.status() !== 200) throw new Error("Browser navigation did not return HTTP 200");
 
   for (const [selector, label] of [

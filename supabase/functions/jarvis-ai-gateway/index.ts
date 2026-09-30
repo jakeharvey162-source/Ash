@@ -554,17 +554,29 @@ async function firstUsefulAnswer(
   timeoutMs = 4200,
   validate?: (answer: string) => string
 ) {
-  const attempts = routes.map(async route => {
+  // Hedge routes instead of firing every provider simultaneously. Most healthy
+  // requests now consume one provider call; slower/failing routes still fall back.
+  const hedgeMs = timeoutMs > 10_000 ? 5_000 : 1_100;
+  let closed = false;
+  const attempts = routes.map(async (route, index) => {
+    if (index) await new Promise(resolve => setTimeout(resolve, index * hedgeMs));
+    if (closed) throw new Error("route_cancelled");
     const answer = String(await route(system, message, history, mode) || "").trim();
     if (!answer) throw new Error("route_empty");
-    return validate ? validate(answer) : answer;
+    const checked = validate ? validate(answer) : answer;
+    if (closed) throw new Error("route_cancelled");
+    closed = true;
+    return checked;
   });
   let timeoutId: ReturnType<typeof setTimeout>;
   const timeout = new Promise<string>((_resolve, reject) =>
     { timeoutId = setTimeout(() => reject(new Error("route_budget_exhausted")), timeoutMs); }
   );
   try { return await Promise.race([Promise.any(attempts), timeout]); }
-  finally { clearTimeout(timeoutId!); }
+  finally {
+    closed = true;
+    clearTimeout(timeoutId!);
+  }
 }
 
 async function askHighEnsemble(system: string, message: string, history: ChatMessage[]) {

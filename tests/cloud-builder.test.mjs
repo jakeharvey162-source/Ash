@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeArtifact, generationPrompt, previewDocument, safePreviewData, restoreProject, saveProject, addRevision, activeRevision, generateArtifact} from '../src/cloud-builder.js';
+import {normalizeArtifact, generationPrompt, previewDocument, safePreviewData, restoreProject, saveProject, addRevision, activeRevision, generateArtifact, artifactQualityFindings} from '../src/cloud-builder.js';
 const html='<!doctype html><html><head><title>Budget</title><style>body{margin:0}</style></head><body><h1>Budget</h1><script>document.body.dataset.ready="yes";</script></body></html>';
 const storage=()=>{const map=new Map();return {getItem:k=>map.get(k),setItem:(k,v)=>map.set(k,v)}};
 test('complete HTML and exact fences accepted; incomplete output is rejected',()=>{
@@ -48,6 +48,20 @@ test('corrupt stored state is handled; quota failure is surfaced',()=>{
   assert.equal(restoreProject({getItem:()=>'{broken'},'alice'),null);
   assert.throws(()=>saveProject({setItem(){throw Error('QuotaExceeded')}},'alice',{}),/Quota/);
 });
+
+test('requested features receive static acceptance checks and one bounded repair',async()=>{
+  const incomplete='<!doctype html><html><head><title>Booking</title></head><body><h1>Book</h1></body></html>';
+  const complete='<!doctype html><html><head><meta name="viewport" content="width=device-width"><style>@media(max-width:600px){form{display:block}}.error{color:red}</style></head><body data-theme="light"><form><input required><p class="error" aria-live="polite"></p><button>Book</button></form><button id="themeToggle">Theme</button><p>Saved locally and not sent.</p><script>document.querySelector("form").addEventListener("submit",e=>e.preventDefault());localStorage.setItem("booking","yes");document.querySelector("#themeToggle").onclick=()=>document.body.dataset.theme="dark";const b=new Blob(["x"],{type:"text/csv"});</script></body></html>';
+  const brief='Build a responsive booking form with inline validation, save locally, say it is not sent, add a dark/light theme toggle and CSV export.';
+  assert.deepEqual(artifactQualityFindings(brief,complete),[]);
+  assert.ok(artifactQualityFindings(brief,incomplete).length>=6);
+  const calls=[];
+  const result=await generateArtifact({request:brief,fetcher:async body=>{calls.push(body);return {ok:true,json:async()=>({answer:calls.length===1?incomplete:complete})}}});
+  assert.equal(result,complete);
+  assert.equal(calls.length,2);
+  assert.match(calls[1].message,/Static acceptance checks found/);
+});
+
 test('generation uses live API output, not a silent scaffold',async()=>{
   let bodySeen;
   const result=await generateArtifact({request:'Build a budget app',fetcher:async body=>{bodySeen=body;return {ok:true,json:async()=>({answer:html})}}});

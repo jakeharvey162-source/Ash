@@ -18,6 +18,28 @@ export function normalizeArtifact(answer) {
   return html;
 }
 
+
+export function artifactQualityFindings(request, answer) {
+  const html = normalizeArtifact(answer);
+  const brief = String(request || '').toLowerCase();
+  const source = html.toLowerCase();
+  const findings = [];
+  const needs = (pattern) => pattern.test(brief);
+  const has = (pattern) => pattern.test(source);
+  const add = (condition, message) => { if (condition && !findings.includes(message)) findings.push(message); };
+
+  const formRequested = needs(/\b(booking|reservation|contact form|signup form|sign-up form|registration form)\b/);
+  add(formRequested && !has(/<form\b/), 'Add the requested working form.');
+  add(formRequested && !has(/addeventlistener\s*\(\s*['"]submit['"]|onsubmit\s*=/), 'Handle the form submission in JavaScript.');
+  add(needs(/\b(save|saved|persist|persistent|remember|local storage|localstorage|offline)\b/) && !has(/\blocalstorage\b/), 'Persist the requested data with localStorage.');
+  add(needs(/\b(csv|export to csv|download csv)\b/) && !has(/text\/csv|\.csv\b|download\s*=/), 'Implement the requested CSV export.');
+  add(needs(/\b(dark mode|light mode|dark\/light|theme toggle|toggle theme)\b/) && !has(/data-theme|theme-toggle|themetoggle|classlist\.(?:add|remove|toggle)\s*\([^)]*dark/), 'Implement the requested theme toggle.');
+  add(needs(/\b(inline errors?|inline validation|validate|validation|required fields?|reject empty)\b/) && !has(/aria-live|role\s*=\s*['"]alert['"]|class\s*=\s*['"][^'"]*error|id\s*=\s*['"][^'"]*error/), 'Show requested validation errors inline.');
+  add(needs(/\b(responsive|mobile|phone|360px|360 px)\b/) && !has(/@media|@container/), 'Add the requested responsive layout rules.');
+  add(needs(/\b(saved locally|local-only|not sent|never sent)\b/) && !has(/saved locally|stored locally|saved (?:in|to) (?:this )?browser|not sent|never sent/), 'Explain that local-only data is not sent.');
+  return findings;
+}
+
 export function generationPrompt(request, previous = '', repair = '') {
   const brief = String(request || '').trim();
   if (!brief || brief.length > MAX_REQUEST) throw new Error(`Describe the project in 1–${MAX_REQUEST} characters.`);
@@ -101,11 +123,23 @@ export function activeRevision(project) {
 }
 
 export async function generateArtifact({ request, previous = '', repair = '', fetcher, signal }) {
-  const message = generationPrompt(request, previous, repair);
-  const response = await fetcher({ action: 'generate', output_format: 'html', message, mode: 'high', history: [] }, signal);
-  const data = await response.json();
-  if (!response.ok) throw new Error(response.status===401 ? 'Your session expired. Sign in again.' : data.error || `Generation failed (${response.status}). Your previous revision is safe.`);
-  return normalizeArtifact(data.answer);
+  const run = async (message) => {
+    const response = await fetcher({ action: 'generate', output_format: 'html', message, mode: 'high', history: [] }, signal);
+    const data = await response.json();
+    if (!response.ok) throw new Error(response.status===401 ? 'Your session expired. Sign in again.' : data.error || `Generation failed (${response.status}). Your previous revision is safe.`);
+    return normalizeArtifact(data.answer);
+  };
+
+  let html = await run(generationPrompt(request, previous, repair));
+  const findings = artifactQualityFindings(request, html);
+  if (!repair && findings.length) {
+    html = await run(generationPrompt(request, html, 'Static acceptance checks found:\n- ' + findings.join('\n- ')));
+    const remaining = artifactQualityFindings(request, html);
+    if (remaining.length) {
+      throw new Error('Ash could not verify the requested features: ' + remaining.join(' ') + ' The previous revision is safe.');
+    }
+  }
+  return html;
 }
 
 export const MAX_PROJECTS = 12;
