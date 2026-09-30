@@ -14,6 +14,8 @@ class CompanionContractTests(unittest.TestCase):
         self.assertIn("_draw_hologram",text)
         self.assertIn("voice_runtime.runtime",text)
         self.assertIn("remote_worker.py",text)
+        self.assertIn("_poll_global_hotkey",text)
+        self.assertIn("GetAsyncKeyState",text)
 
 if __name__=="__main__":
     unittest.main()
