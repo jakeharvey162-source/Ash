@@ -317,6 +317,16 @@ class AshHologramCompanion:
             args += ["--pair", pair_code]
         return args
 
+    def _local_voice_available(self) -> bool:
+        if getattr(sys, "frozen", False):
+            return (APP_DIR / ("AshVoice.exe" if os.name == "nt" else "AshVoice")).exists()
+        try:
+            import faster_whisper  # noqa: F401
+            import sounddevice  # noqa: F401
+            return True
+        except Exception:
+            return False
+
     def _voice_command(self) -> list[str]:
         if getattr(sys, "frozen", False):
             exe = APP_DIR / ("AshVoice.exe" if os.name == "nt" else "AshVoice")
@@ -397,7 +407,7 @@ class AshHologramCompanion:
         menu.add_command(label="Open Ash command center", command=self._open_ash)
         menu.add_command(label="Link this computer", command=self._link_computer)
         menu.add_command(label="Compact / expand", command=self._toggle_compact)
-        menu.add_command(label="Restart voice", command=self._restart_voice_runtime)
+        menu.add_command(label="Restart local voice" if self._local_voice_available() else "Open voice in Ash", command=self._restart_voice_runtime if self._local_voice_available() else self._open_ash)
         menu.add_command(label="Restart desktop worker", command=self._restart_worker)
         menu.add_command(label="Check for updates", command=lambda: threading.Thread(target=self._check_for_updates, kwargs={"manual": True}, daemon=True).start())
         if self.update_available:
@@ -501,6 +511,12 @@ class AshHologramCompanion:
             self.detail = "Voice disabled. Double-click to open Ash."
             return
         self._stop_voice_runtime()
+        if not self._local_voice_available():
+            self.voice = None
+            self.voice_online = False
+            if self.state != "error":
+                self.detail = "Compact mode: double-click Ash for native/web voice. Offline voice is an optional pack."
+            return
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             self.voice = subprocess.Popen(
