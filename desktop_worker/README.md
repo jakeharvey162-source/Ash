@@ -121,3 +121,16 @@ ASH_OPENJARVIS_ENABLED=auto
 ASH_AGENT_TRACE=
 ASH_LOCAL_HOME=
 ```
+
+
+## Full companion integration
+
+The downloaded Windows companion now combines the Ash hologram UI, screen aura,
+always-on voice runtime, paired desktop agent, local schedules, private memory,
+computer vision/control, Ash Builder and the full OpenJarvis specialist bridge.
+
+OpenJarvis profiles are selected according to the task: deep research, ReAct
+debugging, recursive long-context work and general orchestration are read-oriented.
+CodeAct remains confirmation-gated because it can execute code. The desktop
+worker streams real activity events into the hologram so visual states correspond
+to actual building, acting and scheduled work.
