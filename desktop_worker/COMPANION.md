@@ -82,7 +82,8 @@ computer-control policy or confirmation layer.
 
 The default Windows download is now deliberately a **core installer under 100 MB**. It contains the hologram companion and desktop worker, while large local inference bundles are not duplicated into every installation.
 
+- The core package keeps wake-word input and speech using the Windows `System.Speech` stack, so the hologram can still respond without bundling a large model runtime.
 - Web/native voice remains available through the Ash command center.
-- The optional Windows offline voice pack contains `faster-whisper`/CTranslate2 and can be placed beside `Ash.exe`.
+- The optional Windows offline voice pack contains `faster-whisper`/CTranslate2 and can replace the lightweight `AshVoice.exe` for stronger local recognition.
 - OpenJarvis remains optional; normal cloud-assisted Ash, Builder, linking, schedules and the hologram do not require the local OpenJarvis package.
 - CI fails the Windows release if either the installer or portable ZIP grows beyond 100 MB.
