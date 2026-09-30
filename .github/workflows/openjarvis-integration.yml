@@ -1,0 +1,46 @@
+name: OpenJarvis Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "desktop_worker/openjarvis_bridge.py"
+      - "desktop_worker/requirements-openjarvis.optional.txt"
+      - ".github/workflows/openjarvis-integration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Ash desktop core
+        run: pip install -r desktop_worker/requirements.txt
+      - name: Install OpenJarvis specialist
+        run: pip install -r desktop_worker/requirements-openjarvis.optional.txt
+      - name: Verify OpenJarvis bridge contract
+        env:
+          PYTHONPATH: desktop_worker
+        run: |
+          python - <<'PY'
+          import inspect
+          import openjarvis
+          from openjarvis import Jarvis
+          from openjarvis_bridge import OpenJarvisBackend
+
+          assert inspect.isclass(Jarvis), "openjarvis.Jarvis must be a class"
+          assert callable(getattr(Jarvis, "ask", None)), "openjarvis.Jarvis.ask is required"
+          backend = OpenJarvisBackend()
+          assert backend.available, backend.status()
+          print("OPENJARVIS INTEGRATION: PASS")
+          print("version:", getattr(openjarvis, "__version__", "unknown"))
+          print("Jarvis:", inspect.signature(Jarvis))
+          print("ask:", inspect.signature(Jarvis.ask))
+          PY
