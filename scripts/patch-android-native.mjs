@@ -47,6 +47,27 @@ if(!manifest.includes("AshWakeService")){
     "            android:foregroundServiceType=\"microphone\" />\n"+
     "    </application>");
 }
+
+/* Mobile UX hardening for the generated Capacitor activity. */
+manifest=manifest.replace(
+  /(<activity\b[^>]*android:name="\.MainActivity"[^>]*)(>)/,
+  (full, start, end) => {
+    let next=start;
+    if(!/android:windowSoftInputMode=/.test(next)) next+=' android:windowSoftInputMode="adjustResize"';
+    if(!/android:screenOrientation=/.test(next)) next+=' android:screenOrientation="unspecified"';
+    return next+end;
+  }
+);
+manifest=manifest.replace(
+  /<application\b([^>]*)>/,
+  (full, attrs) => {
+    let next=attrs;
+    if(!/android:usesCleartextTraffic=/.test(next)) next+=' android:usesCleartextTraffic="false"';
+    if(!/android:hardwareAccelerated=/.test(next)) next+=' android:hardwareAccelerated="true"';
+    return '<application'+next+'>';
+  }
+);
+
 fs.writeFileSync(manifestPath,manifest);
 console.log("Ash Android native wake service patched.");
 

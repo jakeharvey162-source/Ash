@@ -76,3 +76,13 @@ Ash also exposes OpenJarvis indexed-memory search and confirmation-gated indexin
 inside the configured Ash workspace. The optional OpenJarvis runtime does not
 replace Ash's identity, cloud routing, live web research, device pairing, voice,
 computer-control policy or confirmation layer.
+
+
+## Compact Windows package
+
+The default Windows download is now deliberately a **core installer under 100 MB**. It contains the hologram companion and desktop worker, while large local inference bundles are not duplicated into every installation.
+
+- Web/native voice remains available through the Ash command center.
+- The optional Windows offline voice pack contains `faster-whisper`/CTranslate2 and can be placed beside `Ash.exe`.
+- OpenJarvis remains optional; normal cloud-assisted Ash, Builder, linking, schedules and the hologram do not require the local OpenJarvis package.
+- CI fails the Windows release if either the installer or portable ZIP grows beyond 100 MB.

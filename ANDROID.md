@@ -34,3 +34,20 @@ Ash has a connector registry. Built-in device connectors run through Capacitor. 
 ## Important Android limitation
 
 A normal Android app cannot silently control every other app. Deep cross-app UI automation requires Android AccessibilityService and explicit user enablement, and distribution through Google Play is subject to Play policy. Ash should therefore use official app intents/APIs first, and reserve accessibility automation for legitimate user-directed accessibility/automation workflows with clear disclosure and consent.
+
+
+## Mobile-size and UX target
+
+Ash Android is intentionally much smaller than the Windows desktop package. The CI pipeline now rejects debug or release APK/AAB artifacts above **25 MB**.
+
+The mobile UI uses:
+- display cutout / safe-area padding
+- 44–48 px minimum touch targets
+- a bottom navigation bar that clears gesture/navigation insets
+- 16 px form controls on phones to avoid browser/WebView zoom behavior
+- dynamic viewport height for keyboards and modern Android displays
+- `adjustResize` so the on-screen keyboard does not cover the composer
+- HTTPS-only WebView traffic
+- native Android speech recognition and the existing foreground wake service instead of bundling Whisper/CT2 into the APK
+
+The current Android CI artifact is already far below the Windows package size; the size gate prevents future dependencies from silently making the APK bloated.

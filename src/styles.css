@@ -894,3 +894,37 @@ html,body{overflow-y:auto!important}
 .desktopDownloadSection{position:relative;overflow:hidden}
 .desktopDownloadSection:after{content:"";position:absolute;right:-80px;top:-120px;width:280px;height:280px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 16%,transparent),transparent 68%);pointer-events:none}
 @media(max-width:720px){.heroActions{gap:10px;flex-wrap:wrap}.heroDownload{min-height:42px}.heroDownload small{display:none}}
+
+
+/* ----- Native mobile / Android ergonomics ----- */
+html,body,#app{min-height:100dvh}
+body{
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+button,a,input,textarea,select{touch-action:manipulation}
+@media(max-width:900px){
+  .workspace{
+    padding-left:max(11px,env(safe-area-inset-left));
+    padding-right:max(11px,env(safe-area-inset-right));
+    padding-bottom:calc(104px + env(safe-area-inset-bottom));
+  }
+  .mobileNav{
+    bottom:max(10px,env(safe-area-inset-bottom));
+    width:min(calc(100% - 20px - env(safe-area-inset-left) - env(safe-area-inset-right)),620px);
+  }
+  .mobileNav button{min-height:48px}
+  button,.primary,.secondary,.send,.themeToggle,.modeSwitch button{min-height:44px}
+}
+@media(max-width:650px){
+  input,textarea,select{font-size:16px}
+  .composer{bottom:calc(72px + env(safe-area-inset-bottom));padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  .feed{max-height:none;min-height:40dvh}
+  .card{border-radius:18px}
+  .voiceCore{min-height:auto;padding:16px}
+}
+@media(display-mode:standalone){
+  .toast{top:calc(10px + env(safe-area-inset-top))}
+}
