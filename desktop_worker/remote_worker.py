@@ -257,6 +257,9 @@ class AshRemoteWorker:
                     "evidence": built.details.get("evidence", []),
                     "completed_by": self.device_name,
                     "builder": True,
+                    "generation_mode": built.details.get("generation_mode", "unknown"),
+                    "degraded": built.details.get("degraded", True),
+                    "verification": built.details.get("verification", {}),
                 }
                 self.finish(job_id, ok=built.ok, result=result, error="" if built.ok else built.output)
             elif kind in {"computer_control", "computer", "desktop_control"} or payload.get("computer_control") is True:

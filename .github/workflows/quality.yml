@@ -22,6 +22,8 @@ jobs:
           python-version: "3.11"
       - name: Install web dependencies
         run: npm install --no-audit --no-fund
+      - name: Test browser builder
+        run: npm run test:builder
       - name: Build web app
         run: npm run build
       - name: Install desktop worker dependencies
