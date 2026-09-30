@@ -9,6 +9,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from local_scheduler import LocalScheduler
+
 
 @dataclass
 class RuntimeResult:
@@ -73,6 +75,7 @@ class AshAgentRuntime:
         ).resolve()
         self.workspace_root.mkdir(parents=True, exist_ok=True)
         self.tools = ToolRegistry()
+        self.scheduler = LocalScheduler()
         self._register_builtin_tools()
 
     def _register_builtin_tools(self) -> None:
@@ -117,6 +120,23 @@ class AshAgentRuntime:
             "ash.status",
             "Inspect local Ash backend health, memory and capability status.",
             self._tool_status,
+        ))
+        self.tools.register(ToolSpec(
+            "scheduler.list",
+            "List recurring tasks stored on this desktop.",
+            self._tool_scheduler_list,
+        ))
+        self.tools.register(ToolSpec(
+            "scheduler.create",
+            "Create a recurring local Ash task using an interval in minutes.",
+            self._tool_scheduler_create,
+            confirmation_required=True,
+        ))
+        self.tools.register(ToolSpec(
+            "scheduler.cancel",
+            "Cancel a recurring local Ash task by id.",
+            self._tool_scheduler_cancel,
+            confirmation_required=True,
         ))
 
     @staticmethod
@@ -229,6 +249,23 @@ class AshAgentRuntime:
             "workspace": str(self.workspace_root),
             "skills": bool(self.agent.kernel.skill_context("research debug build memory")),
         }
+
+    def _tool_scheduler_list(self, _args: dict[str, Any]) -> Any:
+        tasks = self.scheduler.list()
+        return {"tasks": tasks[:50]}
+
+    def _tool_scheduler_create(self, args: dict[str, Any]) -> Any:
+        return self.scheduler.create(
+            str(args.get("name") or "Ash task"),
+            str(args.get("prompt") or ""),
+            int(args.get("interval_minutes") or 0),
+        )
+
+    def _tool_scheduler_cancel(self, args: dict[str, Any]) -> Any:
+        task_id = str(args.get("task_id") or "").strip()
+        if not task_id:
+            raise ValueError("task_id is required.")
+        return {"cancelled": self.scheduler.cancel(task_id), "task_id": task_id}
 
     def _planner_prompt(self, request: str) -> str:
         tools = json.dumps(self.tools.descriptions(), ensure_ascii=False)
