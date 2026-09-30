@@ -39,14 +39,19 @@ SOFTWARE.
 
 ## OpenJarvis
 
-Ash's September 2026 desktop intelligence upgrade was informed by the modular
-routing, registry, local-memory and trace-oriented architecture in OpenJarvis:
+Ash's September 2026 desktop intelligence upgrade uses both an Ash-native
+integration layer inspired by OpenJarvis's modular architecture and an optional
+runtime bridge to the published OpenJarvis Python package:
 
 - Project: https://github.com/open-jarvis/OpenJarvis
+- Python package: OpenJarvis 1.0.3
 - License: Apache-2.0
-- Integration approach: Ash-specific implementation; the OpenJarvis Python
-  package is not vendored or required at runtime.
+- Ash bridge: desktop_worker/openjarvis_bridge.py
+- Optional dependency: desktop_worker/requirements-openjarvis.optional.txt
 
-The implementation keeps Ash's existing security model, device pairing,
-provider gateway, builder, computer-control confirmations and voice runtime
-rather than replacing them with OpenJarvis defaults.
+The Windows full-companion installer attempts to install the OpenJarvis
+specialist. Ash remains functional when that optional package cannot be
+installed. OpenJarvis is not granted unrestricted shell or computer-control
+authority by the Ash bridge. Ash keeps its own security model, device pairing,
+provider gateway, builder, confirmation gates, voice runtime and computer
+controller.

@@ -10,6 +10,10 @@ class CompanionContractTests(unittest.TestCase):
         self.assertNotIn("pyautogui",text)
         self.assertIn("ASH_COMPANION_VOICE",text)
         self.assertIn("-topmost",text)
+        self.assertIn("AshHologramCompanion",text)
+        self.assertIn("_draw_hologram",text)
+        self.assertIn("voice_runtime.runtime",text)
+        self.assertIn("remote_worker.py",text)
 
 if __name__=="__main__":
     unittest.main()

@@ -845,3 +845,42 @@ html,body{overflow-y:auto!important}
 @media(max-width:600px){.studioHeading{display:block}.studioHeading>.badge{display:inline-block;margin-top:12px}.studioActions button{flex-grow:1}.studioPreview{padding:0}.studioPreview.mobile iframe{width:360px;max-width:none}.studioToolbar label{width:100%;min-width:0}.studioPreview iframe{height:640px}}
 
 .studioWorkspace{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:20px 0}.studioWorkspace label{flex:1;min-width:180px}.studioWorkspace input,.studioWorkspace select{width:100%}.studioImport input{font-size:12px}
+
+
+/* ----- Ash hologram companion core ----- */
+.voiceCore{grid-template-columns:220px minmax(0,1fr) auto}
+.ashHoloBuddy{
+  width:205px;height:205px;position:relative;display:grid;place-items:center;
+  isolation:isolate;filter:drop-shadow(0 0 18px color-mix(in srgb,var(--accent) 20%,transparent))
+}
+.ashHoloBuddy:before{
+  content:"";position:absolute;left:50%;bottom:6px;width:150px;height:30px;transform:translateX(-50%);
+  border-radius:50%;background:radial-gradient(ellipse,color-mix(in srgb,var(--accent) 22%,transparent),transparent 68%);
+  filter:blur(3px);pointer-events:none
+}
+.ashHoloBuddy canvas{
+  position:absolute;inset:-34px -44px -38px -44px;width:293px;height:277px;
+  opacity:.98;filter:drop-shadow(0 0 18px color-mix(in srgb,var(--accent) 28%,transparent));pointer-events:none
+}
+.holoIdentity{
+  position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);
+  min-width:150px;padding:5px 8px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));
+  border-radius:999px;background:color-mix(in srgb,var(--surface-solid) 78%,transparent);
+  display:flex;align-items:center;justify-content:center;gap:6px;backdrop-filter:blur(10px);
+  color:var(--faint);font-size:.52rem;letter-spacing:.08em;white-space:nowrap
+}
+.holoIdentity i{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.core-listening .ashHoloBuddy,.core-speaking .ashHoloBuddy{filter:drop-shadow(0 0 24px color-mix(in srgb,var(--accent) 34%,transparent))}
+.core-thinking .ashHoloBuddy,.core-building .ashHoloBuddy,.core-acting .ashHoloBuddy{filter:drop-shadow(0 0 30px color-mix(in srgb,var(--accent) 38%,transparent))}
+@media(max-width:900px){
+  .voiceCore{grid-template-columns:170px 1fr}
+  .ashHoloBuddy{width:158px;height:170px}
+  .ashHoloBuddy canvas{inset:-28px -48px -32px -48px;width:254px;height:238px}
+  .holoIdentity{min-width:128px;font-size:.47rem}
+}
+@media(max-width:650px){
+  .voiceCore{grid-template-columns:1fr}
+  .ashHoloBuddy{width:190px;height:184px;margin:0 auto 4px}
+  .ashHoloBuddy canvas{inset:-34px -52px -35px -52px;width:294px;height:253px}
+  .holoIdentity{bottom:-6px}
+}

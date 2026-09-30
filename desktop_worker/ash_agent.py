@@ -15,6 +15,8 @@ import httpx
 from voice_runtime.claude_cli import ClaudeCodeBackend
 from offline_brain import AshOfflineBrain
 from agent_kernel import AgentKernel
+from agent_runtime import AshAgentRuntime
+from openjarvis_bridge import OpenJarvisBackend
 
 
 @dataclass
@@ -40,6 +42,8 @@ class AshPythonAgent:
         self.claude_backend = ClaudeCodeBackend() if self.claude_cli_enabled else None
         self.offline = AshOfflineBrain()
         self.kernel = AgentKernel()
+        self.runtime = AshAgentRuntime(self)
+        self.openjarvis = OpenJarvisBackend()
         self.timeout = httpx.Timeout(45.0, connect=6.0)
 
     def set_device_credentials(self, device_id: str, device_secret: str) -> None:
@@ -186,11 +190,17 @@ class AshPythonAgent:
         ]
         if self.claude_backend is not None:
             candidates.append(("claude_cli", lambda: self.claude_backend.process(prepared), 20.0))
+        if self.openjarvis.available:
+            candidates.append(("openjarvis", lambda: self.openjarvis.ask(prepared), 20.0))
         candidates.extend([
             ("ollama", lambda: self._local(prepared), 8.0),
             ("offline", lambda: self.offline.respond(prompt, mode=mode), 0.0),
         ])
         return self.kernel.route(prompt, candidates, action=action, mode=mode)
+
+    def run_agent(self, prompt: str, mode: str = "high", *, allow_side_effects: bool = False):
+        """Run Ash's bounded tool-using desktop agent."""
+        return self.runtime.run(prompt, mode=mode, allow_side_effects=allow_side_effects)
 
     def think_stream(self, prompt: str, mode: str = "high", on_narration=None) -> str:
         prepared = self.kernel.prepare_prompt(prompt, action="chat")
@@ -220,6 +230,22 @@ class AshPythonAgent:
                     mode=mode,
                     cooldown_seconds=20.0,
                 )
+            except Exception:
+                pass
+
+        if self.openjarvis.available:
+            try:
+                answer = self.kernel.invoke(
+                    "openjarvis",
+                    lambda: self.openjarvis.ask(prepared),
+                    prompt=prompt,
+                    action="chat",
+                    mode=mode,
+                    cooldown_seconds=20.0,
+                )
+                if on_narration:
+                    on_narration(answer)
+                return answer
             except Exception:
                 pass
 

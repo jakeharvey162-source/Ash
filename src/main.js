@@ -572,11 +572,9 @@ function voiceCore(){
   const localReady=devices.some(d=>d.capabilities?.local_ai||d.capabilities?.builder);
   const bars=Array.from({length:32},(_,i)=>`<i style="--bar:${i}"></i>`).join("");
   return `<section class="voiceCore card core-${coreState}" id="voiceCore" data-state="${coreState}">
-    <div class="reactor ashSphere" id="ashSphere">
+    <div class="reactor ashSphere ashHoloBuddy" id="ashSphere">
       <canvas id="ashCoreCanvas" width="420" height="420" aria-hidden="true"></canvas>
-      <div class="reactorRing ring1"></div><div class="reactorRing ring2"></div><div class="reactorRing ring3"></div>
-      <div class="reactorCore"><span>A</span></div>
-      <span class="coreOrbit orbitA"></span><span class="coreOrbit orbitB"></span><span class="coreOrbit orbitC"></span>
+      <div class="holoIdentity"><i></i><span>ASH / DESKTOP INTELLIGENCE</span></div>
     </div>
     <div class="voiceCoreCopy">
       <p class="kicker">ASH CORE / ${esc(coreState.toUpperCase())}</p>
@@ -997,30 +995,111 @@ function setVoiceState(active,synthetic=false){
 }
 function initAshCore(){
   const canvas=document.querySelector("#ashCoreCanvas");if(!canvas||canvas.dataset.ready)return;canvas.dataset.ready="1";
-  const lowPower=(navigator.deviceMemory&&navigator.deviceMemory<=4)||(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4);const mobile=window.innerWidth<650;const size=mobile?280:360;canvas.width=size;canvas.height=size;const ctx=canvas.getContext("2d",{alpha:true}),count=mobile?(lowPower?42:58):(lowPower?72:104);
-  const pts=Array.from({length:count},(_,i)=>{const a=Math.random()*Math.PI*2,z=Math.random()*2-1,r=Math.sqrt(1-z*z);return{a,z,r,seed:Math.random()*20,i}});
-  let frame=0,last=0;
+  const reduce=window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const lowPower=(navigator.deviceMemory&&navigator.deviceMemory<=4)||(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=4);
+  const mobile=window.innerWidth<650,size=mobile?300:380;canvas.width=size;canvas.height=size;
+  const ctx=canvas.getContext("2d",{alpha:true});if(!ctx)return;
+  const particles=Array.from({length:mobile?(lowPower?26:38):(lowPower?42:64)},()=>({
+    x:Math.random(),y:Math.random(),z:Math.random(),speed:.15+Math.random()*.6,seed:Math.random()*20
+  }));
+  let last=0,blinkAt=performance.now()+1800+Math.random()*2600,blink=0;
+  const stateColor=state=>({
+    idle:"#59e8ff",listening:"#55ffb3",thinking:"#ffd66b",building:"#53f6a6",
+    acting:"#9b8cff",speaking:"#63ebff",offline:"#b68cff"
+  }[state]||"#59e8ff");
+  const rgba=(hex,a)=>{
+    const h=hex.replace("#",""),n=parseInt(h,16);
+    return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+  };
+  const glowLine=(x1,y1,x2,y2,color,width=2)=>{
+    ctx.save();ctx.strokeStyle=rgba(color,.15);ctx.lineWidth=width+7;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.strokeStyle=rgba(color,.95);ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.restore();
+  };
   const draw=t=>{
     if(!canvas.isConnected)return;
     if(document.hidden){requestAnimationFrame(draw);return}
-    const minFrame=mobile||lowPower?33:22;if(t-last<minFrame){requestAnimationFrame(draw);return}last=t;frame++;
-    const w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,state=coreState;
-    const speed={idle:.0018,listening:.0035,thinking:.0055,building:.0048,acting:.006,speaking:.004,offline:.0024}[state]||.002;
-    const pulse=1+Math.sin(t*(state==="speaking"?.008:.003))*({idle:.02,listening:.05,thinking:.08,building:.07,acting:.09,speaking:.12,offline:.035}[state]||.03);
+    const minFrame=reduce?90:(mobile||lowPower?34:22);if(t-last<minFrame){requestAnimationFrame(draw);return}last=t;
+    const state=coreState,color=stateColor(state),w=canvas.width,h=canvas.height,cx=w*.5;
+    const speed=reduce?0:{idle:.0018,listening:.0036,thinking:.0048,building:.0042,acting:.0052,speaking:.0044,offline:.0022}[state]||.002;
+    const bob=reduce?0:Math.sin(t*.0019)*3.8,sway=reduce?0:Math.sin(t*.00115)*2.2;
+    const baseY=h*.86,headY=h*.18+bob,shoulderY=headY+h*.21,waistY=shoulderY+h*.25,x=cx+sway;
+    if(t>blinkAt&&blink<=0){blink=1;blinkAt=t+2200+Math.random()*3400}
+    const eyeScale=blink>0?Math.max(.08,Math.abs(.5-blink)*2):1;if(blink>0)blink-=.18;
+
     ctx.clearRect(0,0,w,h);
-    const accent=getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#f59e0b";
-    pts.forEach(p=>{
-      p.a+=speed*(.65+(p.i%7)/10);
-      const x3=p.r*Math.cos(p.a),y3=p.z,z3=p.r*Math.sin(p.a);
-      const persp=1/(1.55-z3*.5),rad=142*pulse*persp;
-      const x=cx+x3*rad,y=cy+y3*rad;
-      const alpha=.18+.72*((z3+1)/2),size=.75+2.2*((z3+1)/2);
-      ctx.globalAlpha=alpha;ctx.fillStyle=accent;ctx.beginPath();ctx.arc(x,y,size,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.globalCompositeOperation="lighter";
+
+    // hologram projection cone
+    const cone=ctx.createLinearGradient(x,headY,x,baseY);cone.addColorStop(0,rgba(color,.02));cone.addColorStop(.65,rgba(color,.045));cone.addColorStop(1,rgba(color,.18));
+    ctx.fillStyle=cone;ctx.beginPath();ctx.moveTo(x-34,headY+28);ctx.lineTo(x-86,baseY);ctx.lineTo(x+86,baseY);ctx.lineTo(x+34,headY+28);ctx.closePath();ctx.fill();
+
+    // base projector rings
+    for(let i=0;i<4;i++){
+      const p=(t*.00022*(i%2?1:-1)+i*.23)%1,rx=w*(.18+i*.025),ry=8+i*3;
+      ctx.strokeStyle=rgba(color,.16+i*.10);ctx.lineWidth=i===0?2:1;
+      ctx.beginPath();ctx.ellipse(x,baseY+i*4,rx,ry,p*Math.PI,0,Math.PI*2);ctx.stroke();
+    }
+
+    // rising particles
+    particles.forEach((p,i)=>{
+      if(!reduce){p.y-=p.speed*.0022*(state==="speaking"?1.7:1);if(p.y<0){p.y=1;p.x=Math.random();p.z=Math.random()}}
+      const px=x+(p.x-.5)*w*.42+Math.sin(t*.001+p.seed)*4,py=headY-12+p.y*(baseY-headY+20);
+      const r=.6+p.z*1.8;ctx.fillStyle=rgba(color,.18+p.z*.55);ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.fill();
     });
-    ctx.globalAlpha=.22;ctx.strokeStyle=accent;ctx.lineWidth=1.2;
-    for(let i=0;i<3;i++){ctx.beginPath();ctx.ellipse(cx,cy,118+i*18,48+i*8,t*.00015+i*.7,0,Math.PI*2);ctx.stroke()}
-    ctx.globalAlpha=1;requestAnimationFrame(draw);
-  };requestAnimationFrame(draw);
+
+    // head shell
+    ctx.shadowBlur=20;ctx.shadowColor=rgba(color,.75);ctx.strokeStyle=rgba(color,.9);ctx.lineWidth=2;
+    ctx.fillStyle=rgba(color,.055);ctx.beginPath();ctx.ellipse(x,headY+h*.085,w*.083,h*.091,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=rgba(color,.25);ctx.lineWidth=1;
+    ctx.beginPath();ctx.ellipse(x,headY+h*.085,w*.068,h*.078,0,0,Math.PI*2);ctx.stroke();
+
+    // neck, shoulders, torso
+    glowLine(x-11,headY+h*.16,x-14,shoulderY-12,color,1.5);glowLine(x+11,headY+h*.16,x+14,shoulderY-12,color,1.5);
+    const torso=[[x-42,shoulderY],[x-24,waistY],[x,waistY+16],[x+24,waistY],[x+42,shoulderY],[x+22,shoulderY-15],[x-22,shoulderY-15]];
+    ctx.fillStyle=rgba(color,.045);ctx.strokeStyle=rgba(color,.78);ctx.lineWidth=1.8;ctx.beginPath();
+    torso.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();ctx.fill();ctx.stroke();
+    glowLine(x-22,shoulderY-14,x,waistY+16,color,1);glowLine(x+22,shoulderY-14,x,waistY+16,color,1);
+
+    // arms and legs
+    glowLine(x-42,shoulderY,x-69,shoulderY+48,color,2.1);glowLine(x-69,shoulderY+48,x-58,waistY+36,color,2.1);
+    glowLine(x+42,shoulderY,x+69,shoulderY+48,color,2.1);glowLine(x+69,shoulderY+48,x+58,waistY+36,color,2.1);
+    glowLine(x-23,waistY+3,x-30,baseY-36,color,2.2);glowLine(x+23,waistY+3,x+30,baseY-36,color,2.2);
+
+    // joints
+    [[x-42,shoulderY],[x+42,shoulderY],[x-69,shoulderY+48],[x+69,shoulderY+48],[x-23,waistY+3],[x+23,waistY+3]].forEach(([jx,jy])=>{
+      ctx.fillStyle=rgba(color,.9);ctx.beginPath();ctx.arc(jx,jy,3,0,Math.PI*2);ctx.fill();
+    });
+
+    // face
+    const eyeY=headY+h*.085,eyeColor=rgba("#eaffff",.96);
+    [-1,1].forEach(dir=>{ctx.fillStyle=eyeColor;ctx.beginPath();ctx.ellipse(x+dir*w*.034,eyeY,6,4.5*eyeScale,0,0,Math.PI*2);ctx.fill()});
+    ctx.strokeStyle=eyeColor;ctx.lineWidth=1.4;ctx.beginPath();
+    const mouthY=eyeY+h*.045;
+    if(state==="speaking"){const m=3+Math.abs(Math.sin(t*.011))*5;ctx.ellipse(x,mouthY,11,m,0,0,Math.PI*2)}
+    else{ctx.moveTo(x-9,mouthY);ctx.quadraticCurveTo(x,mouthY+(state==="listening"?4:1),x+9,mouthY)}
+    ctx.stroke();
+
+    // chest reactor
+    const coreY=shoulderY+h*.095,coreR=9+(state==="speaking"||state==="listening"?Math.abs(Math.sin(t*.008))*4:Math.abs(Math.sin(t*.003))*2);
+    ctx.shadowBlur=28;ctx.shadowColor=color;ctx.fillStyle=rgba(color,.95);ctx.beginPath();ctx.arc(x,coreY,coreR,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#efffff";ctx.beginPath();ctx.arc(x,coreY,coreR*.35,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+
+    // body scanlines
+    ctx.strokeStyle=rgba(color,.17);ctx.lineWidth=1;const offset=(t*.035)%8;
+    for(let sy=headY+offset;sy<baseY-30;sy+=8){
+      const span=sy<shoulderY?32:sy<waistY?44:30;
+      ctx.beginPath();ctx.moveTo(x-span,sy);ctx.lineTo(x+span,sy);ctx.stroke();
+    }
+
+    // state halo
+    ctx.lineWidth=1.4;ctx.strokeStyle=rgba(color,.72);
+    ctx.beginPath();ctx.ellipse(x,headY+h*.085,w*.13,h*.035,t*.0005,0,Math.PI*1.35);ctx.stroke();
+    ctx.strokeStyle=rgba(color,.28);ctx.beginPath();ctx.ellipse(x,coreY,w*.17,h*.028,-t*.00035,0,Math.PI*2);ctx.stroke();
+
+    ctx.restore();requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
 }
 function animateWaveFromAnalyser(analyser,audio){
   const wave=document.querySelector("#voiceWave"),bars=[...document.querySelectorAll("#voiceWave i")];
