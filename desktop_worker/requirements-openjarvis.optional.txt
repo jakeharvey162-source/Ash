@@ -1,0 +1,3 @@
+# Optional advanced local agent stack integrated into Ash Desktop.
+# Apache-2.0 third-party package. Ash remains functional if this optional pack is absent.
+OpenJarvis==1.0.3
