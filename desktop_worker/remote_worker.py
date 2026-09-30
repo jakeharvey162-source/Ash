@@ -7,6 +7,7 @@ import pathlib
 import platform
 import socket
 import time
+import subprocess
 from typing import Any
 
 import httpx
@@ -14,6 +15,7 @@ import httpx
 from ash_agent import AshPythonAgent
 from local_scheduler import LocalScheduler
 from computer_control import AshComputerController, ComputerControlUnavailable
+from site_reference import capture_site_reference
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
 
@@ -32,6 +34,7 @@ class AshRemoteWorker:
         self.client = httpx.Client(timeout=httpx.Timeout(45.0, connect=8.0))
         self.agent = AshPythonAgent()
         self.local_scheduler = LocalScheduler()
+        self.preview_processes: dict[str, subprocess.Popen] = {}
         self.user_id = ""
         self.device_id = ""
         self.device_secret = ""
@@ -79,6 +82,9 @@ class AshRemoteWorker:
             "tool_orchestrator": True,
             "hologram_companion": True,
             "local_scheduler": True,
+            "website_reference": True,
+            "local_preview": True,
+            "admin_scaffold": True,
         }
 
     def broker(self, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -238,6 +244,75 @@ class AshRemoteWorker:
             "updated_at": now,
         })
 
+    def _start_local_preview(self, workspace: pathlib.Path, job_id: str) -> str:
+        package = workspace / "package.json"
+        if not package.exists():
+            return ""
+        try:
+            data = json.loads(package.read_text(encoding="utf-8"))
+            if not (data.get("scripts") or {}).get("preview"):
+                return ""
+        except Exception:
+            return ""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = int(sock.getsockname()[1])
+        command = ["npm", "run", "preview", "--", "--host", "127.0.0.1", "--port", str(port)]
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            proc = subprocess.Popen(
+                command,
+                cwd=str(workspace),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+            )
+            time.sleep(0.8)
+            if proc.poll() is not None:
+                return ""
+            old = self.preview_processes.pop(job_id, None)
+            if old and old.poll() is None:
+                old.terminate()
+            self.preview_processes[job_id] = proc
+            return f"http://127.0.0.1:{port}/"
+        except Exception:
+            return ""
+
+    def _builder_prompt(self, prompt: str, payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        parts = [prompt]
+        meta: dict[str, Any] = {}
+        reference_url = str(payload.get("reference_url") or "").strip()
+        authorized = payload.get("reference_authorized") is True
+        if reference_url:
+            try:
+                reference = capture_site_reference(reference_url, include_text=authorized)
+                meta["reference"] = {
+                    "url": reference.final_url,
+                    "authorized_text": authorized,
+                    "colors": reference.colors,
+                    "fonts": reference.fonts,
+                    "headings": reference.headings[:6],
+                }
+                parts.append(
+                    "\nWEBSITE DESIGN REFERENCE:\n"
+                    + reference.as_prompt_context(include_text=authorized)
+                    + "\nUse this only as a design/layout reference. "
+                    + ("The user confirmed they own or have permission to reproduce the referenced content, so close visual/content fidelity is allowed where technically possible. " if authorized else "Do not copy protected text, logos, images or source code; create an original implementation with similar high-level layout, spacing and visual language. ")
+                    + "Never claim pixel-perfect identity unless verified by screenshot comparison."
+                )
+            except Exception as exc:
+                meta["reference_error"] = str(exc)[:300]
+                parts.append("\nReference URL could not be inspected. Continue with an original design and do not pretend the reference was captured.")
+        if payload.get("create_admin") is True:
+            parts.append(
+                "\nADMIN REQUIREMENT:\nInclude a clearly separated admin area for managing the site's editable content. "
+                "For a standalone/local demo, use safe local persistence and label it as local-only. "
+                "For a backend-ready project, create an admin-ready data/service boundary without inventing credentials. "
+                "Include empty states, validation, edit/save/cancel flows and mobile responsiveness."
+            )
+            meta["admin_requested"] = True
+        return "\n".join(parts), meta
+
     def process(self, job: dict[str, Any]) -> None:
         job_id = str(job["id"])
         payload = job.get("payload") or {}
@@ -262,7 +337,12 @@ class AshRemoteWorker:
             self.emit("worker_task", state=task_state, kind=kind, label=prompt[:96])
             if kind in {"builder", "website", "app_builder"} or payload.get("builder") is True:
                 workspace = self.workspace_root / job_id
-                built = self.agent.build_fullstack(prompt, str(workspace))
+                effective_prompt, builder_meta = self._builder_prompt(prompt, payload)
+                built = self.agent.build_fullstack(effective_prompt, str(workspace))
+                preview_url = ""
+                verification = built.details.get("verification", {})
+                if built.ok and verification.get("build_passed") is True:
+                    preview_url = self._start_local_preview(workspace, job_id)
                 result = {
                     "summary": built.output,
                     "workspace": str(workspace),
@@ -273,7 +353,9 @@ class AshRemoteWorker:
                     "builder": True,
                     "generation_mode": built.details.get("generation_mode", "unknown"),
                     "degraded": built.details.get("degraded", True),
-                    "verification": built.details.get("verification", {}),
+                    "verification": verification,
+                    "preview_url": preview_url,
+                    "builder_meta": builder_meta,
                 }
                 self.finish(job_id, ok=built.ok, result=result, error="" if built.ok else built.output)
             elif kind in {"computer_control", "computer", "desktop_control"} or payload.get("computer_control") is True:

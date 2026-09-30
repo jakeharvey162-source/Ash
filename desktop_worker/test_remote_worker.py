@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from remote_worker import AshRemoteWorker
 
@@ -87,6 +88,30 @@ class RescueWorkerTests(unittest.TestCase):
             self.assertEqual(data["assistant_name"], "Orion")
             self.assertEqual(data["wake_word"], "Nova")
             self.assertEqual(data["wake_aliases"], ["sentinel", "computer"])
+
+    def test_builder_prompt_adds_admin_requirement(self):
+        worker = AshRemoteWorker.__new__(AshRemoteWorker)
+        prompt, meta = worker._builder_prompt("Build a site", {"create_admin": True})
+        self.assertIn("ADMIN REQUIREMENT", prompt)
+        self.assertTrue(meta["admin_requested"])
+
+    def test_builder_prompt_uses_reference_without_copying_unowned_content(self):
+        worker = AshRemoteWorker.__new__(AshRemoteWorker)
+        class Ref:
+            final_url = "https://example.com/"
+            colors = ["#fff"]
+            fonts = ["Inter"]
+            headings = ["Hello"]
+            def as_prompt_context(self, include_text=False):
+                return '{"colors":["#fff"]}'
+        with patch("remote_worker.capture_site_reference", return_value=Ref()) as capture:
+            prompt, meta = worker._builder_prompt("Build a site", {
+                "reference_url": "https://example.com",
+                "reference_authorized": False,
+            })
+        capture.assert_called_once_with("https://example.com", include_text=False)
+        self.assertIn("Do not copy protected text", prompt)
+        self.assertEqual(meta["reference"]["url"], "https://example.com/")
 
     def test_pairing_uses_broker(self):
         class FakeResponse:

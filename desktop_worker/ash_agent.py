@@ -471,6 +471,7 @@ createRoot(document.getElementById("root")).render(
         hero_title = str(content_plan.get("hero_title") or "Make the next move feel obvious.").strip()[:120]
         hero_summary = str(content_plan.get("hero_summary") or f"{brand} turns scattered work into a calm, deliberate flow—so attention stays on the decision, not the interface.").strip()[:320]
         primary_cta = str(content_plan.get("primary_cta") or f"Explore {brand}").strip()[:60]
+        admin_requested = "ADMIN REQUIREMENT:" in request or bool(re.search(r"\badmin(?: area| panel| dashboard)?\b", request, re.I))
         planned_features = content_plan.get("features") if isinstance(content_plan.get("features"), list) else []
         safe_features = []
         for item in planned_features[:3]:
@@ -617,6 +618,33 @@ export default function App() {{
   </div>;
 }}
 '''
+        if admin_requested:
+            app = app.replace(
+                '  const [dark, setDark] = useState(() => localStorage.getItem("theme") !== "light");',
+                '  const [dark, setDark] = useState(() => localStorage.getItem("theme") !== "light");\n'
+                '  const [adminOpen, setAdminOpen] = useState(false);\n'
+                '  const [siteCopy, setSiteCopy] = useState(() => { try { return JSON.parse(localStorage.getItem("site-copy") || "null") || {hero_title: ' + json.dumps(hero_title) + ', hero_summary: ' + json.dumps(hero_summary) + '}; } catch { return {hero_title: ' + json.dumps(hero_title) + ', hero_summary: ' + json.dumps(hero_summary) + '}; } });\n'
+                '  const [draftCopy, setDraftCopy] = useState(siteCopy);'
+            )
+            app = app.replace('<h1>{hero_title}</h1>', '<h1>{siteCopy.hero_title}</h1>')
+            app = app.replace('<p className="hero-copy">{hero_summary}</p>', '<p className="hero-copy">{siteCopy.hero_summary}</p>')
+            app = app.replace(
+                '<a className="button button-small" href="#start">Get started</a>',
+                '<button className="admin-trigger" onClick={() => { setDraftCopy(siteCopy); setAdminOpen(true); }}>Admin</button><a className="button button-small" href="#start">Get started</a>'
+            )
+            admin_panel = '''
+      {adminOpen && <section className="admin-shell" id="admin" aria-label="Local content admin">
+        <div className="admin-panel">
+          <div className="admin-head"><div><p className="micro">LOCAL ADMIN DEMO</p><h2>Edit homepage content</h2></div><button className="icon-button" onClick={() => setAdminOpen(false)} aria-label="Close admin">×</button></div>
+          <p className="admin-note">Changes are saved only in this browser. This demo is not cloud sync and has no production authentication.</p>
+          <label>Hero title<input value={draftCopy.hero_title} onChange={e => setDraftCopy({...draftCopy, hero_title:e.target.value})} maxLength="120" /></label>
+          <label>Hero summary<textarea rows="4" value={draftCopy.hero_summary} onChange={e => setDraftCopy({...draftCopy, hero_summary:e.target.value})} maxLength="320" /></label>
+          <div className="admin-actions"><button className="button ghost" onClick={() => { setDraftCopy(siteCopy); setAdminOpen(false); }}>Cancel</button><button className="button" onClick={() => { setSiteCopy(draftCopy); localStorage.setItem("site-copy", JSON.stringify(draftCopy)); setAdminOpen(false); }}>Save changes</button></div>
+        </div>
+      </section>}
+'''
+            app = app.replace('    </main>', admin_panel + '\n    </main>')
+
         css = """:root{
   --bg:#f4f1ea;--surface:#fbf9f4;--ink:#11110f;--muted:#6e6b64;--line:rgba(17,17,15,.13);
   --accent:#b84a2f;--dark:#171714;--radius:22px;--space:clamp(20px,4vw,64px);
@@ -637,6 +665,8 @@ export default function App() {{
 .cta{background:var(--accent);color:#fff;border-radius:var(--radius);padding:clamp(60px,9vw,110px);margin-bottom:50px}.cta .micro{color:rgba(255,255,255,.65)}.cta h2{font-family:Georgia,serif;font-size:clamp(52px,8vw,100px);font-weight:500;letter-spacing:-.055em;line-height:.88;margin:24px 0}.cta>p:not(.micro){max-width:500px;color:rgba(255,255,255,.76);font-size:18px;margin-bottom:34px}.footer{min-height:120px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:24px;color:var(--muted);font-size:13px}.footer .brand{color:var(--ink)}
 @media(max-width:800px){.nav nav{display:none}.section-head,.section-head.compact,.split,.faq{grid-template-columns:1fr}.section-head{align-items:start}.section-head>p:last-child{max-width:560px}.value-grid{grid-template-columns:1fr}.value-card,.value-card:not(:first-child){border-right:0;border-bottom:1px solid var(--line);padding:28px 0;min-height:auto}.value-card h3{margin:34px 0 10px}.frame-grid{grid-template-columns:1fr}.frame-grid aside{display:none}.plan-grid{grid-template-columns:1fr}.hero-actions{margin-bottom:52px}.cta{width:calc(100% - 28px)}}
 @media(max-width:520px){.shell{width:min(100% - 28px,1180px)}.nav{height:70px}.nav-actions .button-small{display:none}.hero{padding-top:64px}.hero h1{font-size:clamp(52px,17vw,78px)}.hero-actions{flex-direction:column}.frame-main{padding:27px 22px}.frame-main h2{margin-bottom:34px}.task-row{grid-template-columns:36px 1fr 20px}.section{padding:82px 0}.section-head{margin-bottom:42px}.plan{padding:30px;min-height:310px}.cta{padding:48px 26px}.footer{align-items:flex-start;flex-direction:column;padding:34px 0}}
+.admin-trigger{border:1px solid var(--line);background:transparent;color:var(--ink);padding:10px 14px;border-radius:999px;cursor:pointer}.admin-trigger:hover{border-color:var(--accent)}
+.admin-shell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.48);display:grid;place-items:center;padding:20px;backdrop-filter:blur(12px)}.admin-panel{width:min(680px,100%);max-height:88vh;overflow:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:24px;padding:28px;box-shadow:0 30px 100px rgba(0,0,0,.3)}.admin-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.admin-head h2{font-family:Georgia,serif;font-size:36px;font-weight:500;margin:8px 0 18px}.admin-note{color:var(--muted);font-size:13px}.admin-panel label{display:grid;gap:8px;font-weight:650;margin-top:18px}.admin-panel input,.admin-panel textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:14px;padding:13px 14px;font:inherit}.admin-panel input:focus,.admin-panel textarea:focus{outline:2px solid var(--accent);outline-offset:2px}.admin-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 """
         # A full fallback replaces partial/invalid generated output rather than mixing incompatible files.
