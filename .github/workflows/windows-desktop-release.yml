@@ -99,6 +99,8 @@ jobs:
           if (!$iscc) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
           & $iscc "/DSourceDir=$source" "/DOutputDir=$output" "/DMyAppVersion=$version" "desktop_worker/windows/Ash.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $versioned = Get-ChildItem release/AshDesktopSetup-*.exe | Select-Object -First 1
+          Copy-Item $versioned.FullName release/AshDesktopSetup.exe -Force
 
       - name: Generate checksums
         shell: pwsh
@@ -115,6 +117,7 @@ jobs:
           name: Ash-Desktop-Windows
           path: |
             release/AshDesktopSetup-*.exe
+            release/AshDesktopSetup.exe
             release/AshDesktop-portable.zip
             release/SHA256SUMS.txt
           if-no-files-found: error
@@ -126,4 +129,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" release/AshDesktopSetup-*.exe release/AshDesktop-portable.zip release/SHA256SUMS.txt --title "Ash Desktop ${{ github.ref_name }}" --generate-notes
+          @"
+          # Ash Desktop ${{ github.ref_name }}
+
+          Download **AshDesktopSetup.exe** for the normal Windows install.
+          The portable ZIP is for advanced users who do not want an installer.
+
+          The release workflow smoke-tests the packaged hologram, worker and voice executables before publishing and includes SHA-256 checksums.
+          "@ | Set-Content -Encoding UTF8 release/RELEASE-NOTES.md
+          gh release create "${{ github.ref_name }}" release/AshDesktopSetup.exe release/AshDesktop-portable.zip release/SHA256SUMS.txt --title "Ash Desktop ${{ github.ref_name }}" --notes-file release/RELEASE-NOTES.md
