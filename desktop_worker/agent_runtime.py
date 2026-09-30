@@ -225,6 +225,7 @@ class AshAgentRuntime:
         return {
             "routing": self.agent.kernel.health_snapshot(),
             "offline": self.agent.offline.status().__dict__,
+            "openjarvis": self.agent.openjarvis.status() if hasattr(self.agent, "openjarvis") else {"available": False},
             "workspace": str(self.workspace_root),
             "skills": bool(self.agent.kernel.skill_context("research debug build memory")),
         }
