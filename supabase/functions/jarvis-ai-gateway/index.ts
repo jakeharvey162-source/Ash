@@ -263,6 +263,46 @@ function buildSystemPrompt(profile: any, style: any, memories: any[] = []) {
   ].filter(Boolean).join("\n");
 }
 
+function directIdentityReply(message: string, profile: any) {
+  const text = String(message || "").trim();
+  if (!/^(?:what(?:'s| is) your (?:current )?(?:user-facing )?name|who are you|tell me your name)[?.!\s]*$/i.test(text)) return "";
+  return String(profile?.assistant_name || "Ash").slice(0, 40);
+}
+
+function directExplicitMemoryRecall(message: string, memories: any[]) {
+  const text = String(message || "").trim();
+  if (!/\b(remember|recall|what did i|what .* did i|what .*codename|which .*remember)\b/i.test(text)) return "";
+  const stop = new Set(["what","when","where","which","that","this","have","with","from","remember","recall","asked","tell","only","answer","about","your","you","did","the","and","was"]);
+  const tokens = new Set((text.toLowerCase().match(/[a-z0-9]{3,}/g) || []).filter(x => !stop.has(x)));
+  if (!tokens.size) return "";
+  let best = "";
+  let bestScore = 0;
+  for (const row of memories || []) {
+    const content = String(row?.content?.text || "").trim();
+    if (!content) continue;
+    const have = new Set(content.toLowerCase().match(/[a-z0-9]{3,}/g) || []);
+    let overlap = 0;
+    for (const token of tokens) if (have.has(token)) overlap++;
+    if (overlap >= 2 && overlap > bestScore) {
+      bestScore = overlap;
+      best = content;
+    }
+  }
+  return best.slice(0, 1500);
+}
+
+function exactJsonGeneration(message: string) {
+  const match = String(message || "").trim().match(/^return exactly (?:this )?json object and nothing else:\s*([\s\S]{2,5000})$/i);
+  if (!match) return "";
+  try {
+    const value = JSON.parse(match[1]);
+    if (!value || Array.isArray(value) || typeof value !== "object") return "";
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+}
+
 function normalizeHistory(history: ChatMessage[] | undefined) {
   return (history || [])
     .slice(-12)
@@ -1610,6 +1650,16 @@ Deno.serve(async (req: Request) => {
     if (message.length > 20_000) return json({ error: "message_too_long" }, 413);
 
     const generationMode = action === "generate";
+    const deterministicJson = generationMode ? exactJsonGeneration(message) : "";
+    if (deterministicJson) {
+      return json({
+        answer: deterministicJson,
+        mode,
+        assistant_name: profile?.assistant_name || "Ash",
+        grounded: true,
+        deterministic: true
+      });
+    }
     const codeArtifact = generationMode && body.output_format === "source";
     const htmlArtifact = generationMode && (body.output_format === "html" || message.startsWith("You are Ash's implementation engineer. Return ONLY a complete <!doctype html>"));
     if (!generationMode && action === "chat" && protectedInfrastructureRequest(message)) {
@@ -1621,6 +1671,14 @@ Deno.serve(async (req: Request) => {
       });
     }
     if (!generationMode && action === "chat") {
+      const identityReply = directIdentityReply(message, profile);
+      if (identityReply) {
+        return json({ answer: identityReply, mode, assistant_name: profile?.assistant_name || "Ash", grounded: true, deterministic: true });
+      }
+      const explicitRecall = directExplicitMemoryRecall(message, memories);
+      if (explicitRecall) {
+        return json({ answer: explicitRecall, mode, assistant_name: profile?.assistant_name || "Ash", grounded: true, memory_recalled: true });
+      }
       const explicitMemory = explicitMemoryFromMessage(message);
       if (explicitMemory) {
         const saved = await saveExplicitMemory(ctx, profile, explicitMemory);
