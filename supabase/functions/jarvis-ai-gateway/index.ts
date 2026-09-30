@@ -1031,7 +1031,7 @@ async function webResearch(system: string, message: string, mode: Mode) {
   routes.push(duckDuckGoResearch(researchSystem, message, mode, researchedAt));
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
-  if (geminiKey) {
+  if (!raw && geminiKey) {
     routes.push((async () => {
       const model = Deno.env.get("GEMINI_RESEARCH_MODEL") || "gemini-3.8-flash";
       const response = await providerFetch(
