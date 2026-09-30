@@ -39,7 +39,7 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --name Ash --paths desktop_worker desktop_worker/companion_overlay.py
           pyinstaller --noconfirm --clean --onefile --console --name AshWorker --paths desktop_worker --collect-all openjarvis desktop_worker/worker_entry.py
-          pyinstaller --noconfirm --clean --onefile --console --name AshVoice --paths desktop_worker --collect-all faster_whisper --collect-all ctranslate2 desktop_worker/voice_entry.py
+          pyinstaller --noconfirm --clean --onefile --console --name AshVoice --paths desktop_worker --collect-all faster_whisper --collect-all ctranslate2 --collect-all sounddevice desktop_worker/voice_entry.py
 
       - name: Smoke-test packaged binaries
         shell: pwsh
@@ -47,6 +47,12 @@ jobs:
           if (!(Test-Path dist/Ash.exe)) { throw "Ash.exe missing" }
           if (!(Test-Path dist/AshWorker.exe)) { throw "AshWorker.exe missing" }
           if (!(Test-Path dist/AshVoice.exe)) { throw "AshVoice.exe missing" }
+          & dist/Ash.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "Ash.exe self-test failed" }
+          & dist/AshWorker.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "AshWorker.exe self-test failed" }
+          & dist/AshVoice.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "AshVoice.exe self-test failed" }
           $env:PYTHONPATH="desktop_worker"
           python -m unittest desktop_worker/test_companion.py desktop_worker/test_agent_runtime.py desktop_worker/test_openjarvis_bridge.py
 
