@@ -1354,6 +1354,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     "Rules:",
     "- Maximum 4 actions.",
     "- Coordinates are pixels within " + screenWidth + "x" + screenHeight + ".",
+    "- For click or double-click targets, aim near the visual center of the target with a clear margin from its edges; never intentionally click the border.",
     "- Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
     "- Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
     "- If a sensitive/manual step is required, return done=true with a summary asking the user to do that step.",
