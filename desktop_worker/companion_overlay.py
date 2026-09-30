@@ -343,13 +343,34 @@ class AshHologramCompanion:
                 args,
                 cwd=str(ROOT),
                 creationflags=flags,
-                stdout=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
             )
             self.worker_online = True
+            threading.Thread(target=self._read_worker_events, daemon=True).start()
         except Exception:
             self.worker = None
             self.worker_online = False
+
+    def _read_worker_events(self) -> None:
+        proc = self.worker
+        if not proc or not proc.stdout:
+            return
+        for raw in proc.stdout:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                event = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(event, dict):
+                event.setdefault("source", "worker")
+                self.events.put(event)
 
     def _restart_worker(self) -> None:
         self.last_text = "Restarting desktop worker…"
@@ -446,6 +467,43 @@ class AshHologramCompanion:
 
     def _handle_event(self, event: dict) -> None:
         typ = str(event.get("type") or "")
+        source = str(event.get("source") or "voice")
+        if source == "worker":
+            if typ == "worker_ready":
+                self.worker_online = True
+                self.state = "idle"
+                self.last_text = "Desktop agent online."
+                caps = event.get("capabilities") if isinstance(event.get("capabilities"), dict) else {}
+                active = [k.replace("_", " ") for k, v in caps.items() if v is True]
+                self.detail = (" · ".join(active[:4]) or "Local tools are ready.")[:96]
+                return
+            if typ == "worker_task":
+                state = str(event.get("state") or "thinking")
+                self.state = state if state in self.STATE else "thinking"
+                label = str(event.get("label") or "").strip()
+                self.last_text = label[:96] or "Working on it."
+                self.detail = "Ash desktop agent is executing this task."
+                return
+            if typ == "worker_done":
+                self.state = "idle"
+                self.last_text = "Desktop task finished."
+                self.detail = "Ready for your next command."
+                return
+            if typ == "worker_error":
+                self.state = "error"
+                self.last_text = "Desktop task needs attention."
+                self.detail = str(event.get("message") or "A local task failed.")[:96]
+                return
+            if typ == "schedule_task":
+                self.state = "thinking"
+                self.last_text = str(event.get("label") or "Scheduled task")[:96]
+                self.detail = "Running a local Ash automation."
+                return
+            if typ == "schedule_done":
+                self.state = "idle" if event.get("ok") else "error"
+                self.last_text = "Scheduled task complete." if event.get("ok") else "Scheduled task needs attention."
+                self.detail = "Ash local scheduler finished this run."
+                return
         if typ in {"boot", "warming_up"}:
             self.state = "thinking"
             self.last_text = "Warming up local systems…"
