@@ -95,3 +95,11 @@ test('preview iframe never grants generated code same-origin access',()=>{
   assert.match(studio.view(),/sandbox="allow-scripts allow-downloads"/);
   assert.ok(!studio.view().includes('allow-same-origin'));
 });
+
+const {completeHTMLArtifact}=await import('../supabase/functions/jarvis-ai-gateway/artifact-validation.js');
+test('backend rejects truncated code and preserves complete code verbatim',()=>{
+  assert.equal(completeHTMLArtifact(html),html);
+  assert.equal(completeHTMLArtifact('<think>reasoning</think>\n```html\n'+html+'\n```'),html);
+  assert.throws(()=>completeHTMLArtifact(html.slice(0,-20)),/incomplete_html_artifact/);
+  assert.throws(()=>completeHTMLArtifact('Here is your website:\n'+html),/incomplete_html_artifact/);
+});

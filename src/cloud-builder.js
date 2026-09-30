@@ -91,7 +91,7 @@ export function activeRevision(project) {
 
 export async function generateArtifact({ request, previous = '', repair = '', fetcher, signal }) {
   const message = generationPrompt(request, previous, repair);
-  const response = await fetcher({ action: 'generate', message, mode: 'high', history: [] }, signal);
+  const response = await fetcher({ action: 'generate', output_format: 'html', message, mode: 'high', history: [] }, signal);
   const data = await response.json();
   if (!response.ok) throw new Error(response.status===401 ? 'Your session expired. Sign in again.' : data.error || `Generation failed (${response.status}). Your previous revision is safe.`);
   return normalizeArtifact(data.answer);

@@ -1,10 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { completeHTMLArtifact } from "./artifact-validation.js";
 
 type Mode = "instant" | "medium" | "high";
 type ChatMessage = { role?: string; content?: string };
 type ChatBody = {
   action?: "chat" | "generate" | "speech" | "research" | "voices" | "computer_plan";
   message?: string;
+  output_format?: "html";
   mode?: Mode;
   history?: ChatMessage[];
   text?: string;
@@ -330,9 +332,9 @@ async function askGroq(system: string, message: string, history: ChatMessage[], 
           model,
           messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          max_tokens: generation ? 2600 : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
+          max_tokens: generation ? (system.includes("Internal HTML artifact mode:") ? 6500 : 2600) : (mode === "instant" ? 800 : mode === "high" ? 3200 : 1500)
         })
-      }, generation ? 28000 : (model.includes("120b") ? 4500 : 5500));
+      }, generation ? (system.includes("Internal HTML artifact mode:") ? 45000 : 28000) : (model.includes("120b") ? 4500 : 5500));
       if (!response.ok) {
         lastError = "route_failed_" + response.status;
         continue;
@@ -373,11 +375,11 @@ async function askGemini(system: string, message: string, history: ChatMessage[]
         contents,
         generationConfig: {
           temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-          maxOutputTokens: generation ? 2800 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500)
+          maxOutputTokens: generation ? (system.includes("Internal HTML artifact mode:") ? 6500 : 2800) : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500)
         }
       })
     },
-    generation ? 28000 : 6000
+    generation ? (system.includes("Internal HTML artifact mode:") ? 45000 : 28000) : 6000
   );
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
@@ -400,9 +402,9 @@ async function askOpenRouter(system: string, message: string, history: ChatMessa
       model,
       messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
       temperature: mode === "instant" ? 0.2 : mode === "high" ? 0.35 : 0.3,
-      max_tokens: generation ? 2800 : (mode === "instant" ? 1200 : mode === "high" ? 3600 : 2200)
+      max_tokens: generation ? (system.includes("Internal HTML artifact mode:") ? 6500 : 2800) : (mode === "instant" ? 1200 : mode === "high" ? 3600 : 2200)
     })
-  }, generation ? 28000 : 6500);
+  }, generation ? (system.includes("Internal HTML artifact mode:") ? 45000 : 28000) : 6500);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return data?.choices?.[0]?.message?.content || "";
@@ -426,10 +428,10 @@ async function askAnthropic(system: string, message: string, history: ChatMessag
     body: JSON.stringify({
       model,
       system,
-      max_tokens: generation ? 2800 : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
+      max_tokens: generation ? (system.includes("Internal HTML artifact mode:") ? 6500 : 2800) : (mode === "instant" ? 1400 : mode === "high" ? 4000 : 2500),
       messages: [...history, { role: "user", content: message }]
     })
-  }, generation ? 30000 : 8000);
+  }, generation ? (system.includes("Internal HTML artifact mode:") ? 45000 : 30000) : 8000);
   if (!response.ok) throw new Error("route_failed");
   const data = await response.json();
   return (data?.content || []).map((part: any) => part?.text || "").join("");
@@ -461,9 +463,9 @@ async function askNvidia(system: string, message: string, history: ChatMessage[]
           messages: [{ role: "system", content: system }, ...history, { role: "user", content: message }],
           temperature: mode === "instant" ? 0.2 : 0.3,
           top_p: 0.95,
-          max_tokens: generation ? 2800 : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
+          max_tokens: generation ? (system.includes("Internal HTML artifact mode:") ? 6500 : 2800) : (mode === "instant" ? 1000 : mode === "high" ? 3000 : 2000)
         })
-      }, generation ? 28000 : 7000);
+      }, generation ? (system.includes("Internal HTML artifact mode:") ? 45000 : 28000) : 7000);
       if (!response.ok) {
         lastError = "route_failed_" + response.status;
         console.warn("ash_nvidia_text_failed", response.status, model);
@@ -509,17 +511,20 @@ async function firstUsefulAnswer(
   message: string,
   history: ChatMessage[],
   mode: Mode,
-  timeoutMs = 4200
+  timeoutMs = 4200,
+  validate?: (answer: string) => string
 ) {
   const attempts = routes.map(async route => {
     const answer = String(await route(system, message, history, mode) || "").trim();
     if (!answer) throw new Error("route_empty");
-    return answer;
+    return validate ? validate(answer) : answer;
   });
+  let timeoutId: ReturnType<typeof setTimeout>;
   const timeout = new Promise<string>((_resolve, reject) =>
-    setTimeout(() => reject(new Error("route_budget_exhausted")), timeoutMs)
+    { timeoutId = setTimeout(() => reject(new Error("route_budget_exhausted")), timeoutMs); }
   );
-  return await Promise.race([Promise.any(attempts), timeout]);
+  try { return await Promise.race([Promise.any(attempts), timeout]); }
+  finally { clearTimeout(timeoutId!); }
 }
 
 async function askHighEnsemble(system: string, message: string, history: ChatMessage[]) {
@@ -1567,6 +1572,7 @@ Deno.serve(async (req: Request) => {
     if (message.length > 20_000) return json({ error: "message_too_long" }, 413);
 
     const generationMode = action === "generate";
+    const htmlArtifact = generationMode && (body.output_format === "html" || message.startsWith("You are Ash's implementation engineer. Return ONLY a complete <!doctype html>"));
     if (!generationMode && action === "chat" && protectedInfrastructureRequest(message)) {
       return json({
         answer: "I can’t disclose private provider routing, credentials, hidden infrastructure, or system configuration.",
@@ -1591,7 +1597,7 @@ Deno.serve(async (req: Request) => {
         return json({ error: "memory_save_failed" }, 503);
       }
     }
-    const system = buildSystemPrompt(profile, style, memories) + (generationMode ? "\nInternal generation mode: do not browse or research. Follow requested output format exactly. Return code, JSON, or requested content directly without meta commentary." : "");
+    const system = buildSystemPrompt(profile, style, memories) + (generationMode ? "\nInternal generation mode: do not browse or research. Follow requested output format exactly. Return code, JSON, or requested content directly without meta commentary." : "") + (htmlArtifact ? "\nInternal HTML artifact mode: return a complete standalone HTML document. Finish every script and close body/html. Compact code and complete functionality take priority over length. No external dependencies." : "");
     const history = normalizeHistory(body.history);
 
     if (!generationMode && integrationIntent(message)) {
@@ -1686,11 +1692,11 @@ Deno.serve(async (req: Request) => {
         : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const routeBudgetMs = generationMode ? 50000 : (mode === "instant" ? 3600 : 4300);
-      const answer = await firstUsefulAnswer(generationMode ? routes : routes.slice(0, 5), system, message, history, mode, routeBudgetMs);
+      const routeBudgetMs = htmlArtifact ? 95000 : generationMode ? 50000 : (mode === "instant" ? 3600 : 4300);
+      const answer = await firstUsefulAnswer(generationMode ? routes : routes.slice(0, 5), system, message, history, mode, routeBudgetMs, htmlArtifact ? completeHTMLArtifact : undefined);
       if (answer) {
         learnStyle(ctx, message, profile);
-        return json({ answer: cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
+        return json({ answer: htmlArtifact ? answer : cleanModelAnswer(answer), mode, assistant_name: profile?.assistant_name || "Ash", grounded: false });
       }
     } catch {}
     return json({ error: "Cloud intelligence is temporarily unavailable." }, 503);
