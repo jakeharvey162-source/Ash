@@ -78,6 +78,39 @@ class BuilderSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch.object(agent, "think_json", side_effect=responses), patch.object(agent, "think", side_effect=AssertionError("QA must not depend on a model")), patch.object(agent, "_run", side_effect=run), patch.object(agent, "_write_verified_fallback_site", side_effect=renderer):
             return agent.build_fullstack("Build a task management app", tmp)
 
+    def test_saas_marketing_request_uses_planned_renderer_without_raw_source(self):
+        plan = {
+            "name": "LumaFlow",
+            "files": [{"path": "src/App.jsx", "purpose": "marketing UI"}],
+            "content": {
+                "hero_title": "Focus without friction",
+                "hero_summary": "A calm productivity workspace.",
+                "primary_cta": "Start free",
+                "features": [
+                    {"title": "Plan", "body": "Prioritize work."},
+                    {"title": "Focus", "body": "Reduce noise."},
+                    {"title": "Review", "body": "See progress."},
+                ],
+            },
+        }
+        def renderer(root, request, plan=None):
+            (root / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
+            return ["package.json"]
+
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(self.agent, "think_json", return_value=plan), \
+             patch.object(self.agent, "_generate_source", side_effect=AssertionError("SaaS marketing should use the planned renderer")), \
+             patch.object(self.agent, "_write_verified_fallback_site", side_effect=renderer), \
+             patch.object(self.agent, "_run", side_effect=[
+                 subprocess.CompletedProcess(["npm","install"], 0, "", ""),
+                 subprocess.CompletedProcess(["npm","run","build"], 0, "", ""),
+             ]):
+            result = self.agent.build_fullstack("Build a premium productivity SaaS with pricing and FAQ", tmp)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.details["generation_mode"], "planned_renderer")
+        self.assertFalse(result.details["degraded"])
+
     def test_success_reports_only_verified_build(self):
         result = self.run_build_case(iter([0, 0]))
         self.assertTrue(result.ok)
