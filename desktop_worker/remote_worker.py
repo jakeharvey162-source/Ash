@@ -67,6 +67,9 @@ class AshRemoteWorker:
             "voice_runtime": True,
             "computer_control": os.environ.get("ASH_COMPUTER_CONTROL", "").strip().lower() in {"1", "true", "yes", "on"},
             "screen_vision": True,
+            "adaptive_routing": True,
+            "local_skills": True,
+            "fts_memory": True,
         }
 
     def broker(self, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
