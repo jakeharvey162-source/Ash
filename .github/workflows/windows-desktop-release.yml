@@ -122,15 +122,18 @@ jobs:
           $limit = 100MB
           $installer = Get-Item release/AshDesktopSetup.exe
           $portable = Get-Item release/AshDesktop-portable.zip
+          $publishedTotal = $installer.Length + $portable.Length
           Write-Host ("Installer: {0:N1} MB" -f ($installer.Length / 1MB))
           Write-Host ("Portable:  {0:N1} MB" -f ($portable.Length / 1MB))
+          Write-Host ("Published payload: {0:N1} MB" -f ($publishedTotal / 1MB))
           if ($installer.Length -gt $limit) { throw "AshDesktopSetup.exe exceeds the 100 MB compact-release limit." }
           if ($portable.Length -gt $limit) { throw "AshDesktop-portable.zip exceeds the 100 MB compact-release limit." }
+          if ($publishedTotal -gt $limit) { throw "Combined published Windows payload exceeds the 100 MB compact-release limit." }
 
       - name: Generate checksums
         shell: pwsh
         run: |
-          Get-ChildItem release -File | Where-Object { $_.Extension -in ".exe",".zip" } | ForEach-Object {
+          Get-Item release/AshDesktopSetup.exe,release/AshDesktop-portable.zip | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)" | Add-Content release/SHA256SUMS.txt
           }
@@ -141,7 +144,6 @@ jobs:
         with:
           name: Ash-Desktop-Windows
           path: |
-            release/AshDesktopSetup-*.exe
             release/AshDesktopSetup.exe
             release/AshDesktop-portable.zip
             release/SHA256SUMS.txt
