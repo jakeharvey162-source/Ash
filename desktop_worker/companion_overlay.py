@@ -874,7 +874,13 @@ def main() -> int:
     parser.add_argument("--no-worker", action="store_true", help="Do not start the paired desktop worker")
     parser.add_argument("--no-voice", action="store_true", help="Do not start the always-on voice runtime")
     parser.add_argument("--compact", action="store_true", help="Start in compact hologram-only mode")
+    parser.add_argument("--self-test", action="store_true", help="Validate packaged companion imports and exit")
     args = parser.parse_args()
+    if args.self_test:
+        assert "idle" in AshHologramCompanion.STATE
+        assert callable(getattr(AshHologramCompanion, "_worker_command", None))
+        assert callable(getattr(AshHologramCompanion, "_voice_command", None))
+        return 0
     AshHologramCompanion(
         pair_code=args.pair,
         start_worker=not args.no_worker,
