@@ -1,0 +1,121 @@
+name: Windows Desktop Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ash-windows-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install desktop build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r desktop_worker/requirements.txt
+          pip install -r desktop_worker/requirements-voice.optional.txt
+          pip install -r desktop_worker/requirements-openjarvis.optional.txt
+          pip install "pyinstaller>=6.16,<7"
+
+      - name: Build Ash desktop executables
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name Ash --paths desktop_worker desktop_worker/companion_overlay.py
+          pyinstaller --noconfirm --clean --onefile --console --name AshWorker --paths desktop_worker --collect-all openjarvis desktop_worker/worker_entry.py
+          pyinstaller --noconfirm --clean --onefile --console --name AshVoice --paths desktop_worker --collect-all faster_whisper --collect-all ctranslate2 desktop_worker/voice_entry.py
+
+      - name: Smoke-test packaged binaries
+        shell: pwsh
+        run: |
+          if (!(Test-Path dist/Ash.exe)) { throw "Ash.exe missing" }
+          if (!(Test-Path dist/AshWorker.exe)) { throw "AshWorker.exe missing" }
+          if (!(Test-Path dist/AshVoice.exe)) { throw "AshVoice.exe missing" }
+          $env:PYTHONPATH="desktop_worker"
+          python -m unittest desktop_worker/test_companion.py desktop_worker/test_agent_runtime.py desktop_worker/test_openjarvis_bridge.py
+
+      - name: Stage desktop package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/AshDesktop | Out-Null
+          Copy-Item dist/Ash.exe release/AshDesktop/
+          Copy-Item dist/AshWorker.exe release/AshDesktop/
+          Copy-Item dist/AshVoice.exe release/AshDesktop/
+          Copy-Item LICENSE release/AshDesktop/
+          Copy-Item desktop_worker/COMPANION.md release/AshDesktop/
+          Copy-Item desktop_worker/THIRD_PARTY_NOTICES.md release/AshDesktop/
+          @"
+          ASH DESKTOP
+
+          1. Run Ash.exe.
+          2. On first launch, Ash asks you to link this computer.
+          3. In the Ash web app open Preferences -> Linked computers -> Link a computer.
+          4. Paste the one-time code into the hologram.
+          5. Say "Ash" after voice setup finishes, or press Ctrl+Alt+A to summon the hologram.
+
+          Ash uses a visible confirmation boundary for local writes, code execution and protected computer-control actions.
+          "@ | Set-Content -Encoding UTF8 release/AshDesktop/START-HERE.txt
+          Compress-Archive -Path release/AshDesktop/* -DestinationPath release/AshDesktop-portable.zip -Force
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $version = "0.2.${{ github.run_number }}"
+          }
+          $source = (Resolve-Path "release/AshDesktop").Path
+          $output = (Resolve-Path "release").Path
+          $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          if (!$iscc) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DSourceDir=$source" "/DOutputDir=$output" "/DMyAppVersion=$version" "desktop_worker/windows/Ash.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem release -File | Where-Object { $_.Extension -in ".exe",".zip" } | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Add-Content release/SHA256SUMS.txt
+          }
+          Get-Content release/SHA256SUMS.txt
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ash-Desktop-Windows
+          path: |
+            release/AshDesktopSetup-*.exe
+            release/AshDesktop-portable.zip
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" release/AshDesktopSetup-*.exe release/AshDesktop-portable.zip release/SHA256SUMS.txt --title "Ash Desktop ${{ github.ref_name }}" --generate-notes

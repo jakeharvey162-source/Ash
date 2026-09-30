@@ -37,6 +37,8 @@ jobs:
           python -m py_compile desktop_worker/ash_agent.py
           python -m py_compile desktop_worker/offline_brain.py
           python -m py_compile desktop_worker/remote_worker.py
+          python -m py_compile desktop_worker/worker_entry.py
+          python -m py_compile desktop_worker/voice_entry.py
           python -m py_compile desktop_worker/ash_companion.py
           python -m py_compile desktop_worker/companion_overlay.py
           python -m py_compile desktop_worker/computer_control.py

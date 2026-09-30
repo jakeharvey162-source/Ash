@@ -7,14 +7,17 @@ import os
 import pathlib
 import queue
 import random
+import re
 import subprocess
 import sys
 import threading
 import time
 import tkinter as tk
+from tkinter import messagebox, simpledialog
 import webbrowser
 
 ROOT = pathlib.Path(__file__).resolve().parent
+APP_DIR = pathlib.Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else ROOT
 ASH_URL = os.environ.get("ASH_APP_URL", "https://meet-ash.jakeharvey162.workers.dev/")
 
 
@@ -219,7 +222,12 @@ class AshHologramCompanion:
 
         self._bind()
         if start_worker:
-            self._start_worker(pair_code)
+            if pair_code or self._device_config_exists():
+                self._start_worker(pair_code)
+            else:
+                self.worker_online = False
+                self.detail = "Link this computer to unlock Ash desktop actions."
+                self.root.after(850, self._first_run_setup)
         if start_voice:
             self._start_voice_runtime()
 
@@ -252,6 +260,66 @@ class AshHologramCompanion:
             )
         except Exception:
             pass
+
+    def _device_config_exists(self) -> bool:
+        path = pathlib.Path(os.environ.get("ASH_DEVICE_CONFIG", str(pathlib.Path.home() / ".ash" / "device.json"))).expanduser()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return bool(data.get("device_id") and data.get("device_secret"))
+        except Exception:
+            return False
+
+    def _first_run_setup(self) -> None:
+        if self._device_config_exists() or self.worker_online:
+            return
+        answer = messagebox.askyesno(
+            "Link Ash to this computer",
+            "Ash is running. To let the hologram build projects, use local tools and control this computer when you approve it, link this desktop to your Ash account now.\n\nOpen Ash in your browser, go to Preferences → Linked computers → Link a computer, then copy the one-time code.\n\nLink now?",
+            parent=self.root,
+        )
+        if answer:
+            self._link_computer()
+        else:
+            self.state = "offline"
+            self.last_text = "Visual + local mode."
+            self.detail = "Right-click Ash and choose “Link this computer” when ready."
+
+    def _link_computer(self) -> None:
+        code = simpledialog.askstring(
+            "Link this computer",
+            "Paste the one-time pairing code from Ash:",
+            parent=self.root,
+        )
+        if code is None:
+            return
+        clean = str(code).strip().upper()
+        if not re.fullmatch(r"[A-Z0-9-]{6,32}", clean):
+            messagebox.showerror("Invalid pairing code", "That pairing code does not look valid. Generate a fresh code in Ash and try again.", parent=self.root)
+            return
+        self.state = "thinking"
+        self.last_text = "Linking this computer…"
+        self.detail = "Using the one-time Ash pairing code."
+        self._start_worker(clean)
+
+    def _worker_command(self, pair_code: str = "") -> list[str]:
+        if getattr(sys, "frozen", False):
+            exe = APP_DIR / ("AshWorker.exe" if os.name == "nt" else "AshWorker")
+            if not exe.exists():
+                raise FileNotFoundError(f"Packaged Ash worker is missing: {exe}")
+            args = [str(exe)]
+        else:
+            args = [sys.executable, str(ROOT / "remote_worker.py")]
+        if pair_code:
+            args += ["--pair", pair_code]
+        return args
+
+    def _voice_command(self) -> list[str]:
+        if getattr(sys, "frozen", False):
+            exe = APP_DIR / ("AshVoice.exe" if os.name == "nt" else "AshVoice")
+            if not exe.exists():
+                raise FileNotFoundError(f"Packaged Ash voice runtime is missing: {exe}")
+            return [str(exe)]
+        return [sys.executable, "-m", "voice_runtime.runtime"]
 
     def _bind(self) -> None:
         self.canvas.bind("<ButtonPress-1>", self._drag_start)
@@ -323,6 +391,7 @@ class AshHologramCompanion:
             bd=0,
         )
         menu.add_command(label="Open Ash command center", command=self._open_ash)
+        menu.add_command(label="Link this computer", command=self._link_computer)
         menu.add_command(label="Compact / expand", command=self._toggle_compact)
         menu.add_command(label="Restart voice", command=self._restart_voice_runtime)
         menu.add_command(label="Restart desktop worker", command=self._restart_worker)
@@ -333,15 +402,20 @@ class AshHologramCompanion:
 
     def _start_worker(self, pair_code: str = "") -> None:
         self._stop_worker()
-        script = ROOT / "remote_worker.py"
-        args = [sys.executable, str(script)]
-        if pair_code:
-            args += ["--pair", pair_code]
+        try:
+            args = self._worker_command(pair_code)
+        except Exception as exc:
+            self.worker = None
+            self.worker_online = False
+            self.state = "error"
+            self.last_text = "Desktop worker is unavailable."
+            self.detail = str(exc)[:92]
+            return
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             self.worker = subprocess.Popen(
                 args,
-                cwd=str(ROOT),
+                cwd=str(APP_DIR),
                 creationflags=flags,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
@@ -400,8 +474,8 @@ class AshHologramCompanion:
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         try:
             self.voice = subprocess.Popen(
-                [sys.executable, "-m", "voice_runtime.runtime"],
-                cwd=str(ROOT),
+                self._voice_command(),
+                cwd=str(APP_DIR),
                 env=os.environ.copy(),
                 creationflags=flags,
                 stdout=subprocess.PIPE,
