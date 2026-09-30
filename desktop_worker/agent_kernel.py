@@ -89,6 +89,7 @@ class AgentKernel:
         action: str = "chat",
         mode: str = "high",
         cooldown_seconds: float = 12.0,
+        preserve_whitespace: bool = False,
     ) -> str:
         state = self._state(name)
         if state.cooling_down:
@@ -96,9 +97,10 @@ class AgentKernel:
 
         started = time.perf_counter()
         try:
-            answer = str(call() or "").strip()
-            if not answer:
+            raw = str(call() or "")
+            if not raw.strip():
                 raise RuntimeError(f"{name} returned an empty response")
+            answer = raw if preserve_whitespace else raw.strip()
         except Exception as exc:
             latency = (time.perf_counter() - started) * 1000
             with self._lock:
@@ -133,6 +135,7 @@ class AgentKernel:
         *,
         action: str = "chat",
         mode: str = "high",
+        preserve_whitespace: bool = False,
     ) -> str:
         errors: list[str] = []
         attempted = False
@@ -146,6 +149,7 @@ class AgentKernel:
                 return self.invoke(
                     name, call, prompt=prompt, action=action, mode=mode,
                     cooldown_seconds=cooldown,
+                    preserve_whitespace=preserve_whitespace,
                 )
             except Exception as exc:
                 errors.append(f"{name}: {type(exc).__name__}")
