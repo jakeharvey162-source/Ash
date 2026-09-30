@@ -171,7 +171,9 @@ async function persistVoiceOutput(enabled){
     const icon=b.querySelector("span");if(icon)icon.textContent=enabled?"◖))":"◖×";
   });
   const speak=document.querySelector("#speak");if(speak)speak.checked=enabled;
-  if(session){
+  // The Settings form is saved atomically by saveProfile. Avoid racing that
+  // full update with a second PATCH carrying stale aliases or voice fields.
+  if(session&&!document.querySelector("#save")){
     try{
       const body={voice_config:{...profile.voice_config,auto_speak:Boolean(enabled)}};
       await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id),{
@@ -295,7 +297,7 @@ async function persistHandsFree(enabled,{requestPermission=true}={}){
   }else{
     await stopHandsFreeListening(true);toast("Hands-free listening is off.");
   }
-  if(session){
+  if(session&&!document.querySelector("#save")){
     try{await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id),{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({voice_config:{...profile.voice_config,hands_free:Boolean(enabled)}})})}
     catch{toast("Hands-free preference will retry when Ash reconnects.")}
   }
