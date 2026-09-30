@@ -45,6 +45,12 @@ export function previewDocument(html, channel, savedData = {}) {
     try{Object.defineProperty(window,'localStorage',{value:storage})}catch(e){emit('error','Preview persistence could not initialize: '+e.message)}
     addEventListener('error',e=>emit('error',String(e.message||'Script or resource error').slice(0,500)),true);
     addEventListener('unhandledrejection',e=>emit('error',String(e.reason?.message||e.reason||'Unhandled promise rejection').slice(0,500)));
+    // Blob downloads from an opaque-origin iframe are relayed as bounded text.
+    const blobs=new Map(),createURL=URL.createObjectURL.bind(URL),revokeURL=URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL=blob=>{const url=createURL(blob);if(blob.size<=1000000)blobs.set(url,blob);return url};
+    URL.revokeObjectURL=url=>{blobs.delete(url);revokeURL(url)};
+    const nativeClick=HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click=function(){const blob=blobs.get(this.href);if(blob&&/\\.(csv|txt|json)$/i.test(this.download)){const name=this.download;blob.text().then(content=>emit('download',{name,content}));return}return nativeClick.call(this)};
     // Native submissions are disabled by the sandbox. Dispatch local submit events
     // for application handlers without permitting navigation or external requests.
     const submitLocal=(form,button)=>{if(!form||(!form.noValidate&&!form.checkValidity())){form?.reportValidity();return}form.dispatchEvent(new SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:button||null}))};

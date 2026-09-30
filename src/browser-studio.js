@@ -89,6 +89,12 @@ export class BrowserStudio {
         this.metrics={width:Math.round(payload.width),overflow:payload.overflow===true};
         if(this.metrics.overflow&&!this.errors.includes('Horizontal overflow in preview.'))this.errors.push('Horizontal overflow in preview.');
       }
+      if(type==='download'&&payload&&typeof payload.content==='string'&&payload.content.length<=1000000&&/\.(csv|txt|json)$/i.test(String(payload.name))){
+        const name=String(payload.name).replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100);
+        const url=URL.createObjectURL(new Blob([payload.content],{type:'text/plain;charset=utf-8'}));
+        const link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }
       if (type==='storage') {this.project.data=safePreviewData(payload);this.persist();}
       update();
     };

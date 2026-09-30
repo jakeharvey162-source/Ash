@@ -73,20 +73,23 @@ report={"cases":[]}
 for slug,prompt in cases:
     result=agent.build_fullstack(prompt,str(root/slug))
     warning=str(result.details.get("planner_warning") or "")
-    if not result.ok:
-        raise SystemExit(f"{slug}: builder failed: {result.output}")
-    if "verified premium fallback used" in warning.lower():
-        print("BUILDER WARNING",slug,warning,flush=True)
-        raise SystemExit(f"{slug}: cloud generation fell back instead of using live model")
+    degraded=bool(result.details.get("degraded")) or "verified premium fallback used" in warning.lower()
     report["cases"].append({
         "slug":slug,
-        "ok":True,
+        "ok":result.ok,
+        "degraded":degraded,
+        "generation_mode":result.details.get("generation_mode"),
         "generated_files":result.details.get("generated_files",[]),
         "repaired_files":result.details.get("repaired_files",[]),
         "evidence":result.details.get("evidence",[]),
         "planner_warning":warning,
         "summary":result.output[:1200],
     })
+    # Keep failure evidence available to CI artifact uploads before exiting.
+    (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+    if not result.ok or degraded:
+        print(json.dumps(report,indent=2),flush=True)
+        raise SystemExit(f"{slug}: " + ("degraded generation" if degraded else "builder failed"))
 
 (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
 print("ASH LIVE DEVICE BUILDER: PASS")
