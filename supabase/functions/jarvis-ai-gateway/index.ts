@@ -1528,6 +1528,50 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
   }
 
   if (!raw) {
+    const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (anthropicKey) {
+      try {
+        const workspace = String(Deno.env.get("ANTHROPIC_WORKSPACE_ID") || "").trim();
+        const headers: Record<string, string> = {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json"
+        };
+        if (workspace) headers["anthropic-workspace-id"] = workspace;
+        const response = await providerFetch(
+          "computer_vision_anthropic",
+          "https://api.anthropic.com/v1/messages",
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              model: Deno.env.get("ANTHROPIC_VISION_MODEL") || Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-4-6",
+              max_tokens: 1200,
+              temperature: 0.1,
+              messages: [{
+                role: "user",
+                content: [
+                  { type: "image", source: { type: "base64", media_type: "image/jpeg", data: screenshotBase64 } },
+                  { type: "text", text: prompt }
+                ]
+              }]
+            })
+          },
+          14000
+        );
+        if (response.ok) {
+          const data = await response.json();
+          raw = (data?.content || []).map((part: any) => part?.text || "").join("").trim();
+        } else {
+          console.warn("ash_computer_vision_anthropic_failed", response.status);
+        }
+      } catch (error) {
+        console.warn("ash_computer_vision_anthropic_error", String((error as Error)?.message || error));
+      }
+    }
+  }
+
+  if (!raw) {
     const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!openRouterKey) throw new Error("computer_vision_unavailable");
     const visionModel = Deno.env.get("OPENROUTER_VISION_MODEL") || "google/gemini-3-flash-preview";
