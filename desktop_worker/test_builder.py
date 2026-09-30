@@ -20,6 +20,17 @@ class BuilderSafetyTests(unittest.TestCase):
         with patch.object(self.agent, "_cloud", side_effect=RuntimeError("unavailable")), patch.object(self.agent, "_local", return_value="```js\nexport default 1;\n```"):
             self.assertEqual(self.agent._generate_source("Generate file"), "export default 1;\n")
 
+    def test_computer_plan_normalizes_1000_space_to_screen_pixels(self):
+        mapped = self.agent._map_plan_coordinates({
+            "done": False,
+            "coordinate_space": "normalized_1000",
+            "actions": [{"type": "click", "x": 500, "y": 450}],
+        }, 800, 600)
+        action = mapped["actions"][0]
+        self.assertEqual(action["x"], 400)
+        self.assertTrue(268 <= action["y"] <= 270)
+        self.assertEqual(mapped["coordinate_space"], "screen_pixels")
+
     def test_safe_write_stays_inside_workspace(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp).resolve()
