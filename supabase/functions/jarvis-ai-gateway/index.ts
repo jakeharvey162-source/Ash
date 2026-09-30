@@ -1343,6 +1343,38 @@ async function transcribe(req: Request) {
   return json({ text: String(data.text || "") });
 }
 
+function parseFirstJSONObject(raw: string) {
+  const text = String(raw || "");
+  const start = text.indexOf("{");
+  if (start < 0) throw new Error("json_object_missing");
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new Error("json_object_incomplete");
+}
+
 async function planComputerFromScreenshot(system: string, goal: string, screenshotBase64: string, screenWidth: number, screenHeight: number) {
   const prompt = [
     system,
@@ -1490,8 +1522,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     raw = String(data?.choices?.[0]?.message?.content || "").trim();
   }
 
-  const start = raw.indexOf("{");
-  const parsed = JSON.parse(start >= 0 ? raw.slice(start) : raw);
+  const parsed = parseFirstJSONObject(raw);
   const allowed = new Set(["launch_app","open_url","move","click","double_click","type_text","press","hotkey","scroll","wait"]);
   const actions = Array.isArray(parsed?.actions) ? parsed.actions
     .filter((a: any) => allowed.has(String(a?.type || "")))
