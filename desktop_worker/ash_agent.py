@@ -768,7 +768,8 @@ USER REQUEST:
         generated: list[str] = []
         request_lc = request.lower()
         marketing_surface = live_plan and any(token in request_lc for token in (
-            "website", "landing page", "landing experience", "marketing site", "portfolio", "restaurant", "coffee shop", "cafe"
+            "website", "landing page", "landing experience", "marketing site", "product site",
+            "portfolio", "restaurant", "coffee shop", "cafe", "saas", "startup", "pricing page"
         ))
         raw_source_opt_in = os.environ.get("ASH_BUILDER_RAW_SOURCE", "").strip().lower() in {"1", "true", "yes", "on"}
         if marketing_surface and not raw_source_opt_in:
