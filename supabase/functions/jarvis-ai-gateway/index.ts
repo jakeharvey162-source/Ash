@@ -17,6 +17,7 @@ type ChatBody = {
   screenshot_base64?: string;
   screen_width?: number;
   screen_height?: number;
+  computer_step?: number;
 };
 
 const cors = {
@@ -1427,10 +1428,8 @@ function parseFirstJSONObject(raw: string) {
   throw new Error("json_object_incomplete");
 }
 
-async function planComputerFromScreenshot(system: string, goal: string, screenshotBase64: string, screenWidth: number, screenHeight: number) {
+async function planComputerFromScreenshot(system: string, goal: string, screenshotBase64: string, screenWidth: number, screenHeight: number, computerStep = 0) {
   const prompt = [
-    system,
-    "",
     "You are Ash Computer Control. The user explicitly approved control of their own computer.",
     "Inspect the screenshot and choose the smallest safe next actions toward the goal.",
     "Return ONE JSON object only.",
@@ -1444,6 +1443,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     "- Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
     "- If a sensitive/manual step is required, return done=true with a summary asking the user to do that step.",
     "- Do not claim success unless the screenshot proves it.",
+    "- Control-loop step: " + computerStep + ". On step 0 Ash has not executed any action yet. If the goal requests a click, typing, scrolling or navigation and its target is visible, done MUST be false and actions MUST contain the next safe action.",
     "",
     "GOAL: " + goal
   ].join("\n");
@@ -1475,7 +1475,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
               max_tokens: 1200
             })
           },
-          12000
+          30_000
         );
         if (response.ok) {
           const data = await response.json();
@@ -1494,10 +1494,8 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     const configured = String(Deno.env.get("GEMINI_VISION_MODEL") || Deno.env.get("GEMINI_MODEL") || "").trim();
     const modelCandidates = [...new Set([
       configured,
-      "gemini-3.8-flash",
-      "gemini-3.5-flash",
-      "gemini-2.5-flash-lite",
-      "gemini-2.5-flash"
+      "gemini-2.5-flash",
+      "gemini-2.0-flash"
     ].filter(Boolean))];
     for (const model of modelCandidates) {
       try {
@@ -1523,7 +1521,7 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
               }
             })
           },
-          12000
+          30_000
         );
         if (!response.ok) {
           console.warn("ash_computer_vision_model_failed", model, response.status);
@@ -1679,11 +1677,12 @@ Deno.serve(async (req: Request) => {
       const image = String(body.screenshot_base64 || "").trim();
       const width = Math.max(1, Math.min(10000, Number(body.screen_width || 1)));
       const height = Math.max(1, Math.min(10000, Number(body.screen_height || 1)));
+      const computerStep = Math.max(0, Math.min(16, Number(body.computer_step || 0)));
       if (!goal || !image) return json({ error: "computer_plan_input_required" }, 400);
       if (image.length > 5_500_000) return json({ error: "screenshot_too_large" }, 413);
       const system = buildSystemPrompt(profile, style, memories);
       try {
-        const plan = await planComputerFromScreenshot(system, goal, image, width, height);
+        const plan = await planComputerFromScreenshot(system, goal, image, width, height, computerStep);
         return json({ ...plan, assistant_name: profile?.assistant_name || "Ash" });
       } catch (error) {
         console.error("ash_computer_vision_failure", String((error as Error)?.message || error));

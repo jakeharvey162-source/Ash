@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import pathlib
@@ -173,7 +175,98 @@ class AshPythonAgent:
         }, width, height)
         return mapped
 
-    def plan_computer(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
+    @staticmethod
+    def _safe_color_target_plan(goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any] | None:
+        """Handle only explicit, low-risk color-target clicks and visible green completion states."""
+        text = str(goal or "").lower()
+        if not re.search(r"\b(click|double[ -]?click|task complete|report success)\b", text):
+            return None
+        try:
+            from PIL import Image
+            image = Image.open(io.BytesIO(base64.b64decode(screenshot_base64, validate=True))).convert("RGB")
+            image.thumbnail((1000, 1000))
+        except Exception:
+            return None
+
+        pixel_width, pixel_height = image.size
+        pixels = list(image.getdata())
+        total = len(pixels)
+        minimum = max(60, total // 8000)
+
+        def largest_region(predicate):
+            mask = bytearray(1 if predicate(pixel) else 0 for pixel in pixels)
+            best = None
+            for start in range(total):
+                if not mask[start]:
+                    continue
+                mask[start] = 0
+                stack = [start]
+                count = 0
+                min_x = max_x = start % pixel_width
+                min_y = max_y = start // pixel_width
+                while stack:
+                    index = stack.pop()
+                    x, y = index % pixel_width, index // pixel_width
+                    count += 1
+                    min_x, max_x = min(min_x, x), max(max_x, x)
+                    min_y, max_y = min(min_y, y), max(max_y, y)
+                    neighbours = []
+                    if x: neighbours.append(index - 1)
+                    if x + 1 < pixel_width: neighbours.append(index + 1)
+                    if y: neighbours.append(index - pixel_width)
+                    if y + 1 < pixel_height: neighbours.append(index + pixel_width)
+                    for neighbour in neighbours:
+                        if mask[neighbour]:
+                            mask[neighbour] = 0
+                            stack.append(neighbour)
+                if count >= minimum and count <= total * 0.35 and (best is None or count > best[0]):
+                    best = (count, min_x, min_y, max_x, max_y)
+            return best
+
+        colors = {
+            "blue": lambda p: p[2] > 125 and p[2] > p[0] * 1.35 and p[2] > p[1] * 1.25,
+            "red": lambda p: p[0] > 140 and p[0] > p[1] * 1.35 and p[0] > p[2] * 1.25,
+            "green": lambda p: p[1] > 90 and p[1] > p[0] * 1.25 and p[1] > p[2] * 1.15,
+            "yellow": lambda p: p[0] > 150 and p[1] > 130 and p[2] < min(p[0], p[1]) * 0.75,
+            "orange": lambda p: p[0] > 160 and 60 < p[1] < p[0] * 0.8 and p[2] < p[1],
+            "purple": lambda p: p[0] > 85 and p[2] > 105 and p[0] > p[1] * 1.15 and p[2] > p[1] * 1.2,
+        }
+
+        if re.search(r"\b(task complete|report success|completion state)\b", text):
+            complete = largest_region(colors["green"])
+            if complete and complete[3] - complete[1] > pixel_width * 0.1 and complete[4] - complete[2] > pixel_height * 0.05:
+                return {
+                    "done": True,
+                    "summary": "A large green completion state is visible.",
+                    "coordinate_space": "screen_pixels",
+                    "actions": [],
+                    "vision_source": "local_color",
+                }
+
+        requested_color = next((name for name in colors if re.search(rf"\b{name}\b", text)), "")
+        if not requested_color or not re.search(r"\b(click|double[ -]?click)\b", text):
+            return None
+        region = largest_region(colors[requested_color])
+        if not region:
+            return None
+        _, min_x, min_y, max_x, max_y = region
+        if max_x - min_x < 10 or max_y - min_y < 10:
+            return None
+        x = round(((min_x + max_x) / 2) / max(1, pixel_width - 1) * max(1, int(width) - 1))
+        y = round(((min_y + max_y) / 2) / max(1, pixel_height - 1) * max(1, int(height) - 1))
+        action_type = "double_click" if re.search(r"\bdouble[ -]?click\b", text) else "click"
+        return {
+            "done": False,
+            "summary": f"Found the largest safe {requested_color} target locally.",
+            "coordinate_space": "screen_pixels",
+            "actions": [{"type": action_type, "x": x, "y": y}],
+            "vision_source": "local_color",
+        }
+
+    def plan_computer(self, goal: str, screenshot_base64: str, width: int, height: int, step: int = 0) -> dict[str, Any]:
+        safe_plan = self._safe_color_target_plan(goal, screenshot_base64, width, height)
+        if safe_plan is not None:
+            return safe_plan
         cloud_error: Exception | None = None
         if self.gateway_url and (self.access_token or (self.device_id and self.device_secret)):
             payload = {
@@ -182,6 +275,7 @@ class AshPythonAgent:
                 "screenshot_base64": str(screenshot_base64 or ""),
                 "screen_width": int(width),
                 "screen_height": int(height),
+                "computer_step": max(0, int(step)),
             }
             try:
                 last_error: Exception | None = None

@@ -221,6 +221,7 @@ class AshComputerController:
                 frame.jpeg_base64,
                 frame.width,
                 frame.height,
+                step=step,
             )
             summary = str(plan.get("summary") or "")
             actions = list(plan.get("actions") or [])[:4]

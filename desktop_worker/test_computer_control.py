@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 import unittest
 from unittest.mock import patch, Mock
@@ -105,6 +107,35 @@ class ComputerControlSafetyTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["steps"], 2)
         c.execute_action.assert_called_once()
+
+    def test_safe_color_target_fallback_clicks_explicit_target_then_verifies_completion(self):
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest("Pillow is part of the optional computer-control install")
+        from ash_agent import AshPythonAgent
+
+        def encoded(done=False):
+            image = Image.new("RGB", (800, 600), (244, 246, 249))
+            draw = ImageDraw.Draw(image)
+            if done:
+                draw.rounded_rectangle((255, 215, 545, 355), radius=18, fill=(225, 255, 237), outline=(40, 160, 95), width=3)
+            else:
+                draw.rounded_rectangle((300, 250, 500, 330), radius=16, fill=(30, 125, 255))
+            output = io.BytesIO()
+            image.save(output, "JPEG", quality=92)
+            return base64.b64encode(output.getvalue()).decode("ascii")
+
+        goal = "Click the blue button once. When TASK COMPLETE appears, report success."
+        click = AshPythonAgent._safe_color_target_plan(goal, encoded(False), 800, 600)
+        self.assertFalse(click["done"])
+        self.assertEqual(click["actions"][0]["type"], "click")
+        self.assertTrue(380 <= click["actions"][0]["x"] <= 420)
+        self.assertTrue(270 <= click["actions"][0]["y"] <= 310)
+
+        complete = AshPythonAgent._safe_color_target_plan(goal, encoded(True), 800, 600)
+        self.assertTrue(complete["done"])
+        self.assertEqual(complete["actions"], [])
 
     def test_text_length_is_bounded(self):
         c = self.controller()
