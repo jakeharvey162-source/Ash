@@ -18,6 +18,112 @@ ROOT = pathlib.Path(__file__).resolve().parent
 ASH_URL = os.environ.get("ASH_APP_URL", "https://meet-ash.jakeharvey162.workers.dev/")
 
 
+class AshScreenAura:
+    """Click-through full-screen ambient glow tied to Ash's real runtime state."""
+
+    def __init__(self, master: tk.Tk, state_getter, color_getter, transparent: str) -> None:
+        self.master = master
+        self.state_getter = state_getter
+        self.color_getter = color_getter
+        self.transparent = transparent
+        self.window = tk.Toplevel(master)
+        self.window.overrideredirect(True)
+        self.window.attributes("-topmost", True)
+        self.window.configure(bg=transparent)
+        try:
+            self.window.wm_attributes("-transparentcolor", transparent)
+        except tk.TclError:
+            pass
+        sw, sh = master.winfo_screenwidth(), master.winfo_screenheight()
+        self.window.geometry(f"{sw}x{sh}+0+0")
+        self.canvas = tk.Canvas(
+            self.window, width=sw, height=sh, bg=transparent,
+            highlightthickness=0, bd=0,
+        )
+        self.canvas.pack(fill="both", expand=True)
+        self.phase = 0.0
+        self._click_through_ready = False
+        self.window.after(100, self._make_click_through)
+        self.window.after(70, self._tick)
+
+    @staticmethod
+    def _hex_rgb(value: str) -> tuple[int, int, int]:
+        value = value.lstrip("#")
+        return tuple(int(value[i:i+2], 16) for i in (0, 2, 4))
+
+    @classmethod
+    def _blend(cls, a: str, b: str, t: float) -> str:
+        ar, ag, ab = cls._hex_rgb(a)
+        br, bg, bb = cls._hex_rgb(b)
+        t = max(0.0, min(1.0, t))
+        return "#%02x%02x%02x" % (
+            int(ar + (br-ar)*t), int(ag + (bg-ag)*t), int(ab + (bb-ab)*t)
+        )
+
+    def _make_click_through(self) -> None:
+        if os.name != "nt":
+            return
+        try:
+            import ctypes
+            hwnd = self.window.winfo_id()
+            get_style = ctypes.windll.user32.GetWindowLongW
+            set_style = ctypes.windll.user32.SetWindowLongW
+            GWL_EXSTYLE = -20
+            WS_EX_LAYERED = 0x00080000
+            WS_EX_TRANSPARENT = 0x00000020
+            WS_EX_NOACTIVATE = 0x08000000
+            WS_EX_TOOLWINDOW = 0x00000080
+            style = get_style(hwnd, GWL_EXSTYLE)
+            set_style(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW)
+            self._click_through_ready = True
+        except Exception:
+            self._click_through_ready = False
+
+    def _tick(self) -> None:
+        try:
+            state = str(self.state_getter() or "idle")
+            accent = str(self.color_getter() or "#57e6ff")
+            self.phase += 0.11
+            self._draw(state, accent)
+            self.window.after(70, self._tick)
+        except tk.TclError:
+            return
+
+    def _draw(self, state: str, accent: str) -> None:
+        self.canvas.delete("all")
+        if state == "idle":
+            return
+        strength = {
+            "listening": 0.68, "wake": 0.92, "thinking": 0.78, "speaking": 0.72,
+            "building": 0.76, "acting": 0.86, "offline": 0.38, "error": 0.94,
+        }.get(state, 0.48)
+        pulse = 0.78 + 0.22 * abs(math.sin(self.phase * (1.8 if state == "thinking" else 1.15)))
+        w, h = self.canvas.winfo_width(), self.canvas.winfo_height()
+        if w < 10 or h < 10:
+            return
+        thickness = 54 if state in {"wake", "acting", "error"} else 40
+        layers = 11
+        for i in range(layers, 0, -1):
+            d = max(1, int(thickness * i / layers))
+            fade = 0.90 - (i / layers) * 0.43 * strength * pulse
+            col = self._blend(accent, self.transparent, min(0.96, fade))
+            self.canvas.create_rectangle(0, 0, w, d, fill=col, outline="")
+            self.canvas.create_rectangle(0, h-d, w, h, fill=col, outline="")
+            self.canvas.create_rectangle(0, 0, d, h, fill=col, outline="")
+            self.canvas.create_rectangle(w-d, 0, w, h, fill=col, outline="")
+        # Corner energy nodes make the aura read as a deliberate Ash HUD.
+        node = self._blend(accent, "#ffffff", 0.34)
+        radius = 3 + int(2 * pulse)
+        for x, y in ((18, 18), (w-18, 18), (18, h-18), (w-18, h-18)):
+            self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, fill=node, outline="")
+
+    def close(self) -> None:
+        try:
+            self.window.destroy()
+        except Exception:
+            pass
+
+
 class AshHologramCompanion:
     """Always-on-top holographic Ash desktop companion.
 
@@ -94,6 +200,12 @@ class AshHologramCompanion:
             bd=0,
         )
         self.canvas.pack(fill="both", expand=True)
+        self.aura = AshScreenAura(
+            self.root,
+            state_getter=lambda: self.state,
+            color_getter=lambda: self._color()[0],
+            transparent=self.TRANSPARENT,
+        )
         self.particles = [
             {
                 "x": random.uniform(118, 288),
@@ -554,10 +666,41 @@ class AshHologramCompanion:
         worker = "DESKTOP ✓" if self.worker_online else "DESKTOP —"
         voice = "VOICE ✓" if self.voice_online else "VOICE —"
         self.canvas.create_text(
-            178, 475, text=f"{worker}   {voice}   DBL-CLICK: OPEN ASH",
+            178, 474, text=f"{worker}   {voice}   CTRL+ALT+A: SUMMON",
             fill=self._blend(accent, self.MUTED, .56),
             font=("Consolas", 7),
         )
+
+    def _draw_telemetry(self, accent: str) -> None:
+        if self.compact:
+            return
+        # Small truthful runtime telemetry orbiting the hologram.
+        items = [
+            ("VOICE", "LIVE" if self.voice_online else "OFF"),
+            ("AGENT", "LIVE" if self.worker_online else "OFF"),
+            ("MODE", self.state.upper()[:9]),
+        ]
+        y = 150
+        for title, value in items:
+            x1, x2 = 14, 86
+            self.canvas.create_rectangle(
+                x1, y, x2, y+28,
+                fill="#061018",
+                outline=self._blend(accent, self.TRANSPARENT, .62),
+                width=1,
+            )
+            self.canvas.create_text(x1+7, y+7, anchor="nw", text=title, fill=self.MUTED, font=("Consolas", 6))
+            self.canvas.create_text(x1+7, y+17, anchor="nw", text=value, fill=accent, font=("Segoe UI Semibold", 7))
+            y += 36
+
+        # Animated signal rail on the opposite side.
+        base_x = 321
+        for i in range(7):
+            amp = 4 + int(12 * abs(math.sin(self.phase * 1.7 + i * .72)))
+            self.canvas.create_line(
+                base_x - amp, 174 + i*14, base_x, 174 + i*14,
+                fill=self._blend(accent, self.TRANSPARENT, .35 + i*.045), width=2,
+            )
 
     def _draw(self) -> None:
         self.canvas.delete("all")
@@ -565,6 +708,7 @@ class AshHologramCompanion:
         accent, label = self._color()
         self._draw_panel(accent)
         self._draw_hologram(accent, label)
+        self._draw_telemetry(accent)
         self._draw_footer(accent)
 
     def _tick(self) -> None:
@@ -581,6 +725,10 @@ class AshHologramCompanion:
         self._save_position()
         self._stop_voice_runtime()
         self._stop_worker()
+        try:
+            self.aura.close()
+        except Exception:
+            pass
         self.root.destroy()
 
     def run(self) -> None:
