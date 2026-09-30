@@ -19,6 +19,11 @@ class CompanionContractTests(unittest.TestCase):
         self.assertIn("AshScreenAura",text)
         self.assertIn("WS_EX_TRANSPARENT",text)
         self.assertIn("_draw_telemetry",text)
+        self.assertIn("_first_run_setup",text)
+        self.assertIn("_link_computer",text)
+        self.assertIn("AshWorker.exe",text)
+        self.assertIn("AshVoice.exe",text)
+        self.assertIn("simpledialog.askstring",text)
 
 if __name__=="__main__":
     unittest.main()
