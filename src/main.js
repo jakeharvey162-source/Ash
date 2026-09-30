@@ -488,6 +488,7 @@ function authView(){
 
         <div class="heroActions">
           <button id="meetAsh" class="heroPrimary">Meet Ash <span>→</span></button>
+          <a class="heroDownload" href="https://github.com/jakeharvey162-source/Ash/releases" target="_blank" rel="noopener noreferrer"><span class="downloadGlyph">↓</span><b>Download Desktop</b><small>Windows</small></a>
           <button id="watchVoice" class="heroSecondary"><span class="playDot">▶</span><b>Hear Ash</b></button>
         </div>
 
@@ -532,6 +533,13 @@ function authView(){
         <p class="kicker">PRODUCT</p>
         <h2>Ash is an AI command center, not a single model.</h2>
         <p>Ash combines conversational AI, software building, automation, connected tools, voice interaction and optional local AI in one interface. Cloud intelligence is routed securely through Ash services; local features require the Ash desktop worker and a supported local model.</p>
+      </article>
+      <article class="publicSection desktopDownloadSection" id="desktop-download">
+        <p class="kicker">ASH DESKTOP</p>
+        <h2>Put Ash on your Windows desktop.</h2>
+        <p>Install the floating hologram companion, wake-word voice, linked desktop agent, local memory, software builder and permissioned computer-control runtime. Public installers are published as signed-by-checksum GitHub release assets after the Windows package passes its executable smoke tests.</p>
+        <a class="publicDownloadButton" href="https://github.com/jakeharvey162-source/Ash/releases" target="_blank" rel="noopener noreferrer">Get Ash Desktop for Windows <span>→</span></a>
+        <p class="publicFine">Before installing, compare the published SHA-256 checksum with the downloaded installer. Windows may show a reputation warning until the project has established code-signing reputation.</p>
       </article>
       <article class="publicSection" id="capabilities">
         <p class="kicker">CAPABILITIES</p>
