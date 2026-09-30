@@ -16,6 +16,9 @@ class CompanionContractTests(unittest.TestCase):
         self.assertIn("remote_worker.py",text)
         self.assertIn("_poll_global_hotkey",text)
         self.assertIn("GetAsyncKeyState",text)
+        self.assertIn("AshScreenAura",text)
+        self.assertIn("WS_EX_TRANSPARENT",text)
+        self.assertIn("_draw_telemetry",text)
 
 if __name__=="__main__":
     unittest.main()
