@@ -624,10 +624,12 @@ USER REQUEST:
 """ + request
         planner_warning = ""
         live_plan = True
+        generation_mode = "generated_source"
         try:
             plan = self.think_json(planner_prompt, attempts=3)
         except Exception as exc:
             live_plan = False
+            generation_mode = "fallback_scaffold"
             planner_warning = str(exc)
             plan = self._fallback_web_plan(request)
         specs = plan.get("files") if isinstance(plan, dict) else None
@@ -640,6 +642,7 @@ USER REQUEST:
         ))
         raw_source_opt_in = os.environ.get("ASH_BUILDER_RAW_SOURCE", "").strip().lower() in {"1", "true", "yes", "on"}
         if marketing_surface and not raw_source_opt_in:
+            generation_mode = "planned_renderer"
             generated = self._write_verified_fallback_site(root, request, plan)
             planner_warning = (planner_warning + " | " if planner_warning else "") + "Live AI brief, design system and content rendered through Ash's verified production renderer."
             specs = []
@@ -665,6 +668,7 @@ PURPOSE: {purpose}
             if content is None:
                 content = self._clean_generated_file(self.think(prompt, "high", action="generate"))
             if self._looks_like_generation_failure(content):
+                generation_mode = "recovery_renderer" if live_plan else "fallback_scaffold"
                 if live_plan:
                     generated = self._write_verified_fallback_site(root, request, plan)
                     planner_warning = (planner_warning + " | " if planner_warning else "") + "Live AI plan rendered through the verified production source renderer after the long-form source route degraded."
@@ -684,6 +688,9 @@ PURPOSE: {purpose}
                 evidence.append({"command": "npm run build", "code": build.returncode, "stdout": build.stdout[-2000:], "stderr": build.stderr[-4000:]})
                 repaired = []
                 if build.returncode != 0:
+                    repaired = self._repair_build(root, request, plan, evidence, max_rounds=2)
+                if evidence[-1].get("code") != 0:
+                    generation_mode = "recovery_renderer" if live_plan else "fallback_scaffold"
                     if live_plan:
                         generated = self._write_verified_fallback_site(root, request, plan)
                         planner_warning = (planner_warning + " | " if planner_warning else "") + "Generated build failed; live AI plan was repaired through the verified production source renderer."
@@ -701,15 +708,19 @@ PURPOSE: {purpose}
         else:
             repaired = []
 
-        review = self.think("""You are Ash's QA lead. Review the evidence below.
-Never claim a test passed unless its exit code is 0. Return a concise release-readiness report.
-
-REQUEST:
-""" + request + "\n\nFILES:\n" + "\n".join(generated) + "\n\nEVIDENCE:\n" + json.dumps(evidence, indent=2), "medium", action="generate")
         build_evidence = [item for item in evidence if str(item.get("command", "")).startswith("npm run build")]
         install_evidence = [item for item in evidence if str(item.get("command", "")).startswith("npm install")]
         ok = bool(build_evidence) and build_evidence[-1].get("code") == 0 and (not install_evidence or install_evidence[-1].get("code") == 0)
-        return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "repaired_files": repaired, "plan": plan, "planner_warning": planner_warning, "evidence": evidence})
+        degraded = generation_mode in {"fallback_scaffold", "recovery_renderer"}
+        review = ("Build passed." if ok else "Build failed; inspect the command evidence.")
+        if degraded:
+            review += " A fallback renderer was used; the original requested functionality is not verified."
+        elif generation_mode == "planned_renderer":
+            review += " The site uses an AI plan with the built-in renderer."
+        if repaired:
+            review += f" Repaired {len(set(repaired))} file(s) before rebuilding."
+        review += " Browser interactions, accessibility and task requirements still need acceptance testing."
+        return AgentResult(ok, review, {"workspace": str(root), "generated_files": generated, "repaired_files": repaired, "plan": plan, "planner_warning": planner_warning, "evidence": evidence, "generation_mode": generation_mode, "degraded": degraded, "verification": {"build_passed": ok, "requirements_verified": False, "browser_verified": False}})
 
 
 def main() -> int:
