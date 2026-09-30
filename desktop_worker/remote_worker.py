@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from ash_agent import AshPythonAgent
+from local_scheduler import LocalScheduler
 from computer_control import AshComputerController, ComputerControlUnavailable
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
@@ -30,6 +31,7 @@ class AshRemoteWorker:
         self.preferences_path = pathlib.Path(os.environ.get("ASH_PREFERENCES_FILE", str(pathlib.Path.home() / ".ash" / "preferences.json"))).expanduser()
         self.client = httpx.Client(timeout=httpx.Timeout(45.0, connect=8.0))
         self.agent = AshPythonAgent()
+        self.local_scheduler = LocalScheduler()
         self.user_id = ""
         self.device_id = ""
         self.device_secret = ""
@@ -72,6 +74,7 @@ class AshRemoteWorker:
             "fts_memory": True,
             "tool_orchestrator": True,
             "hologram_companion": True,
+            "local_scheduler": True,
         }
 
     def broker(self, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -323,16 +326,45 @@ class AshRemoteWorker:
         except Exception as exc:
             self.finish(job_id, ok=False, error=str(exc))
 
+    def run_due_local_tasks(self) -> None:
+        for task in self.local_scheduler.due():
+            task_id = str(task.get("id") or "")
+            prompt = str(task.get("prompt") or "").strip()
+            if not task_id or not prompt:
+                continue
+            try:
+                result = self.agent.run_agent(prompt, "high")
+                if result.requires_confirmation:
+                    self.local_scheduler.complete(
+                        task_id,
+                        ok=False,
+                        summary=result.output,
+                        error="Scheduled task reached an action that requires confirmation.",
+                    )
+                else:
+                    self.local_scheduler.complete(
+                        task_id,
+                        ok=result.ok,
+                        summary=result.output,
+                        error="" if result.ok else result.output,
+                    )
+            except Exception as exc:
+                self.local_scheduler.complete(task_id, ok=False, error=str(exc))
+
     def run_forever(self) -> None:
         self.validate()
         self.register_device()
         print(json.dumps({"type": "ready", "device_id": self.device_id, "device_name": self.device_name, "workspace_root": str(self.workspace_root), "paired": bool(self.device_secret)}), flush=True)
         last_heartbeat = 0.0
+        last_local_schedule = 0.0
         while True:
             now = time.time()
             if now - last_heartbeat >= 30:
                 self.heartbeat()
                 last_heartbeat = now
+            if now - last_local_schedule >= 15:
+                self.run_due_local_tasks()
+                last_local_schedule = now
             for candidate in self.queued_jobs():
                 claimed = self.claim(str(candidate["id"]))
                 if claimed:
