@@ -27,6 +27,7 @@ class LocalMemory:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._fts = False
         with self._connect() as db:
             db.execute(
                 """
@@ -39,6 +40,30 @@ class LocalMemory:
                 """
             )
             db.execute("create index if not exists memories_created_idx on memories(created_at desc)")
+            try:
+                db.execute(
+                    "create virtual table if not exists memories_fts using fts5("
+                    "content, content='memories', content_rowid='id', tokenize='porter unicode61')"
+                )
+                db.execute(
+                    """
+                    create trigger if not exists memories_ai after insert on memories begin
+                      insert into memories_fts(rowid, content) values (new.id, new.content);
+                    end
+                    """
+                )
+                db.execute(
+                    """
+                    create trigger if not exists memories_ad after delete on memories begin
+                      insert into memories_fts(memories_fts, rowid, content)
+                      values ('delete', old.id, old.content);
+                    end
+                    """
+                )
+                db.execute("insert into memories_fts(memories_fts) values('rebuild')")
+                self._fts = True
+            except sqlite3.OperationalError:
+                self._fts = False
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path)
@@ -68,6 +93,26 @@ class LocalMemory:
         wanted = self._tokens(query)
         if not wanted:
             return []
+        if self._fts:
+            match = " OR ".join(f'"{token}"' for token in sorted(wanted)[:12])
+            try:
+                with self._lock, self._connect() as db:
+                    rows = db.execute(
+                        """
+                        select memories.content
+                        from memories_fts
+                        join memories on memories.id = memories_fts.rowid
+                        where memories_fts match ?
+                        order by bm25(memories_fts) asc, memories.created_at desc
+                        limit ?
+                        """,
+                        (match, max(1, int(limit))),
+                    ).fetchall()
+                if rows:
+                    return [content for (content,) in rows]
+            except sqlite3.OperationalError:
+                self._fts = False
+
         with self._lock, self._connect() as db:
             rows = db.execute(
                 "select content from memories order by created_at desc limit 250"
