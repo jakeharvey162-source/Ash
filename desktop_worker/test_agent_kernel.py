@@ -56,6 +56,17 @@ class AgentKernelTests(unittest.TestCase):
             self.assertNotIn("[Skill: design]", prompt)
             self.assertLess(len(prompt), 5000)
 
+    def test_route_can_preserve_source_whitespace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kernel = AgentKernel(pathlib.Path(tmp))
+            result = kernel.route(
+                "generate source",
+                [("local", lambda: "export default 1;\n", 0.0)],
+                action="generate",
+                preserve_whitespace=True,
+            )
+            self.assertEqual(result, "export default 1;\n")
+
     def test_trace_never_stores_raw_prompt(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
