@@ -266,7 +266,7 @@ function buildSystemPrompt(profile: any, style: any, memories: any[] = []) {
 
 function directIdentityReply(message: string, profile: any) {
   const text = String(message || "").trim();
-  if (!/^(?:what(?:'s| is) your (?:current )?(?:user-facing )?name|who are you|tell me your name)[?.!\s]*$/i.test(text)) return "";
+  if (!/\b(?:what(?:'s| is) your (?:current )?(?:user-facing )?(?:assistant )?name|who are you|tell me your (?:assistant )?name)\b/i.test(text)) return "";
   return String(profile?.assistant_name || "Ash").slice(0, 40);
 }
 
@@ -641,6 +641,31 @@ function researchIntent(message: string) {
   const m = String(message || "");
   return /\b(research|search|web|internet|online|latest|today|tonight|yesterday|tomorrow|recent|news|source|sources|verify|fact[- ]?check|look up|find online|breaking|updated|update|price|prices|release|released|version|score|scores|market|stock|weather|president|prime minister|minister|mayor|governor|ceo|leader|officeholder|election|poll|policy|law|legislation|exchange rate|interest rate|roster|lineup|standings|schedule|fixture|availability|outage|status)\b/i.test(m)
     || (/\b(who is|who's|what is|what's)\b/i.test(m) && /\b(openai|google|microsoft|apple|meta|anthropic|tesla|nvidia|samsung|netflix|spotify|github|vercel|supabase|chatgpt|gemini|claude|android|windows|iphone)\b/i.test(m));
+}
+
+function directCommandReply(message: string) {
+  const text = String(message || "").trim();
+  const arithmetic = text.match(/\b(?:calculate|what is)\s+(-?\d+(?:\.\d+)?)\s*(times|multiplied by|plus|minus|divided by|over)\s*(-?\d+(?:\.\d+)?)/i);
+  if (arithmetic) {
+    const left = Number(arithmetic[1]);
+    const right = Number(arithmetic[3]);
+    const operator = arithmetic[2].toLowerCase();
+    const value = operator === "times" || operator === "multiplied by" ? left * right
+      : operator === "plus" ? left + right
+      : operator === "minus" ? left - right
+      : right === 0 ? NaN : left / right;
+    if (Number.isFinite(value) && Math.abs(value) <= 1e15) return String(Number(value.toFixed(10)));
+  }
+  const exact = text.match(/\b(?:reply|respond|say)\s+with\s+(?:only|exactly)\s+["']?(.+?)["']?[.!?]?$/i);
+  if (exact) return exact[1].replace(/["']$/, "").trim();
+  return "";
+}
+
+function unverifiedCompletedActionRequest(message: string) {
+  const text = String(message || "");
+  const asksForConfirmation = /\b(confirm|verify|did you|have you|already|tell me (?:that|whether)|is it live|was it sent)\b/i.test(text);
+  const claimsExternalAction = /\b(sent|emailed|deployed|published|posted|purchased|paid|booked|scheduled|deleted|uploaded|submitted|created|changed|updated)\b/i.test(text);
+  return asksForConfirmation && claimsExternalAction;
 }
 
 function protectedInfrastructureRequest(message: string) {
@@ -1717,6 +1742,16 @@ Deno.serve(async (req: Request) => {
     }
     const codeArtifact = generationMode && body.output_format === "source";
     const htmlArtifact = generationMode && (body.output_format === "html" || message.startsWith("You are Ash's implementation engineer. Return ONLY a complete <!doctype html>"));
+    if (!generationMode && action === "chat" && unverifiedCompletedActionRequest(message)) {
+      return json({
+        answer: "I can’t confirm that action happened because I don’t have a verified action record for it. Check the relevant service or ask me to perform it through a connected tool.",
+        mode,
+        assistant_name: profile?.assistant_name || "Ash",
+        grounded: true,
+        deterministic: true,
+        unverified_action_denied: true
+      });
+    }
     if (!generationMode && action === "chat" && protectedInfrastructureRequest(message)) {
       return json({
         answer: "I can’t disclose private provider routing, credentials, hidden infrastructure, or system configuration.",
@@ -1729,6 +1764,10 @@ Deno.serve(async (req: Request) => {
       const identityReply = directIdentityReply(message, profile);
       if (identityReply) {
         return json({ answer: identityReply, mode, assistant_name: profile?.assistant_name || "Ash", grounded: true, deterministic: true });
+      }
+      const commandReply = directCommandReply(message);
+      if (commandReply) {
+        return json({ answer: commandReply, mode, assistant_name: profile?.assistant_name || "Ash", grounded: true, deterministic: true });
       }
       const explicitRecall = directExplicitMemoryRecall(message, memories);
       if (explicitRecall) {
@@ -1844,7 +1883,7 @@ Deno.serve(async (req: Request) => {
         : [askGroq, askGemini, askOpenRouter, askNvidia, askAnthropic, askBytez];
 
     try {
-      const routeBudgetMs = htmlArtifact ? 95000 : codeArtifact ? 65000 : generationMode ? 50000 : (mode === "instant" ? 3600 : 4300);
+      const routeBudgetMs = htmlArtifact ? 95000 : codeArtifact ? 65000 : generationMode ? 50000 : (mode === "instant" ? 8000 : 10000);
       const answer = await firstUsefulAnswer(generationMode ? routes : routes.slice(0, 5), system, message, history, mode, routeBudgetMs, htmlArtifact ? completeHTMLArtifact : codeArtifact ? sourceArtifact : undefined);
       if (answer) {
         learnStyle(ctx, message, profile);
