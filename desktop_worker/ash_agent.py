@@ -93,7 +93,7 @@ class AshPythonAgent:
             return self.kernel.route(
                 prompt,
                 [
-                    ("cloud", lambda: checked(lambda: self._cloud(prompt, mode="high", action="generate")), 12.0),
+                    ("cloud", lambda: checked(lambda: self._cloud(prompt, mode="high", action="generate")), 0.0),
                     ("ollama", lambda: checked(lambda: self._local(prompt)), 8.0),
                 ],
                 action="generate",
@@ -110,6 +110,7 @@ class AshPythonAgent:
             'Return ONE JSON object only using this schema: {"done":boolean,"summary":string,"actions":[{"type":"launch_app|open_url|move|click|double_click|type_text|press|hotkey|scroll|wait","x":number,"y":number,"text":string,"key":string,"keys":[string],"amount":number,"seconds":number}]}',
             "Maximum 4 actions.",
             f"Coordinates are pixels within {int(width)}x{int(height)}.",
+            "For click or double-click targets, aim near the visual center of the target with a clear margin from its edges.",
             "Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
             "Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
             "If a sensitive/manual step is required, return done=true with a summary asking the user to do it manually.",
@@ -186,7 +187,7 @@ class AshPythonAgent:
     def think(self, prompt: str, mode: str = "high", action: str = "chat") -> str:
         prepared = self.kernel.prepare_prompt(prompt, action=action)
         candidates = [
-            ("cloud", lambda: self._cloud(prepared, mode=mode, action=action), 12.0),
+            ("cloud", lambda: self._cloud(prepared, mode=mode, action=action), 0.0 if action == "generate" else 12.0),
         ]
         if self.claude_backend is not None:
             candidates.append(("claude_cli", lambda: self.claude_backend.process(prepared), 20.0))
