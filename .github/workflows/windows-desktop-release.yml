@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - "desktop_worker/**"
-      - ".github/workflows/windows-desktop-release.yml"
-  push:
     tags:
       - "v*"
 
