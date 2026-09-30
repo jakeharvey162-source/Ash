@@ -40,13 +40,13 @@ if errorlevel 2 goto :skipvoice
 :skipvoice
 
 echo.
-choice /C YN /N /M "Install the advanced OpenJarvis local agent pack? [Y/N] "
-if errorlevel 2 goto :skipopenjarvis
+echo Installing advanced OpenJarvis local agent pack...
 ".venv\Scripts\python.exe" -m pip install -r requirements-openjarvis.optional.txt
 if errorlevel 1 (
   echo OpenJarvis pack could not be installed. Ash will continue with its native runtime.
+) else (
+  echo OpenJarvis specialist installed and integrated.
 )
-:skipopenjarvis
 
 echo.
 choice /C YN /N /M "Install optional screen-vision/control dependencies? [Y/N] "
