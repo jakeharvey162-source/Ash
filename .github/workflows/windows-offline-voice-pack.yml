@@ -1,0 +1,53 @@
+name: Windows Offline Voice Pack
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  voice:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install offline voice dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r desktop_worker/requirements.txt
+          pip install -r desktop_worker/requirements-voice.optional.txt
+          pip install "pyinstaller>=6.16,<7"
+
+      - name: Build AshVoice
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --console --name AshVoice --paths desktop_worker --collect-all faster_whisper --collect-all ctranslate2 desktop_worker/voice_entry.py
+          & dist/AshVoice.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "AshVoice self-test failed" }
+
+      - name: Package optional voice runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist/AshVoice.exe release/AshVoice.exe
+          @"
+          OPTIONAL ASH OFFLINE VOICE PACK
+
+          Copy AshVoice.exe next to Ash.exe in the Ash Desktop install folder, then restart Ash.
+          This pack is intentionally separate because faster-whisper and its native inference runtime make the download much larger.
+          Android does not need this pack; Android uses the operating system/native speech stack.
+          "@ | Set-Content -Encoding UTF8 release/README-VOICE.txt
+          Compress-Archive -Path release/AshVoice.exe,release/README-VOICE.txt -DestinationPath release/Ash-Offline-Voice-Pack.zip -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ash-Offline-Voice-Pack
+          path: release/Ash-Offline-Voice-Pack.zip
+          if-no-files-found: error
+          retention-days: 14
