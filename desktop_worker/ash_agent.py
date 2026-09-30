@@ -15,6 +15,7 @@ import httpx
 from voice_runtime.claude_cli import ClaudeCodeBackend
 from offline_brain import AshOfflineBrain
 from agent_kernel import AgentKernel
+from agent_runtime import AshAgentRuntime
 
 
 @dataclass
@@ -40,6 +41,7 @@ class AshPythonAgent:
         self.claude_backend = ClaudeCodeBackend() if self.claude_cli_enabled else None
         self.offline = AshOfflineBrain()
         self.kernel = AgentKernel()
+        self.runtime = AshAgentRuntime(self)
         self.timeout = httpx.Timeout(45.0, connect=6.0)
 
     def set_device_credentials(self, device_id: str, device_secret: str) -> None:
@@ -191,6 +193,10 @@ class AshPythonAgent:
             ("offline", lambda: self.offline.respond(prompt, mode=mode), 0.0),
         ])
         return self.kernel.route(prompt, candidates, action=action, mode=mode)
+
+    def run_agent(self, prompt: str, mode: str = "high", *, allow_side_effects: bool = False):
+        """Run Ash's bounded tool-using desktop agent."""
+        return self.runtime.run(prompt, mode=mode, allow_side_effects=allow_side_effects)
 
     def think_stream(self, prompt: str, mode: str = "high", on_narration=None) -> str:
         prepared = self.kernel.prepare_prompt(prompt, action="chat")
