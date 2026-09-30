@@ -80,6 +80,17 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
           jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab
 
+      - name: Enforce compact Android release size
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          APK_SIZE=$(stat -c%s "$APK")
+          AAB_SIZE=$(stat -c%s "$AAB")
+          echo "Release APK: $((APK_SIZE / 1024 / 1024)) MB"
+          echo "Release AAB: $((AAB_SIZE / 1024 / 1024)) MB"
+          test "$APK_SIZE" -le $((25 * 1024 * 1024)) || { echo "::error::Android release APK exceeds 25 MB"; exit 1; }
+          test "$AAB_SIZE" -le $((25 * 1024 * 1024)) || { echo "::error::Android release AAB exceeds 25 MB"; exit 1; }
+
       - name: Upload Play release artifacts
         uses: actions/upload-artifact@v4
         with:
