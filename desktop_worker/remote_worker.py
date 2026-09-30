@@ -70,6 +70,8 @@ class AshRemoteWorker:
             "adaptive_routing": True,
             "local_skills": True,
             "fts_memory": True,
+            "tool_orchestrator": True,
+            "hologram_companion": True,
         }
 
     def broker(self, action: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -290,8 +292,34 @@ class AshRemoteWorker:
                     backend = self.agent.offline.status().backend
                 self.finish(job_id, ok=True, result={"summary": answer, "completed_by": self.device_name, "rescue": True, "backend": backend})
             else:
-                answer = self.agent.think(prompt, str(job.get("mode") or "high"))
-                self.finish(job_id, ok=True, result={"summary": answer, "completed_by": self.device_name})
+                runtime = self.agent.run_agent(prompt, str(job.get("mode") or "high"))
+                if runtime.requires_confirmation:
+                    self.finish(
+                        job_id,
+                        ok=False,
+                        result={
+                            "summary": runtime.output,
+                            "completed_by": self.device_name,
+                            "requires_confirmation": True,
+                            "pending_tool": runtime.pending_tool,
+                            "tools_used": runtime.tools_used,
+                            "evidence": runtime.evidence,
+                        },
+                        error="This task needs explicit confirmation before the pending local action can run.",
+                    )
+                else:
+                    self.finish(
+                        job_id,
+                        ok=runtime.ok,
+                        result={
+                            "summary": runtime.output,
+                            "completed_by": self.device_name,
+                            "tools_used": runtime.tools_used,
+                            "evidence": runtime.evidence,
+                            "agent_runtime": True,
+                        },
+                        error="" if runtime.ok else runtime.output,
+                    )
         except Exception as exc:
             self.finish(job_id, ok=False, error=str(exc))
 
