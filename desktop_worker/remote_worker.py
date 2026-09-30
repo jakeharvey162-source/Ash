@@ -390,8 +390,13 @@ def main() -> int:
     args = parser.parse_args()
     if args.name:
         os.environ["ASH_DEVICE_NAME"] = args.name
-    AshRemoteWorker(pair_code=args.pair).run_forever()
-    return 0
+    worker = AshRemoteWorker(pair_code=args.pair)
+    try:
+        worker.run_forever()
+        return 0
+    except Exception as exc:
+        worker.emit("worker_error", message=str(exc)[:500])
+        return 1
 
 
 if __name__ == "__main__":
