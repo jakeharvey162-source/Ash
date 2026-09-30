@@ -37,8 +37,18 @@ class FakeKernel:
 
 
 class FakeOpenJarvis:
+    available = True
+    def __init__(self):
+        self.calls = []
     def status(self):
-        return {"available": False}
+        return {"available": True}
+    def ask(self, task, profile="orchestrator", allow_side_effects=False):
+        self.calls.append((task, profile, allow_side_effects))
+        return f"{profile}:{task}"
+    def memory_search(self, query, top_k=5):
+        return [{"content": query, "score": 1.0}]
+    def memory_index(self, path):
+        return {"path": path, "chunks": 1}
 
 
 class FakeAgent:
@@ -88,6 +98,34 @@ class AgentRuntimeTests(unittest.TestCase):
             runtime = AshAgentRuntime(FakeAgent(), pathlib.Path(tmp))
             with self.assertRaises(ValueError):
                 runtime._safe_path("../escape.txt")
+
+    def test_openjarvis_research_profile_is_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = FakeAgent()
+            agent.plan = {
+                "steps": [{"tool": "specialist.openjarvis.research", "args": {"task": "compare sources"}}],
+                "answer_instruction": "summarize",
+            }
+            result = AshAgentRuntime(agent, pathlib.Path(tmp)).run("research this")
+            self.assertTrue(result.ok)
+            self.assertIn("specialist.openjarvis.research", result.tools_used)
+            self.assertEqual(agent.openjarvis.calls[0][1], "research")
+
+    def test_openjarvis_code_profile_requires_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = FakeAgent()
+            agent.plan = {
+                "steps": [{"tool": "specialist.openjarvis.code", "args": {"task": "run code"}}],
+                "answer_instruction": "do it",
+            }
+            runtime = AshAgentRuntime(agent, pathlib.Path(tmp))
+            blocked = runtime.run("execute this code")
+            self.assertTrue(blocked.requires_confirmation)
+            self.assertFalse(agent.openjarvis.calls)
+            allowed = runtime.run("execute this code", allow_side_effects=True)
+            self.assertTrue(allowed.ok)
+            self.assertEqual(agent.openjarvis.calls[0][1], "code")
+            self.assertTrue(agent.openjarvis.calls[0][2])
 
     def test_research_evidence_is_passed_to_final_answer(self):
         with tempfile.TemporaryDirectory() as tmp:
