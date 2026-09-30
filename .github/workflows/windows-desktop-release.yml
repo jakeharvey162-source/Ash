@@ -30,8 +30,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r desktop_worker/requirements.txt
-          pip install -r desktop_worker/requirements-voice.optional.txt
-          pip install -r desktop_worker/requirements-openjarvis.optional.txt
           pip install "pyinstaller>=6.16,<7"
 
       - name: Stamp desktop package version
@@ -53,22 +51,18 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --name Ash --paths desktop_worker desktop_worker/companion_overlay.py
           pyinstaller --noconfirm --clean --onefile --console --name AshSmoke --paths desktop_worker desktop_worker/companion_overlay.py
-          pyinstaller --noconfirm --clean --onefile --console --name AshWorker --paths desktop_worker --collect-all openjarvis desktop_worker/worker_entry.py
-          pyinstaller --noconfirm --clean --onefile --console --name AshVoice --paths desktop_worker --collect-all faster_whisper --collect-all ctranslate2 desktop_worker/voice_entry.py
+          pyinstaller --noconfirm --clean --onefile --console --name AshWorker --paths desktop_worker desktop_worker/worker_entry.py
 
       - name: Smoke-test packaged binaries
         shell: pwsh
         run: |
           if (!(Test-Path dist/Ash.exe)) { throw "Ash.exe missing" }
           if (!(Test-Path dist/AshWorker.exe)) { throw "AshWorker.exe missing" }
-          if (!(Test-Path dist/AshVoice.exe)) { throw "AshVoice.exe missing" }
           if (!(Test-Path dist/AshSmoke.exe)) { throw "AshSmoke.exe missing" }
           & dist/AshSmoke.exe --self-test
           if ($LASTEXITCODE -ne 0) { throw "Ash companion self-test failed" }
           & dist/AshWorker.exe --self-test
           if ($LASTEXITCODE -ne 0) { throw "AshWorker.exe self-test failed" }
-          & dist/AshVoice.exe --self-test
-          if ($LASTEXITCODE -ne 0) { throw "AshVoice.exe self-test failed" }
           $env:PYTHONPATH="desktop_worker"
           python -m unittest desktop_worker/test_companion.py desktop_worker/test_agent_runtime.py desktop_worker/test_openjarvis_bridge.py
 
@@ -78,7 +72,6 @@ jobs:
           New-Item -ItemType Directory -Force release/AshDesktop | Out-Null
           Copy-Item dist/Ash.exe release/AshDesktop/
           Copy-Item dist/AshWorker.exe release/AshDesktop/
-          Copy-Item dist/AshVoice.exe release/AshDesktop/
           Copy-Item LICENSE release/AshDesktop/
           Copy-Item desktop_worker/COMPANION.md release/AshDesktop/
           Copy-Item desktop_worker/THIRD_PARTY_NOTICES.md release/AshDesktop/
@@ -89,7 +82,8 @@ jobs:
           2. On first launch, Ash asks you to link this computer.
           3. In the Ash web app open Preferences -> Linked computers -> Link a computer.
           4. Paste the one-time code into the hologram.
-          5. Say "Ash" after voice setup finishes, or press Ctrl+Alt+A to summon the hologram.
+          5. Press Ctrl+Alt+A to summon the hologram. Double-click it to open the full Ash command center and use voice.
+          6. The compact Windows installer intentionally excludes the large offline Whisper/OpenJarvis packs. Those are optional add-ons, not required for normal cloud-assisted Ash use.
 
           Ash uses a visible confirmation boundary for local writes, code execution and protected computer-control actions.
           "@ | Set-Content -Encoding UTF8 release/AshDesktop/START-HERE.txt
@@ -115,6 +109,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $versioned = Get-ChildItem release/AshDesktopSetup-*.exe | Select-Object -First 1
           Copy-Item $versioned.FullName release/AshDesktopSetup.exe -Force
+
+      - name: Enforce compact package size
+        shell: pwsh
+        run: |
+          $limit = 100MB
+          $installer = Get-Item release/AshDesktopSetup.exe
+          $portable = Get-Item release/AshDesktop-portable.zip
+          Write-Host ("Installer: {0:N1} MB" -f ($installer.Length / 1MB))
+          Write-Host ("Portable:  {0:N1} MB" -f ($portable.Length / 1MB))
+          if ($installer.Length -gt $limit) { throw "AshDesktopSetup.exe exceeds the 100 MB compact-release limit." }
+          if ($portable.Length -gt $limit) { throw "AshDesktop-portable.zip exceeds the 100 MB compact-release limit." }
 
       - name: Generate checksums
         shell: pwsh
@@ -149,6 +154,8 @@ jobs:
           Download **AshDesktopSetup.exe** for the normal Windows install.
           The portable ZIP is for advanced users who do not want an installer.
 
-          The release workflow smoke-tests the packaged hologram, worker and voice executables before publishing and includes SHA-256 checksums.
+          The release workflow smoke-tests the packaged hologram and desktop worker, enforces a 100 MB download cap, and includes SHA-256 checksums.
+
+          The compact installer uses Ash's web/native voice path by default. Large offline Whisper and OpenJarvis runtimes are optional add-ons rather than being duplicated into every install.
           "@ | Set-Content -Encoding UTF8 release/RELEASE-NOTES.md
           gh release create "${{ github.ref_name }}" release/AshDesktopSetup.exe release/AshDesktop-portable.zip release/SHA256SUMS.txt --title "Ash Desktop ${{ github.ref_name }}" --notes-file release/RELEASE-NOTES.md
