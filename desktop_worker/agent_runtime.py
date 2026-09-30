@@ -123,8 +123,40 @@ class AshAgentRuntime:
         ))
         self.tools.register(ToolSpec(
             "specialist.openjarvis",
-            "Delegate a complex read-oriented local subtask to the integrated OpenJarvis orchestrator when installed.",
+            "Delegate a complex read-oriented local subtask to OpenJarvis's general orchestrator.",
             self._tool_openjarvis,
+        ))
+        self.tools.register(ToolSpec(
+            "specialist.openjarvis.research",
+            "Use OpenJarvis deep-research mode for a complex investigation.",
+            self._tool_openjarvis_research,
+        ))
+        self.tools.register(ToolSpec(
+            "specialist.openjarvis.react",
+            "Use OpenJarvis ReAct mode for multi-step read-oriented reasoning and debugging.",
+            self._tool_openjarvis_react,
+        ))
+        self.tools.register(ToolSpec(
+            "specialist.openjarvis.long_context",
+            "Use OpenJarvis recursive long-context mode for large documents and decomposition.",
+            self._tool_openjarvis_long_context,
+        ))
+        self.tools.register(ToolSpec(
+            "specialist.openjarvis.code",
+            "Use OpenJarvis CodeAct mode. It may execute code and therefore requires explicit confirmation.",
+            self._tool_openjarvis_code,
+            confirmation_required=True,
+        ))
+        self.tools.register(ToolSpec(
+            "openjarvis.memory.search",
+            "Search the optional OpenJarvis indexed memory store.",
+            self._tool_openjarvis_memory_search,
+        ))
+        self.tools.register(ToolSpec(
+            "openjarvis.memory.index",
+            "Index a workspace file or folder into OpenJarvis memory.",
+            self._tool_openjarvis_memory_index,
+            confirmation_required=True,
         ))
         self.tools.register(ToolSpec(
             "scheduler.list",
@@ -246,13 +278,47 @@ class AshAgentRuntime:
         answer = self.agent._cloud(query, mode="high", action="research")
         return {"answer": answer}
 
-    def _tool_openjarvis(self, args: dict[str, Any]) -> Any:
+    def _require_openjarvis(self):
+        if not hasattr(self.agent, "openjarvis") or not self.agent.openjarvis.available:
+            raise RuntimeError("OpenJarvis specialist is not available on this desktop.")
+        return self.agent.openjarvis
+
+    def _openjarvis_task(self, args: dict[str, Any], profile: str, *, allow_side_effects: bool = False) -> Any:
         task = str(args.get("task") or "").strip()
         if not task:
             raise ValueError("OpenJarvis specialist task is required.")
-        if not hasattr(self.agent, "openjarvis") or not self.agent.openjarvis.available:
-            raise RuntimeError("OpenJarvis specialist is not available on this desktop.")
-        return {"answer": self.agent.openjarvis.ask(task)}
+        bridge = self._require_openjarvis()
+        return {
+            "profile": profile,
+            "answer": bridge.ask(task, profile=profile, allow_side_effects=allow_side_effects),
+        }
+
+    def _tool_openjarvis(self, args: dict[str, Any]) -> Any:
+        return self._openjarvis_task(args, "orchestrator")
+
+    def _tool_openjarvis_research(self, args: dict[str, Any]) -> Any:
+        return self._openjarvis_task(args, "research")
+
+    def _tool_openjarvis_react(self, args: dict[str, Any]) -> Any:
+        return self._openjarvis_task(args, "react")
+
+    def _tool_openjarvis_long_context(self, args: dict[str, Any]) -> Any:
+        return self._openjarvis_task(args, "long_context")
+
+    def _tool_openjarvis_code(self, args: dict[str, Any]) -> Any:
+        return self._openjarvis_task(args, "code", allow_side_effects=True)
+
+    def _tool_openjarvis_memory_search(self, args: dict[str, Any]) -> Any:
+        query = str(args.get("query") or "").strip()
+        if not query:
+            raise ValueError("OpenJarvis memory search query is required.")
+        bridge = self._require_openjarvis()
+        return {"matches": bridge.memory_search(query, top_k=int(args.get("limit") or 5))}
+
+    def _tool_openjarvis_memory_index(self, args: dict[str, Any]) -> Any:
+        target = self._safe_path(str(args.get("path") or "."))
+        bridge = self._require_openjarvis()
+        return bridge.memory_index(str(target))
 
     def _tool_status(self, _args: dict[str, Any]) -> Any:
         return {
@@ -287,6 +353,8 @@ class AshAgentRuntime:
             "Do not reveal hidden reasoning or chain-of-thought. Return one JSON object only. "
             "Use at most 6 steps and only tools from the supplied list. "
             "Prefer zero tool calls for normal conversation. Use research.live for facts that may have changed. "
+            "For difficult local reasoning, choose the narrowest OpenJarvis specialist: research for investigation, "
+            "react for multi-step debugging, long_context for very large material, and code only when execution is truly needed. "
             "Never invent a path, memory result, file content or tool result. "
             "Do not request files.write or memory.store unless the user's request clearly asks to save/change something. "
             "Schema: {\"steps\":[{\"tool\":\"tool.name\",\"args\":{}}],\"answer_instruction\":\"brief instruction for final response\"}.\n"
