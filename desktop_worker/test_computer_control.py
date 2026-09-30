@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from computer_control import AshComputerController, ComputerControlUnavailable
 
@@ -78,6 +78,33 @@ class ComputerControlSafetyTests(unittest.TestCase):
     def test_benign_goal_is_not_blocked_by_risk_gate(self):
         c = self.controller()
         self.assertEqual(c.risk_reason("Open my project dashboard and show the latest build"), "")
+
+    def test_open_url_uses_default_browser(self):
+        c = self.controller()
+        with patch("computer_control.webbrowser.open", return_value=True) as opener:
+            result = c.execute_action({"type": "open_url", "url": "https://example.com/path"})
+        opener.assert_called_once_with("https://example.com/path")
+        self.assertEqual(result["type"], "open_url")
+
+    def test_open_url_rejects_non_http_scheme(self):
+        c = self.controller()
+        with self.assertRaises(ValueError):
+            c.execute_action({"type": "open_url", "url": "file:///etc/passwd"})
+
+    def test_goal_loop_can_open_url_then_verify_completion(self):
+        c = self.controller()
+        c.capture = Mock(return_value=type("Frame", (), {"jpeg_base64":"abc","width":800,"height":600})())
+        plans = iter([
+            {"done":False,"summary":"Opening the requested page.","actions":[{"type":"open_url","url":"https://example.com"}]},
+            {"done":True,"summary":"The requested page is open.","actions":[]},
+        ])
+        c.agent = type("Agent", (), {"plan_computer":lambda self,*args,**kwargs: next(plans)})()
+        c.execute_action = Mock(return_value={"type":"open_url","url":"https://example.com"})
+        with patch("computer_control.time.sleep", return_value=None):
+            result = c.run_goal("Open https://example.com", max_steps=3)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["steps"], 2)
+        c.execute_action.assert_called_once()
 
     def test_text_length_is_bounded(self):
         c = self.controller()
