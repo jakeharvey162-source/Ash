@@ -77,6 +77,7 @@ class AshHologramCompanion:
         self.voice: subprocess.Popen[str] | None = None
         self.worker_online = False
         self.voice_online = False
+        self.hotkey_down = False
 
         self.settings_path = pathlib.Path.home() / ".ash" / "companion.json"
         self.preferences_path = pathlib.Path.home() / ".ash" / "preferences.json"
@@ -164,6 +165,25 @@ class AshHologramCompanion:
 
     def _open_ash(self) -> None:
         webbrowser.open(ASH_URL)
+
+    def _poll_global_hotkey(self) -> None:
+        """Ctrl+Alt+A summons Ash on Windows without an extra dependency."""
+        if os.name != "nt":
+            return
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            down = all(user32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x11, 0x12, 0x41))
+            if down and not self.hotkey_down:
+                self.root.deiconify()
+                self.root.lift()
+                self.root.attributes("-topmost", True)
+                self.state = "wake"
+                self.last_text = "I'm here."
+                self.detail = "Ctrl+Alt+A summoned Ash. Double-click for the command center."
+            self.hotkey_down = bool(down)
+        except Exception:
+            self.hotkey_down = False
 
     def _toggle_compact(self) -> None:
         self.compact = not self.compact
@@ -548,6 +568,7 @@ class AshHologramCompanion:
         self._draw_footer(accent)
 
     def _tick(self) -> None:
+        self._poll_global_hotkey()
         self.phase += 0.055 if self.state in {"idle", "offline"} else 0.09
         if self.worker and self.worker.poll() is not None:
             self.worker_online = False
