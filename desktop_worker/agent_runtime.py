@@ -122,6 +122,11 @@ class AshAgentRuntime:
             self._tool_status,
         ))
         self.tools.register(ToolSpec(
+            "specialist.openjarvis",
+            "Delegate a complex read-oriented local subtask to the integrated OpenJarvis orchestrator when installed.",
+            self._tool_openjarvis,
+        ))
+        self.tools.register(ToolSpec(
             "scheduler.list",
             "List recurring tasks stored on this desktop.",
             self._tool_scheduler_list,
@@ -240,6 +245,14 @@ class AshAgentRuntime:
             raise ValueError("Research query is required.")
         answer = self.agent._cloud(query, mode="high", action="research")
         return {"answer": answer}
+
+    def _tool_openjarvis(self, args: dict[str, Any]) -> Any:
+        task = str(args.get("task") or "").strip()
+        if not task:
+            raise ValueError("OpenJarvis specialist task is required.")
+        if not hasattr(self.agent, "openjarvis") or not self.agent.openjarvis.available:
+            raise RuntimeError("OpenJarvis specialist is not available on this desktop.")
+        return {"answer": self.agent.openjarvis.ask(task)}
 
     def _tool_status(self, _args: dict[str, Any]) -> Any:
         return {
