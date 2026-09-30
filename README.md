@@ -34,3 +34,15 @@ Provider-generated audio is connected to a Web Audio analyser so the Ash wavefor
 Ash supports hands-free conversation while the app is open and in the foreground. Users can enable wake listening, say the configured wake word (default **Ash**) or aliases such as **Hey Ash** and **Arise**, then speak naturally without typing. After Ash answers, a short follow-up window remains open so the next reply does not require the wake word again.
 
 Ash pauses speech recognition while its own voice is playing, then re-arms the listener automatically. Spoken output and hands-free input can be switched on or off independently. Browser/PWA wake listening uses the browser speech-recognition API; the Android build also includes native speech recognition. The separate desktop local voice runtime can stay always-on while its process is running.
+
+
+## Desktop intelligence kernel
+
+The paired desktop worker now adds an Ash-specific modular intelligence layer:
+- adaptive cloud → Claude CLI → Ollama → offline fallback with short failure cooldowns,
+- privacy-first operational traces that store prompt fingerprints instead of raw prompt text,
+- optional local Markdown skills from `desktop_worker/skills` and `~/.ash/skills`,
+- SQLite FTS5 retrieval for stronger local memory recall, with the previous token matcher as a fallback.
+
+These additions strengthen the existing Ash architecture; they do not replace
+Supabase memory, live research, confirmation gates, the builder, or computer control.
