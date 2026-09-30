@@ -15,6 +15,8 @@ import time
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 import webbrowser
+import urllib.request
+from build_version import BUILD_VERSION, LATEST_RELEASE_API, RELEASES_URL
 
 ROOT = pathlib.Path(__file__).resolve().parent
 APP_DIR = pathlib.Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else ROOT
@@ -187,6 +189,7 @@ class AshHologramCompanion:
         self.worker_online = False
         self.voice_online = False
         self.hotkey_down = False
+        self.update_available = ""
 
         self.settings_path = pathlib.Path.home() / ".ash" / "companion.json"
         self.preferences_path = pathlib.Path.home() / ".ash" / "preferences.json"
@@ -233,6 +236,7 @@ class AshHologramCompanion:
 
         self.root.after(60, self._poll_events)
         self.root.after(33, self._tick)
+        self.root.after(3200, lambda: threading.Thread(target=self._check_for_updates, daemon=True).start())
 
     def _assistant_name(self) -> str:
         try:
@@ -395,10 +399,36 @@ class AshHologramCompanion:
         menu.add_command(label="Compact / expand", command=self._toggle_compact)
         menu.add_command(label="Restart voice", command=self._restart_voice_runtime)
         menu.add_command(label="Restart desktop worker", command=self._restart_worker)
+        menu.add_command(label="Check for updates", command=lambda: threading.Thread(target=self._check_for_updates, kwargs={"manual": True}, daemon=True).start())
+        if self.update_available:
+            menu.add_command(label=f"Install update {self.update_available}", command=lambda: webbrowser.open(RELEASES_URL))
         menu.add_separator()
         menu.add_command(label="Hide 10 minutes", command=self._hide_temporarily)
         menu.add_command(label="Quit Ash companion", command=self.close)
         menu.tk_popup(event.x_root, event.y_root)
+
+    @staticmethod
+    def _version_tuple(value: str) -> tuple[int, int, int]:
+        match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", str(value or "").strip())
+        return tuple(int(x) for x in match.groups()) if match else (0, 0, 0)
+
+    def _check_for_updates(self, manual: bool = False) -> None:
+        try:
+            request = urllib.request.Request(
+                LATEST_RELEASE_API,
+                headers={"User-Agent": f"AshDesktop/{BUILD_VERSION}", "Accept": "application/vnd.github+json"},
+            )
+            with urllib.request.urlopen(request, timeout=7) as response:
+                payload = json.loads(response.read(512_000).decode("utf-8"))
+            latest = str(payload.get("tag_name") or "").strip().lstrip("v")
+            url = str(payload.get("html_url") or RELEASES_URL)
+            if latest and self._version_tuple(latest) > self._version_tuple(BUILD_VERSION):
+                self.events.put({"type": "update_available", "version": latest, "url": url, "source": "updater"})
+            elif manual:
+                self.events.put({"type": "update_current", "version": BUILD_VERSION, "source": "updater"})
+        except Exception as exc:
+            if manual:
+                self.events.put({"type": "update_error", "message": str(exc)[:120], "source": "updater"})
 
     def _start_worker(self, pair_code: str = "") -> None:
         self._stop_worker()
@@ -542,6 +572,23 @@ class AshHologramCompanion:
     def _handle_event(self, event: dict) -> None:
         typ = str(event.get("type") or "")
         source = str(event.get("source") or "voice")
+        if source == "updater":
+            if typ == "update_available":
+                self.update_available = str(event.get("version") or "")
+                self.state = "wake"
+                self.last_text = f"Ash {self.update_available} is ready."
+                self.detail = "Right-click the hologram to open the verified release."
+                return
+            if typ == "update_current":
+                self.state = "idle"
+                self.last_text = "Ash is up to date."
+                self.detail = f"Installed version {event.get('version') or BUILD_VERSION}."
+                return
+            if typ == "update_error":
+                self.state = "error"
+                self.last_text = "Update check failed."
+                self.detail = "Ash can keep running. Try again from the right-click menu."
+                return
         if source == "worker":
             if typ == "worker_ready":
                 self.worker_online = True
