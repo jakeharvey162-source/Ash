@@ -45,6 +45,11 @@ export function previewDocument(html, channel, savedData = {}) {
     try{Object.defineProperty(window,'localStorage',{value:storage})}catch(e){emit('error','Preview persistence could not initialize: '+e.message)}
     addEventListener('error',e=>emit('error',String(e.message||'Script or resource error').slice(0,500)),true);
     addEventListener('unhandledrejection',e=>emit('error',String(e.reason?.message||e.reason||'Unhandled promise rejection').slice(0,500)));
+    // Native submissions are disabled by the sandbox. Dispatch local submit events
+    // for application handlers without permitting navigation or external requests.
+    const submitLocal=(form,button)=>{if(!form||(!form.noValidate&&!form.checkValidity())){form?.reportValidity();return}form.dispatchEvent(new SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:button||null}))};
+    document.addEventListener('click',e=>{const button=e.target.closest?.('button,input');if(!button||!button.form||button.type!=='submit')return;e.preventDefault();submitLocal(button.form,button)},true);
+    document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.tagName!=='INPUT'||!e.target.form)return;e.preventDefault();submitLocal(e.target.form,e.target.form.querySelector('[type=submit],button:not([type])'))},true);
     const check=()=>emit('metrics',{width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+2,title:document.title,textLength:(document.body?.innerText||'').trim().length});
     addEventListener('DOMContentLoaded',()=>{emit('ready',{});setTimeout(check,250)});
     addEventListener('resize',check);
