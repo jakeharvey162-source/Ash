@@ -46,3 +46,39 @@ The paired desktop worker now adds an Ash-specific modular intelligence layer:
 
 These additions strengthen the existing Ash architecture; they do not replace
 Supabase memory, live research, confirmation gates, the builder, or computer control.
+
+
+## Ash hologram desktop companion
+
+The downloaded desktop experience now has a persistent **Ash hologram buddy** rather than a plain tray-style assistant. The companion is an always-on-top transparent window that reacts to Ash's real runtime state:
+
+- cyan idle presence,
+- green listening/wake state,
+- amber reasoning,
+- cyan speaking,
+- green building,
+- purple action/local states,
+- error/attention state when the voice runtime needs help.
+
+The hologram is drawn locally with lightweight vector/canvas-style primitives, so it does not need a looping video or a GPU-heavy 3D engine. It starts Ash's voice runtime and paired desktop worker, remembers its screen position, supports compact mode, opens the full command center on double-click and can start automatically with Windows.
+
+Install on Windows from `desktop_worker/install_hologram_companion.bat`.
+
+## Unified local agent runtime
+
+Ash Desktop now combines the native Ash runtime with the OpenJarvis package as an integrated specialist when available. The native layer remains responsible for Ash identity, provider routing, permissions and confirmation boundaries.
+
+The desktop agent includes:
+
+- bounded multi-step tool planning,
+- typed local tool registry,
+- calculator and workspace file tools,
+- private local memory search/store,
+- live research hand-off,
+- local recurring schedules,
+- adaptive backend routing using observed reliability/latency,
+- optional Claude Code and Ollama routes,
+- integrated OpenJarvis orchestrator as an additional local specialist,
+- workspace containment and confirmation gates for local writes.
+
+Ash deliberately does **not** grant an imported agent unrestricted shell/computer access merely because a package supports it. Computer control continues through Ash's separate permissioned controller and confirmation model.
