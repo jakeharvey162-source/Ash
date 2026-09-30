@@ -150,7 +150,7 @@ class AshPythonAgent:
                 "screen_height": int(height),
             }
             try:
-                with httpx.Client(timeout=httpx.Timeout(18.0, connect=6.0)) as client:
+                with httpx.Client(timeout=httpx.Timeout(42.0, connect=6.0)) as client:
                     r = client.post(self.gateway_url, headers=self._headers(), json=payload)
                     if r.status_code >= 400:
                         raise RuntimeError(f"Ash computer vision returned HTTP {r.status_code}: {r.text[:300]}")
