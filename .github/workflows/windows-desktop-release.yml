@@ -34,6 +34,20 @@ jobs:
           pip install -r desktop_worker/requirements-openjarvis.optional.txt
           pip install "pyinstaller>=6.16,<7"
 
+      - name: Stamp desktop package version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $version = "0.2.${{ github.run_number }}"
+          }
+          @"
+          BUILD_VERSION = "$version"
+          RELEASES_URL = "https://github.com/jakeharvey162-source/Ash/releases"
+          LATEST_RELEASE_API = "https://api.github.com/repos/jakeharvey162-source/Ash/releases/latest"
+          "@ | Set-Content -Encoding UTF8 desktop_worker/build_version.py
+
       - name: Build Ash desktop executables
         shell: pwsh
         run: |
