@@ -86,3 +86,38 @@ ASH_CLAUDE_ALLOWED_TOOLS=
 
 The Vercel frontend does not install the heavier microphone/Whisper dependencies.
 See `desktop_worker/THIRD_PARTY_NOTICES.md` for attribution.
+
+
+## Install the full Ash desktop companion
+
+On Windows, run:
+
+```bat
+desktop_worker\install_hologram_companion.bat
+```
+
+The installer creates an isolated Python environment, installs the Ash desktop core, offers local voice support, installs the integrated OpenJarvis specialist, optionally installs screen-vision/control dependencies, and creates a Windows Startup launcher.
+
+The default launcher is:
+
+```bat
+desktop_worker\run_companion.bat
+```
+
+The companion itself is `companion_overlay.py`. It is a transparent always-on-top animated Ash hologram with reactive listening/thinking/speaking/building/action states. It starts the paired remote worker and local wake-word runtime, so the visual buddy and Ash's actual capabilities are connected rather than being a decorative animation.
+
+## Unified agent runtime
+
+`agent_runtime.py` provides Ash's bounded tool-using desktop loop. It can route a task through verified local tools, memory, research, schedules and the integrated OpenJarvis specialist, then synthesize an answer from tool evidence.
+
+Local mutation tools such as `files.write`, `memory.store`, `scheduler.create` and `scheduler.cancel` are confirmation-gated. Paths are contained inside `ASH_WORKSPACE_ROOT`. The OpenJarvis specialist is exposed through `openjarvis_bridge.py` and is kept read-oriented by default; Ash's own controller remains the only path for computer-control actions.
+
+Local recurring schedules are stored under `~/.ash/local-schedules.json` and are checked by the paired worker. Results are recorded to `~/.ash/local-schedule-results.jsonl`.
+
+Optional environment:
+
+```
+ASH_OPENJARVIS_ENABLED=auto
+ASH_AGENT_TRACE=
+ASH_LOCAL_HOME=
+```
