@@ -59,6 +59,10 @@ class AshRemoteWorker:
             "device_name": self.device_name,
         }, indent=2), encoding="utf-8")
 
+    @staticmethod
+    def emit(event_type: str, **fields: Any) -> None:
+        print(json.dumps({"type": event_type, "source": "worker", "ts": time.time(), **fields}, ensure_ascii=False), flush=True)
+
     def capabilities(self) -> dict[str, bool]:
         return {
             "builder": True,
@@ -254,6 +258,8 @@ class AshRemoteWorker:
             self.finish(job_id, ok=False, error="Job contained no prompt.")
             return
         try:
+            task_state = "building" if kind in {"builder", "website", "app_builder"} or payload.get("builder") is True else "acting" if kind in {"computer_control", "computer", "desktop_control"} or payload.get("computer_control") is True else "thinking"
+            self.emit("worker_task", state=task_state, kind=kind, label=prompt[:96])
             if kind in {"builder", "website", "app_builder"} or payload.get("builder") is True:
                 workspace = self.workspace_root / job_id
                 built = self.agent.build_fullstack(prompt, str(workspace))
@@ -323,7 +329,9 @@ class AshRemoteWorker:
                         },
                         error="" if runtime.ok else runtime.output,
                     )
+            self.emit("worker_done", kind=kind)
         except Exception as exc:
+            self.emit("worker_error", kind=kind, message=str(exc)[:240])
             self.finish(job_id, ok=False, error=str(exc))
 
     def run_due_local_tasks(self) -> None:
@@ -333,6 +341,7 @@ class AshRemoteWorker:
             if not task_id or not prompt:
                 continue
             try:
+                self.emit("schedule_task", task_id=task_id, label=str(task.get("name") or prompt)[:96])
                 result = self.agent.run_agent(prompt, "high")
                 if result.requires_confirmation:
                     self.local_scheduler.complete(
@@ -348,13 +357,15 @@ class AshRemoteWorker:
                         summary=result.output,
                         error="" if result.ok else result.output,
                     )
+                self.emit("schedule_done", task_id=task_id, ok=bool(result.ok and not result.requires_confirmation))
             except Exception as exc:
+                self.emit("schedule_done", task_id=task_id, ok=False, message=str(exc)[:240])
                 self.local_scheduler.complete(task_id, ok=False, error=str(exc))
 
     def run_forever(self) -> None:
         self.validate()
         self.register_device()
-        print(json.dumps({"type": "ready", "device_id": self.device_id, "device_name": self.device_name, "workspace_root": str(self.workspace_root), "paired": bool(self.device_secret)}), flush=True)
+        self.emit("worker_ready", device_id=self.device_id, device_name=self.device_name, workspace_root=str(self.workspace_root), paired=bool(self.device_secret), capabilities=self.capabilities())
         last_heartbeat = 0.0
         last_local_schedule = 0.0
         while True:
