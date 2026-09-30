@@ -85,15 +85,19 @@ class AshPythonAgent:
                 raise RuntimeError("Provider returned an assistant fallback instead of source.")
             return source
 
-        return self.kernel.route(
-            prompt,
-            [
-                ("cloud", lambda: checked(lambda: self._cloud(prompt, mode="high", action="generate")), 12.0),
-                ("ollama", lambda: checked(lambda: self._local(prompt)), 8.0),
-            ],
-            action="generate",
-            mode="high",
-        )
+        try:
+            return self.kernel.route(
+                prompt,
+                [
+                    ("cloud", lambda: checked(lambda: self._cloud(prompt, mode="high", action="generate")), 12.0),
+                    ("ollama", lambda: checked(lambda: self._local(prompt)), 8.0),
+                ],
+                action="generate",
+                mode="high",
+                preserve_whitespace=True,
+            )
+        except RuntimeError as exc:
+            raise RuntimeError("Source generation unavailable: " + str(exc)) from exc
 
     def _local_computer_plan(self, goal: str, screenshot_base64: str, width: int, height: int) -> dict[str, Any]:
         prompt = "\n".join([
