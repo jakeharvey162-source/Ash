@@ -63,6 +63,9 @@ report["details"]=result.details
 if not result.ok:
     fail("Ash Builder returned failure: "+result.output,report)
 
+if result.details.get("degraded", True):
+    fail("Live builder degraded to a fallback renderer; build success does not prove task completion", report)
+
 pkg=OUT/"package.json"
 if not pkg.exists():
     fail("Builder produced no package.json",report)

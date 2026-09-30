@@ -1,6 +1,8 @@
 import pathlib
 import tempfile
 import unittest
+import subprocess
+from unittest.mock import patch
 
 from ash_agent import AshPythonAgent
 
@@ -39,6 +41,49 @@ class BuilderSafetyTests(unittest.TestCase):
         data = self.agent._extract_json(text)
         self.assertTrue(data['ok'])
         self.assertEqual(data['files'], [])
+
+
+    def run_build_case(self, codes, repair_patch=None, planning_fails=False):
+        agent = self.agent
+        plan = {"name": "Test app", "files": [{"path": "package.json", "purpose": "build"}]}
+        responses = [RuntimeError("planner offline") if planning_fails else plan]
+        if repair_patch is not None:
+            responses.append(repair_patch)
+        def run(root, command, timeout):
+            code = next(codes)
+            return subprocess.CompletedProcess(command, code, "build output", "syntax error" if code else "")
+        def renderer(root, request, plan=None):
+            (root / "package.json").write_text('{"scripts":{"build":"vite build"}}')
+            return ["package.json"]
+        with tempfile.TemporaryDirectory() as tmp, patch.object(agent, "think_json", side_effect=responses), patch.object(agent, "think", side_effect=AssertionError("QA must not depend on a model")), patch.object(agent, "_run", side_effect=run), patch.object(agent, "_write_verified_fallback_site", side_effect=renderer):
+            return agent.build_fullstack("Build a task management app", tmp)
+
+    def test_success_reports_only_verified_build(self):
+        result = self.run_build_case(iter([0, 0]))
+        self.assertTrue(result.ok)
+        self.assertFalse(result.details["degraded"])
+        self.assertFalse(result.details["verification"]["requirements_verified"])
+        self.assertFalse(result.details["verification"]["browser_verified"])
+
+    def test_failed_build_is_repaired_before_fallback(self):
+        result = self.run_build_case(iter([0, 1, 0]), {"files": [{"path": "src/app.js", "content": "export default 1;"}]})
+        self.assertTrue(result.ok)
+        self.assertEqual(result.details["repaired_files"], ["src/app.js"])
+        self.assertEqual(result.details["generation_mode"], "generated_source")
+        self.assertFalse(result.details["degraded"])
+        self.assertEqual(result.details["evidence"][-1]["command"], "npm run build (repair 1)")
+
+    def test_failed_repair_is_explicitly_degraded(self):
+        result = self.run_build_case(iter([0, 1, 0, 0]), {"files": []})
+        self.assertTrue(result.ok)
+        self.assertTrue(result.details["degraded"])
+        self.assertEqual(result.details["generation_mode"], "recovery_renderer")
+        self.assertIn("not verified", result.output)
+
+    def test_install_failure_is_not_success(self):
+        result = self.run_build_case(iter([1]))
+        self.assertFalse(result.ok)
+        self.assertFalse(result.details["verification"]["build_passed"])
 
 
 if __name__ == '__main__':

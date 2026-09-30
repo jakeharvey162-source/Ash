@@ -28,6 +28,8 @@ for case in cases:
         "slug": case["slug"],
         "prompt": case["prompt"],
         "ok": bool(result.ok),
+        "generation_mode": result.details.get("generation_mode", "unknown"),
+        "degraded": result.details.get("degraded", True),
         "workspace": str(workspace),
         "generated_files": result.details.get("generated_files", []),
         "planner_warning": result.details.get("planner_warning", ""),
@@ -35,7 +37,7 @@ for case in cases:
         "summary": result.output[:1800],
     }
     report["cases"].append(entry)
-    if os.environ.get("ASH_REQUIRE_LIVE_BUILDER", "").strip().lower() in {"1","true","yes","on"} and "fallback" in str(entry.get("planner_warning") or "").lower():
+    if os.environ.get("ASH_REQUIRE_LIVE_BUILDER", "").strip().lower() in {"1","true","yes","on"} and entry["degraded"]:
         print(json.dumps(report, indent=2))
         raise SystemExit("Live paired Builder fell back instead of using Ash intelligence: " + case["slug"])
     if not result.ok:
