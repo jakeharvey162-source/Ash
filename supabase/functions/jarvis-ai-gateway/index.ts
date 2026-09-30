@@ -1350,10 +1350,11 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
     "You are Ash Computer Control. The user explicitly approved control of their own computer.",
     "Inspect the screenshot and choose the smallest safe next actions toward the goal.",
     "Return ONE JSON object only.",
-    "Schema: {\"done\":boolean,\"summary\":string,\"actions\":[{\"type\":\"move|click|double_click|type_text|press|hotkey|scroll|wait\",\"x\":number,\"y\":number,\"text\":string,\"key\":string,\"keys\":[string],\"amount\":number,\"seconds\":number}]}",
+    "Schema: {\"done\":boolean,\"summary\":string,\"coordinate_space\":\"normalized_1000\",\"actions\":[{\"type\":\"move|click|double_click|type_text|press|hotkey|scroll|wait\",\"x\":number,\"y\":number,\"text\":string,\"key\":string,\"keys\":[string],\"amount\":number,\"seconds\":number}]}",
     "Rules:",
     "- Maximum 4 actions.",
-    "- Coordinates are pixels within " + screenWidth + "x" + screenHeight + ".",
+    "- For pointer actions, x and y MUST use normalized 0-1000 coordinates: 0,0 is top-left and 1000,1000 is bottom-right regardless of screenshot size.",
+    "- The source screenshot represents a " + screenWidth + "x" + screenHeight + " screen, but do not return raw pixel coordinates.",
     "- For click or double-click targets, aim near the visual center of the target with a clear margin from its edges; never intentionally click the border.",
     "- Never type passwords, OTPs, card numbers, recovery codes, private keys, or other authentication secrets.",
     "- Never approve purchases, financial transfers, destructive deletion, security-setting changes, or account permission changes.",
@@ -1495,7 +1496,12 @@ async function planComputerFromScreenshot(system: string, goal: string, screensh
   const actions = Array.isArray(parsed?.actions) ? parsed.actions
     .filter((a: any) => allowed.has(String(a?.type || "")))
     .slice(0, 4) : [];
-  return { done: parsed?.done === true, summary: String(parsed?.summary || ""), actions };
+  return {
+    done: parsed?.done === true,
+    summary: String(parsed?.summary || ""),
+    coordinate_space: parsed?.coordinate_space === "normalized_1000" ? "normalized_1000" : "screen_pixels",
+    actions
+  };
 }
 
 Deno.serve(async (req: Request) => {
