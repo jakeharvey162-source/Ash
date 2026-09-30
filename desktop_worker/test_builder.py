@@ -111,6 +111,22 @@ class BuilderSafetyTests(unittest.TestCase):
         self.assertEqual(result.details["generation_mode"], "planned_renderer")
         self.assertFalse(result.details["degraded"])
 
+    def test_verified_renderer_includes_functional_admin_when_requested(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            files = self.agent._write_verified_fallback_site(
+                root,
+                "Build a website. ADMIN REQUIREMENT: include an admin area.",
+                {"name":"Demo","content":{"hero_title":"Hello","hero_summary":"Summary","primary_cta":"Start","features":[{"title":"A","body":"a"},{"title":"B","body":"b"},{"title":"C","body":"c"}]}},
+            )
+            app = (root / "src" / "App.jsx").read_text(encoding="utf-8")
+            css = (root / "src" / "styles.css").read_text(encoding="utf-8")
+            self.assertIn("LOCAL ADMIN DEMO", app)
+            self.assertIn('localStorage.setItem("site-copy"', app)
+            self.assertIn("Save changes", app)
+            self.assertIn(".admin-shell", css)
+            self.assertIn("src/App.jsx", files)
+
     def test_success_reports_only_verified_build(self):
         result = self.run_build_case(iter([0, 0]))
         self.assertTrue(result.ok)
