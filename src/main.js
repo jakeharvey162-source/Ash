@@ -1,6 +1,6 @@
 import { BrowserStudio } from './browser-studio.js';
 import { exactRepeatToken } from './exact-reply.js';
-import { renderIntelligenceCatalog } from './intelligence-view.js';
+import { renderIntelligenceCatalog, loadPublicEarthquakesView } from './intelligence-view.js';
 import { CONNECTOR_CATALOG } from './connectors.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus, openBackgroundWakeBatterySettings } from './native.js';
 const C=window.JARVIS_CONFIG||{};
@@ -1232,6 +1232,7 @@ function bind(){
   document.querySelector("#runHealth")?.addEventListener("click",()=>probeHealth(true));
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
+  document.querySelector("#loadPublicQuakes")?.addEventListener("click",()=>loadPublicEarthquakesView());
   document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
   document.querySelector("#createComputerControl")?.addEventListener("click",createComputerControlJob);
   document.querySelectorAll("[data-toggle-auto]").forEach(b=>b.onclick=()=>toggleAutomation(b.dataset.toggleAuto,b.dataset.enabled==="true"));
