@@ -26,7 +26,8 @@ try{
   await waitServer();
   browser=await chromium.launch({headless:true});
   for(const [name,width,height] of [["desktop",1440,960],["mobile",390,844]]){
-    const page=await browser.newPage({viewport:{width,height}});
+    const context=await browser.newContext({viewport:{width,height}});
+    const page=await context.newPage();
     page.on("console",m=>{if(m.type()==="error")report.errors.push({view:name,type:"console",text:m.text()})});
     page.on("pageerror",e=>report.errors.push({view:name,type:"page",text:String(e)}));
     const r=await page.goto("http://127.0.0.1:5179/",{waitUntil:"networkidle",timeout:30000});
@@ -62,7 +63,7 @@ try{
     const blockers=violations.filter(v=>v.impact==="critical"||v.impact==="serious");
     if(blockers.length)throw new Error(name+" has serious automated accessibility failures: "+JSON.stringify(blockers.slice(0,5)));
     await page.screenshot({path:`builder-${name}.png`,fullPage:true});
-    await page.close();
+    await context.close();
   }
   if(report.errors.length)throw new Error("Browser errors detected: "+JSON.stringify(report.errors.slice(0,8)));
   report.checks.desktop=true;
