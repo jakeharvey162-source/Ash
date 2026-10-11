@@ -1,10 +1,11 @@
 import { chromium } from "playwright";
+import AxeBuilder from "@axe-core/playwright";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 
 const cwd="builder-acceptance-output";
 const reportPath="builder-visual-acceptance.json";
-const report={checks:{},errors:[]};
+const report={checks:{},errors:[],accessibility:{}};
 
 const detached=process.platform!=="win32";
 const child=spawn("npm",["run","preview","--","--host","127.0.0.1","--port","5179"],{cwd,shell:false,stdio:["ignore","pipe","pipe"],detached});
@@ -44,6 +45,22 @@ try{
     if(metrics.text.length<500)throw new Error(name+" rendered too little meaningful content");
     if(metrics.headings<4||metrics.sections<4||metrics.buttons<3)throw new Error(name+" lacks expected visual/semantic structure");
     if(/lorem ipsum|john doe|acme corp/i.test(metrics.text))throw new Error(name+" contains placeholder content");
+    const axe=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21aa"]).analyze();
+    const violations=axe.violations.map(v=>({
+      rule:v.id,
+      impact:v.impact||"unknown",
+      nodes:v.nodes.length,
+      description:String(v.help||"") .slice(0,120)
+    }));
+    report.accessibility[name]={
+      engine:"axe-core",
+      wcag_tags:["wcag2a","wcag2aa","wcag21aa"],
+      violations,
+      automatic_only:true,
+      keyboard_and_screen_reader_review_required:true
+    };
+    const blockers=violations.filter(v=>v.impact==="critical"||v.impact==="serious");
+    if(blockers.length)throw new Error(name+" has serious automated accessibility failures: "+JSON.stringify(blockers.slice(0,5)));
     await page.screenshot({path:`builder-${name}.png`,fullPage:true});
     await page.close();
   }
