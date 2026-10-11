@@ -24,8 +24,8 @@ jobs:
         run: pip install -r desktop_worker/requirements.txt
       - name: Python desktop tests
         run: PYTHONPATH=desktop_worker python -m unittest discover -s desktop_worker -p 'test_*.py'
-      - name: Exact reply tests
-        run: node --test tests/exact-reply.test.mjs
+      - name: Local source and UI regression tests
+        run: node --test tests/exact-reply.test.mjs tests/intelligence-view.test.mjs
       - name: Build web
         run: |
           npm install --no-audit --no-fund
