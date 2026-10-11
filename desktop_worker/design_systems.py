@@ -81,13 +81,20 @@ FALLBACK_COLORS = {
     "Clean Enterprise": ("#F7F9FC","#FFFFFF","#17263A","#64768C","#3976DF",
                           "#101A2A","#1B2C40","#EDF3FC","#B1C2DA","#6EACFF"),
 }
+CTA_COLORS = {
+    "Editorial Luxe": "#694726",
+    "Midnight Studio": "#075747",
+    "Warm Commerce": "#762e20",
+    "Clean Enterprise": "#164582",
+}
+
 def fallback_css_for_request(request: str) -> str:
     for label, colors in FALLBACK_COLORS.items():
         if "Preset: " + label in str(request or ""):
             a,b,c,d,e,f,g,h,i,j = colors
             return (
                 "\n/* Ash Studio original fallback palette: " + label + " */\n"
-                f":root{{--bg:{a};--surface:{b};--ink:{c};--muted:{d};--accent:{e};}}\n"
+                f":root{{--bg:{a};--surface:{b};--ink:{c};--muted:{d};--accent:{e};--cta-bg:{CTA_COLORS[label]};}}\n"
                 f":root[data-theme='dark']{{--bg:{f};--surface:{g};--ink:{h};--muted:{i};--accent:{j};}}\n"
             )
     return ""
