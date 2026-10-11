@@ -17,6 +17,7 @@ from local_scheduler import LocalScheduler
 from computer_control import AshComputerController, ComputerControlUnavailable
 from site_reference import capture_site_reference
 from design_systems import design_spec
+from build_quality import assess_build
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
 
@@ -349,6 +350,7 @@ class AshRemoteWorker:
                 built = self.agent.build_fullstack(effective_prompt, str(workspace))
                 preview_url = ""
                 verification = built.details.get("verification", {})
+                quality_report = assess_build(workspace, built.details)
                 if built.ok and verification.get("build_passed") is True:
                     preview_url = self._start_local_preview(workspace, job_id)
                 result = {
@@ -364,6 +366,7 @@ class AshRemoteWorker:
                     "verification": verification,
                     "preview_url": preview_url,
                     "builder_meta": builder_meta,
+                    "quality_report": quality_report,
                 }
                 self.finish(job_id, ok=built.ok, result=result, error="" if built.ok else built.output)
             elif kind in {"computer_control", "computer", "desktop_control"} or payload.get("computer_control") is True:
