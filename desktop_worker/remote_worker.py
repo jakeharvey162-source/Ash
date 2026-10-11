@@ -417,9 +417,10 @@ class AshRemoteWorker:
             self.finish(job_id, ok=False, error=str(exc))
 
     def run_due_local_tasks(self) -> None:
-        for task in self.local_scheduler.due():
+        for task in self.local_scheduler.claim_due():
             task_id = str(task.get("id") or "")
             prompt = str(task.get("prompt") or "").strip()
+            lease_id = str(task.get("lease_id") or "")
             if not task_id or not prompt:
                 continue
             try:
@@ -431,6 +432,8 @@ class AshRemoteWorker:
                         ok=False,
                         summary=result.output,
                         error="Scheduled task reached an action that requires confirmation.",
+                        lease_id=lease_id,
+                        needs_confirmation=True,
                     )
                 else:
                     self.local_scheduler.complete(
@@ -438,11 +441,12 @@ class AshRemoteWorker:
                         ok=result.ok,
                         summary=result.output,
                         error="" if result.ok else result.output,
+                        lease_id=lease_id,
                     )
                 self.emit("schedule_done", task_id=task_id, ok=bool(result.ok and not result.requires_confirmation))
             except Exception as exc:
                 self.emit("schedule_done", task_id=task_id, ok=False, message=str(exc)[:240])
-                self.local_scheduler.complete(task_id, ok=False, error=str(exc))
+                self.local_scheduler.complete(task_id, ok=False, error=str(exc), lease_id=lease_id)
 
     def run_forever(self) -> None:
         self.validate()

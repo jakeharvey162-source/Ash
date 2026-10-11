@@ -1,4 +1,6 @@
 import { BrowserStudio } from './browser-studio.js';
+import { exactRepeatToken } from './exact-reply.js';
+import { renderIntelligenceCatalog } from './intelligence-view.js';
 import { CONNECTOR_CATALOG } from './connectors.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus, openBackgroundWakeBatterySettings } from './native.js';
 const C=window.JARVIS_CONFIG||{};
@@ -451,7 +453,7 @@ async function talkNow(){
 
 
 function nav(){
-  const items=[["home","Overview"],["builder","Builder"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["team","Organization"],["settings","Preferences"]];
+  const items=[["home","Overview"],["builder","Builder"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["intelligence","Intelligence"],["team","Organization"],["settings","Preferences"]];
   const liveDevices=devices.filter(d=>d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<90000).length;
   const cloudOk=healthState.gateway==="online"&&healthState.session==="healthy";
   const cloudLabel=cloudOk?"Cloud connected":healthState.gateway==="degraded"?"Cloud degraded":"Checking cloud";
@@ -464,7 +466,7 @@ function topbar(title,sub=""){
   return `<header class="topbar"><div><p class="kicker">${esc(sub)}</p><h1>${esc(title)}</h1></div><div class="topactions"><div class="modeSwitch">${["instant","medium","high"].map(x=>`<button data-mode="${x}" class="${mode===x?"active":""}">${x}</button>`).join("")}</div><button type="button" class="handsFreeToggle ${wakeOn?"active":""}" data-handsfree-toggle aria-pressed="${wakeOn?"true":"false"}" title="Hands-free wake listening"><span>●</span><em>${wakeOn?"Wake armed":"Wake off"}</em></button><button type="button" class="voiceToggle ${voiceEnabled()?"active":""}" data-voice-toggle aria-pressed="${voiceEnabled()?"true":"false"}" title="Turn spoken responses ${voiceEnabled()?"off":"on"}"><span>${voiceEnabled()?"◖))":"◖×"}</span><em>${voiceEnabled()?"Voice on":"Voice off"}</em></button><button id="themeToggle" class="themeToggle" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button><span class="live ${cloudOk?"ok":""}"><i></i>${label}</span></div></header>`;
 }
 function googleMark(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.24-.2-1.8H12v3.27h5.52c-.11.81-.71 2.03-2.05 2.85l-.02.11 2.98 2.31.21.02c1.95-1.8 3.07-4.45 3.07-7.76Z"/><path fill="#34A853" d="M12 22c2.78 0 5.11-.92 6.81-2.5l-3.24-2.51c-.87.59-2.02 1-3.57 1-2.73 0-5.05-1.8-5.88-4.29l-.1.01-3.1 2.4-.04.1C4.57 19.57 8.03 22 12 22Z"/><path fill="#FBBC05" d="M6.12 13.7A6.02 6.02 0 0 1 5.8 12c0-.59.11-1.16.3-1.7l-.01-.12-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.05 4.46l3.07-2.76Z"/><path fill="#EA4335" d="M12 6.01c1.94 0 3.25.84 4 1.53l2.88-2.81C17.11 3.08 14.78 2 12 2 8.03 2 4.57 4.43 2.88 7.79l3.22 2.51C6.95 7.81 9.27 6.01 12 6.01Z"/></svg>'}
-function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav" aria-label="Ash mobile navigation">${[["home","Home"],["builder","Build"],["automation","Automate"],["activity","Activity"],["connections","Connect"],["team","Team"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
+function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav" aria-label="Ash mobile navigation">${[["home","Home"],["builder","Build"],["automation","Automate"],["activity","Activity"],["connections","Connect"],["intelligence","Intel"],["team","Team"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
 function authView(){
   const signupMode=authMode==="signup";
   return `<section class="cinematicAuth" id="cinematicAuth">
@@ -1148,7 +1150,7 @@ async function playVoiceBlob(blob){
     await audio.play();
   }catch{setVoiceState(false);URL.revokeObjectURL(url)}
 }
-function render(){browserStudio.syncUser(session?.user?.id||null);browserStudio.detach?.();heroVisualCleanup?.();heroVisualCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="team"?teamView():settingsView()):authView();bind();if(session&&view==="builder")browserStudio.mount();if(!session){initCinematicMotion();initHeroRobot()}else{initAshCore();refreshHandsFreeUi()}}
+function render(){browserStudio.syncUser(session?.user?.id||null);browserStudio.detach?.();heroVisualCleanup?.();heroVisualCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="intelligence"?topbar("Intelligence","ASH / RESEARCH")+renderIntelligenceCatalog():view==="team"?teamView():settingsView()):authView();bind();if(session&&view==="builder")browserStudio.mount();if(!session){initCinematicMotion();initHeroRobot()}else{initAshCore();refreshHandsFreeUi()}}
 function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelectorAll("[data-voice-toggle]").forEach(b=>b.addEventListener("click",toggleVoiceOutput));
@@ -1483,10 +1485,16 @@ async function send(){
   sending=true;setSendBusy(true);setCoreState("thinking",fresh?"Researching the live web and checking sources.":"Working the request across Ash intelligence.");
 
   try{
-    const action=fresh?"research":"chat";
-    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(-10)})});
-    const d=await r.json();
-    if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");
+    const exactToken=exactRepeatToken(message);
+    let d;
+    if(exactToken!==null){
+      d={answer:exactToken};
+    }else{
+      const action=fresh?"research":"chat";
+      const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(-10)})});
+      d=await r.json();
+      if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");
+    }
 
     const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null,grounded:Boolean(d.grounded),sources:Array.isArray(d.sources)?d.sources:[],researched_at:d.researched_at||null};
     messages.push(reply);
