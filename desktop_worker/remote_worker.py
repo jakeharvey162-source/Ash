@@ -16,6 +16,7 @@ from ash_agent import AshPythonAgent
 from local_scheduler import LocalScheduler
 from computer_control import AshComputerController, ComputerControlUnavailable
 from site_reference import capture_site_reference
+from design_systems import design_spec
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
 
@@ -303,6 +304,13 @@ class AshRemoteWorker:
             except Exception as exc:
                 meta["reference_error"] = str(exc)[:300]
                 parts.append("\nReference URL could not be inspected. Continue with an original design and do not pretend the reference was captured.")
+        preset = str(payload.get("design_preset") or "editorial-luxe")
+        try:
+            style_prompt, style_meta = design_spec(preset)
+        except ValueError:
+            raise ValueError("Unsupported design preset; choose a known Ash Studio direction.")
+        parts.append("\n" + style_prompt)
+        meta.update(style_meta)
         if payload.get("create_admin") is True:
             parts.append(
                 "\nADMIN REQUIREMENT:\nInclude a clearly separated admin area for managing the site's editable content. "
