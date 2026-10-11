@@ -69,3 +69,25 @@ def design_spec(preset: str) -> tuple[str, dict]:
     )
     return prompt, {"design_preset": preset, "design_label": data["label"],
                     "suggested_colors": data["palette"], "component_libraries_installed": False}
+
+# Verified fallback uses original color tokens, not third-party source code.
+FALLBACK_COLORS = {
+    "Editorial Luxe": ("#F5F1EA","#FCFAF5","#10141B","#64707B","#B89360",
+                       "#10141B","#1C2632","#F5F1EA","#A7B1C0","#D4AF76"),
+    "Midnight Studio": ("#0A0C12","#151C27","#EAEFF7","#A5B1C4","#8FE4CF",
+                        "#0A0C12","#151C27","#EAEFF7","#A5B1C4","#8FE4CF"),
+    "Warm Commerce": ("#F7F3E9","#FFFCF6","#332A24","#76685D","#D9754A",
+                       "#211B18","#302720","#FFF4E9","#BBABA0","#F19776"),
+    "Clean Enterprise": ("#F7F9FC","#FFFFFF","#17263A","#64768C","#3976DF",
+                          "#101A2A","#1B2C40","#EDF3FC","#B1C2DA","#6EACFF"),
+}
+def fallback_css_for_request(request: str) -> str:
+    for label, colors in FALLBACK_COLORS.items():
+        if "Preset: " + label in str(request or ""):
+            a,b,c,d,e,f,g,h,i,j = colors
+            return (
+                "\n/* Ash Studio original fallback palette: " + label + " */\n"
+                f":root{{--bg:{a};--surface:{b};--ink:{c};--muted:{d};--accent:{e};}}\n"
+                f":root[data-theme='dark']{{--bg:{f};--surface:{g};--ink:{h};--muted:{i};--accent:{j};}}\n"
+            )
+    return ""
