@@ -51,7 +51,8 @@ try{
       rule:v.id,
       impact:v.impact||"unknown",
       nodes:v.nodes.length,
-      description:String(v.help||"") .slice(0,120)
+      targets:v.nodes.slice(0,5).map(n=>({selector:n.target.slice(0,2),summary:String(n.failureSummary||"").slice(0,300)})),
+      description:String(v.help||"").slice(0,120)
     }));
     report.accessibility[name]={
       engine:"axe-core",
