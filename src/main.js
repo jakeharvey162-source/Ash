@@ -1,4 +1,5 @@
 import { BrowserStudio } from './browser-studio.js';
+import { exactRepeatToken } from './exact-reply.js';
 import { CONNECTOR_CATALOG } from './connectors.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus, openBackgroundWakeBatterySettings } from './native.js';
 const C=window.JARVIS_CONFIG||{};
@@ -1483,10 +1484,16 @@ async function send(){
   sending=true;setSendBusy(true);setCoreState("thinking",fresh?"Researching the live web and checking sources.":"Working the request across Ash intelligence.");
 
   try{
-    const action=fresh?"research":"chat";
-    const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(-10)})});
-    const d=await r.json();
-    if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");
+    const exactToken=exactRepeatToken(message);
+    let d;
+    if(exactToken!==null){
+      d={answer:exactToken};
+    }else{
+      const action=fresh?"research":"chat";
+      const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(-10)})});
+      d=await r.json();
+      if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");
+    }
 
     const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null,grounded:Boolean(d.grounded),sources:Array.isArray(d.sources)?d.sources:[],researched_at:d.researched_at||null};
     messages.push(reply);
