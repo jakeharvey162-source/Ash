@@ -255,9 +255,18 @@ try{
   await nav("activity");
   const protectedRow=page.locator(".activityRow").filter({hasText:autoNames.daily}).first();
   await protectedRow.locator("[data-approve-job]").click();
-  await sleep(500);
-  protectedState=await authedJson("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(protectedJob.id)+"&select=*");
-  if(protectedState.data?.[0]?.status!=="queued"||protectedState.data?.[0]?.requires_confirmation!==false) fail("Activity approval did not release protected job");
+  // Approval updates a remote DB asynchronously. Wait for its actual persisted
+  // authorization result rather than guessing that 500 ms is always sufficient.
+  // Never skip confirmation, fabricate a release, or change job state in the audit.
+  const approvalDeadline=Date.now()+12000;
+  do {
+    protectedState=await authedJson("/rest/v1/jarvis_remote_jobs?id=eq."+encodeURIComponent(protectedJob.id)+"&select=*");
+    if(protectedState.data?.[0]?.status==="queued"&&protectedState.data?.[0]?.requires_confirmation===false) break;
+    await sleep(400);
+  } while(Date.now()<approvalDeadline);
+  if(protectedState.data?.[0]?.status!=="queued"||protectedState.data?.[0]?.requires_confirmation!==false)
+    fail("Activity approval did not release protected job (state="+
+      JSON.stringify({status:protectedState.data?.[0]?.status,requires_confirmation:protectedState.data?.[0]?.requires_confirmation,http:protectedState.status})+")");
 
   const approvedClaim=await page.evaluate(async({pairing,jobId})=>{
     const r=await fetch(pairing.endpoint,{method:"POST",headers:{"Content-Type":"application/json","x-ash-device-id":pairing.device_id,"x-ash-device-secret":pairing.device_secret},body:JSON.stringify({action:"claim_job",job_id:jobId})});

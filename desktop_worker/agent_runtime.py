@@ -11,6 +11,8 @@ from typing import Any, Callable
 
 from local_scheduler import LocalScheduler
 from intelligence_hub import catalog as intelligence_catalog, wazuh_agents, read_local_export
+from trusted_sources import catalogue as trusted_plugins_catalogue, earthquakes as usgs_earthquakes, github_project
+from visual_planner import flow_diagram
 
 
 @dataclass
@@ -158,6 +160,26 @@ class AshAgentRuntime:
             "Index a workspace file or folder into OpenJarvis memory.",
             self._tool_openjarvis_memory_index,
             confirmation_required=True,
+        ))
+        self.tools.register(ToolSpec(
+            "visual.diagram",
+            "Build bounded Mermaid flowchart SOURCE for planning, with 1-18 labeled nodes and 0-30 edges; not rendered until opened in an editor.",
+            self._tool_diagram,
+        ))
+        self.tools.register(ToolSpec(
+            "plugins.catalog",
+            "Show approved public plugin tools and permissions (no arbitrary tools automatically installed).",
+            self._tool_plugins_catalog,
+        ))
+        self.tools.register(ToolSpec(
+            "plugins.github.repository",
+            "Read real GitHub metadata for an allowlisted open-source project; never claim the repo is installed.",
+            self._tool_plugins_github,
+        ))
+        self.tools.register(ToolSpec(
+            "world.usgs.earthquakes",
+            "Fetch recent publicly reported USGS earthquakes as source-dated map records, not surveillance.",
+            self._tool_world_earthquakes,
         ))
         self.tools.register(ToolSpec(
             "intelligence.catalog",
@@ -356,6 +378,19 @@ class AshAgentRuntime:
             "workspace": str(self.workspace_root),
             "skills": bool(self.agent.kernel.skill_context("research debug build memory")),
         }
+
+    def _tool_diagram(self, args: dict[str, Any]) -> Any:
+        return flow_diagram(str(args.get("title") or "Ash diagram"),
+                            args.get("nodes"), args.get("edges", []))
+
+    def _tool_plugins_catalog(self, _args: dict[str, Any]) -> Any:
+        return {"plugins": trusted_plugins_catalogue(), "network_executed": False}
+
+    def _tool_plugins_github(self, args: dict[str, Any]) -> Any:
+        return github_project(str(args.get("project") or ""))
+
+    def _tool_world_earthquakes(self, _args: dict[str, Any]) -> Any:
+        return usgs_earthquakes()
 
     def _tool_intelligence_catalog(self, _args: dict[str, Any]) -> Any:
         return {"connectors": intelligence_catalog()}

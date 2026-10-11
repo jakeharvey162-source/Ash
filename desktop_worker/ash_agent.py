@@ -778,6 +778,8 @@ export default function App() {{
 .admin-shell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.48);display:grid;place-items:center;padding:20px;backdrop-filter:blur(12px)}.admin-panel{width:min(680px,100%);max-height:88vh;overflow:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:24px;padding:28px;box-shadow:0 30px 100px rgba(0,0,0,.3)}.admin-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.admin-head h2{font-family:Georgia,serif;font-size:36px;font-weight:500;margin:8px 0 18px}.admin-note{color:var(--muted);font-size:13px}.admin-panel label{display:grid;gap:8px;font-weight:650;margin-top:18px}.admin-panel input,.admin-panel textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:14px;padding:13px 14px;font:inherit}.admin-panel input:focus,.admin-panel textarea:focus{outline:2px solid var(--accent);outline-offset:2px}.admin-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 """
+        from design_systems import fallback_css_for_request
+        css += fallback_css_for_request(request)
         # A full fallback replaces partial/invalid generated output rather than mixing incompatible files.
         if root.exists():
             for child in list(root.iterdir()):
