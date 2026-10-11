@@ -5,6 +5,7 @@ audit, or customer feedback. We never run generated source from this module.
 """
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 from typing import Any
@@ -28,26 +29,32 @@ def assess_build(root: pathlib.Path, details: dict[str, Any]) -> dict[str, Any]:
     sources: list[str] = []
     bytes_read = 0
     found_files = 0
-    for path in sorted(workspace.rglob("*")):
-        if len(sources) >= MAX_FILES or bytes_read >= MAX_TOTAL_BYTES:
-            break
-        if SKIP_DIRECTORIES.intersection(path.relative_to(workspace).parts):
-            continue
-        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in EXTENSIONS:
-            continue
-        try:
-            if workspace not in path.resolve().parents:
-                continue
-            size = path.stat().st_size
-            if size > MAX_FILE_BYTES:
-                continue
-            bytes_read += size
-            if bytes_read > MAX_TOTAL_BYTES:
+    # Prune dependency/build directories before recursion. A node_modules
+    # directory can contain >100,000 files; sorting rglob("*") first would
+    # allocate that full tree and delay every completed Builder job.
+    for current, dirs, filenames in os.walk(workspace, topdown=True, followlinks=False):
+        dirs[:] = sorted(d for d in dirs
+                         if d not in SKIP_DIRECTORIES
+                         and not (pathlib.Path(current) / d).is_symlink())
+        for filename in sorted(filenames):
+            if found_files >= MAX_FILES or bytes_read >= MAX_TOTAL_BYTES:
                 break
-            sources.append(path.read_text(encoding="utf-8", errors="replace"))
-            found_files += 1
-        except OSError:
-            continue
+            path = pathlib.Path(current) / filename
+            if path.is_symlink() or path.suffix.lower() not in EXTENSIONS:
+                continue
+            try:
+                if workspace not in path.resolve().parents:
+                    continue
+                size = path.stat().st_size
+                if size > MAX_FILE_BYTES or bytes_read + size > MAX_TOTAL_BYTES:
+                    continue
+                sources.append(path.read_text(encoding="utf-8", errors="replace"))
+                bytes_read += size
+                found_files += 1
+            except OSError:
+                continue
+        if found_files >= MAX_FILES or bytes_read >= MAX_TOTAL_BYTES:
+            break
     body = "\n".join(sources)
     tests = {
         "responsive_layout_source": bool(re.search(r"@media\b|clamp\(|minmax\(|flex-wrap|grid-template", body, re.I)),
