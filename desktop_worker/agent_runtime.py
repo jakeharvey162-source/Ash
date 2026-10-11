@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from local_scheduler import LocalScheduler
+from intelligence_hub import catalog as intelligence_catalog, wazuh_agents, read_local_export
 
 
 @dataclass
@@ -159,6 +160,21 @@ class AshAgentRuntime:
             confirmation_required=True,
         ))
         self.tools.register(ToolSpec(
+            "intelligence.catalog",
+            "List available intelligence modules and their honest configuration status.",
+            self._tool_intelligence_catalog,
+        ))
+        self.tools.register(ToolSpec(
+            "intelligence.wazuh.agents",
+            "Read agent inventory from the user's configured Wazuh manager only.",
+            self._tool_intelligence_agents,
+        ))
+        self.tools.register(ToolSpec(
+            "intelligence.report",
+            "Read an existing authorized SpiderFoot or Strix JSON export in the Ash workspace.",
+            self._tool_intelligence_report,
+        ))
+        self.tools.register(ToolSpec(
             "scheduler.list",
             "List recurring tasks stored on this desktop.",
             self._tool_scheduler_list,
@@ -167,6 +183,18 @@ class AshAgentRuntime:
             "scheduler.create",
             "Create a recurring local Ash task using an interval in minutes.",
             self._tool_scheduler_create,
+            confirmation_required=True,
+        ))
+        self.tools.register(ToolSpec(
+            "scheduler.pause",
+            "Pause a recurring Ash task pending review.",
+            self._tool_scheduler_pause,
+            confirmation_required=True,
+        ))
+        self.tools.register(ToolSpec(
+            "scheduler.resume",
+            "Resume a previously paused recurring Ash task.",
+            self._tool_scheduler_resume,
             confirmation_required=True,
         ))
         self.tools.register(ToolSpec(
@@ -329,6 +357,19 @@ class AshAgentRuntime:
             "skills": bool(self.agent.kernel.skill_context("research debug build memory")),
         }
 
+    def _tool_intelligence_catalog(self, _args: dict[str, Any]) -> Any:
+        return {"connectors": intelligence_catalog()}
+
+    def _tool_intelligence_agents(self, _args: dict[str, Any]) -> Any:
+        return wazuh_agents()
+
+    def _tool_intelligence_report(self, args: dict[str, Any]) -> Any:
+        kind = str(args.get("kind") or "")
+        path = self._safe_path(str(args.get("path") or ""))
+        if kind not in ("spiderfoot", "strix") or not path.is_file():
+            raise ValueError("Select a supported report in your Ash workspace.")
+        return read_local_export(kind, str(path))
+
     def _tool_scheduler_list(self, _args: dict[str, Any]) -> Any:
         tasks = self.scheduler.list()
         return {"tasks": tasks[:50]}
@@ -339,6 +380,18 @@ class AshAgentRuntime:
             str(args.get("prompt") or ""),
             int(args.get("interval_minutes") or 0),
         )
+
+    def _tool_scheduler_pause(self, args: dict[str, Any]) -> Any:
+        task_id = str(args.get("task_id") or "").strip()
+        if not task_id:
+            raise ValueError("task_id is required.")
+        return {"paused": self.scheduler.pause(task_id), "task_id": task_id}
+
+    def _tool_scheduler_resume(self, args: dict[str, Any]) -> Any:
+        task_id = str(args.get("task_id") or "").strip()
+        if not task_id:
+            raise ValueError("task_id is required.")
+        return {"resumed": self.scheduler.resume(task_id), "task_id": task_id}
 
     def _tool_scheduler_cancel(self, args: dict[str, Any]) -> Any:
         task_id = str(args.get("task_id") or "").strip()
@@ -413,6 +466,14 @@ class AshAgentRuntime:
 
         if not evidence:
             return RuntimeResult(True, self.agent.think(prompt, mode), [], [])
+
+        # Reporting success for failed tools makes autonomous actions appear completed.
+        # Stop the plan and retain evidence rather than asking a model to hide the failure.
+        failures = [item for item in evidence if item.get("ok") is False]
+        if failures:
+            labels = ", ".join(str(item.get("tool")) for item in failures)
+            return RuntimeResult(False, "Ash could not complete the task. Failed tools: " + labels,
+                                 tools_used, evidence)
 
         evidence_text = json.dumps(evidence, ensure_ascii=False)[:24000]
         final_prompt = (
