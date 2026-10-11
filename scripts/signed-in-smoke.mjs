@@ -205,7 +205,8 @@ for (const [w,h,label] of [
 const mobileButtons = await page.locator(".mobileNav button").count();
 await page.setViewportSize({width:390,height:844});
 await page.reload({waitUntil:"networkidle"});
-if (mobileButtons !== 7) throw new Error("Expected 7 mobile navigation actions, got " + mobileButtons);
+if (mobileButtons !== 8) throw new Error("Expected 8 mobile navigation actions, got " + mobileButtons);
+if (await page.locator('.mobileNav button[data-view="intelligence"]').count() !== 1) throw new Error("Intelligence page is missing from mobile navigation.");
 await page.screenshot({ path: "signed-in-smoke.png", fullPage: true });
 console.log("ASH SIGNED-IN UI SMOKE: PASS");
 await browser.close();
