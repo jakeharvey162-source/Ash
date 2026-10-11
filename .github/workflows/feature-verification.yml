@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install desktop test dependencies
+        run: pip install -r desktop_worker/requirements.txt
       - name: Python desktop tests
         run: PYTHONPATH=desktop_worker python -m unittest discover -s desktop_worker -p 'test_*.py'
       - name: Exact reply tests
