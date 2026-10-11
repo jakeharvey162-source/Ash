@@ -30,3 +30,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run build
+      - name: Verify Deque axe-core accessibility test adapter
+        run: |
+          npm install --no-save --no-audit --no-fund playwright @axe-core/playwright@4.13.0
+          node --input-type=module -e "import AxeBuilder from '@axe-core/playwright'; if(typeof AxeBuilder !== 'function') process.exit(1); console.log('AxeBuilder import verified');"
