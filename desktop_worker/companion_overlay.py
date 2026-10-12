@@ -183,6 +183,25 @@ class AshHologramCompanion:
         self.next_blink = time.time() + random.uniform(2.2, 5.0)
         self.drag_origin: tuple[int, int] | None = None
         self.hidden_until = 0.0
+        self.presence = "visible"
+        self.portal_started = 0.0
+        self.gesture_until = 0.0
+        self.gesture = "idle"
+        self.roaming = False
+        self.next_stroll = time.monotonic() + 18
+        self.robot_frames = {}
+        assets = ROOT / "assets" / "robot"
+        for name in ("idle", "speaking", "thinking", "wave", "dance", "walking"):
+            try:
+                sheet = tk.PhotoImage(file=str(assets / f"{name}.png"))
+                frames = []
+                for i in range(12):
+                    frame = tk.PhotoImage(width=256, height=320)
+                    frame.tk.call(frame, "copy", sheet, "-from", i*256, 0, (i+1)*256, 320, "-to", 0, 0)
+                    frames.append(frame)
+                self.robot_frames[name] = frames
+            except (tk.TclError, OSError):
+                self.robot_frames.pop(name, None)
         self.events: queue.Queue[dict] = queue.Queue()
         self.worker: subprocess.Popen[str] | None = None
         self.voice: subprocess.Popen[str] | None = None
@@ -208,7 +227,7 @@ class AshHologramCompanion:
         self.canvas.pack(fill="both", expand=True)
         self.aura = AshScreenAura(
             self.root,
-            state_getter=lambda: self.state,
+            state_getter=lambda: "idle" if self.presence == "hidden" else self.state,
             color_getter=lambda: self._color()[0],
             transparent=self.TRANSPARENT,
         )
@@ -369,7 +388,7 @@ class AshHologramCompanion:
             user32 = ctypes.windll.user32
             down = all(user32.GetAsyncKeyState(vk) & 0x8000 for vk in (0x11, 0x12, 0x41))
             if down and not self.hotkey_down:
-                self.root.deiconify()
+                self._summon()
                 self.root.lift()
                 self.root.attributes("-topmost", True)
                 self.state = "wake"
@@ -386,13 +405,22 @@ class AshHologramCompanion:
 
     def _hide_temporarily(self, seconds: int = 600) -> None:
         self.hidden_until = time.time() + seconds
-        self.root.withdraw()
+        self.presence = "departing"
+        self.portal_started = time.monotonic()
         self.root.after(seconds * 1000, self._show_again)
 
     def _show_again(self) -> None:
         if time.time() >= self.hidden_until:
-            self.root.deiconify()
-            self.root.attributes("-topmost", True)
+            self._summon()
+
+    def _summon(self) -> None:
+        self.hidden_until = 0.0
+        self.presence = "arriving"
+        self.portal_started = time.monotonic()
+        self.root.deiconify()
+        self.root.attributes("-topmost", True)
+        self.last_text = "Now you need me? I'm here."
+        self.detail = "Your conversation and running tasks are still here."
 
     def _menu(self, event) -> None:
         menu = tk.Menu(
@@ -407,6 +435,7 @@ class AshHologramCompanion:
         menu.add_command(label="Open Ash command center", command=self._open_ash)
         menu.add_command(label="Link this computer", command=self._link_computer)
         menu.add_command(label="Compact / expand", command=self._toggle_compact)
+        menu.add_command(label="Stop strolling" if self.roaming else "Let Ash stroll around", command=self._toggle_roaming)
         menu.add_command(label="Restart local voice" if self._local_voice_available() else "Open voice in Ash", command=self._restart_voice_runtime if self._local_voice_available() else self._open_ash)
         menu.add_command(label="Restart desktop worker", command=self._restart_worker)
         menu.add_command(label="Check for updates", command=lambda: threading.Thread(target=self._check_for_updates, kwargs={"manual": True}, daemon=True).start())
@@ -421,6 +450,10 @@ class AshHologramCompanion:
     def _version_tuple(value: str) -> tuple[int, int, int]:
         match = re.match(r"^v?(\d+)\.(\d+)\.(\d+)", str(value or "").strip())
         return tuple(int(x) for x in match.groups()) if match else (0, 0, 0)
+
+    def _toggle_roaming(self) -> None:
+        self.roaming = not self.roaming
+        self.next_stroll = time.monotonic()
 
     def _check_for_updates(self, manual: bool = False) -> None:
         try:
@@ -587,6 +620,18 @@ class AshHologramCompanion:
 
     def _handle_event(self, event: dict) -> None:
         typ = str(event.get("type") or "")
+        if typ == "companion":
+            action = event.get("action")
+            if action == "dismiss":
+                self._hide_temporarily(86400)
+            elif action == "summon":
+                self._summon()
+            elif action in {"dance", "wave"}:
+                self.gesture = action
+                self.gesture_until = time.monotonic() + 3.0
+            return
+        if typ == "wake" and self.presence in {"hidden", "departing"}:
+            self._summon()
         source = str(event.get("source") or "voice")
         if source == "updater":
             if typ == "update_available":
@@ -727,16 +772,40 @@ class AshHologramCompanion:
             font=("Segoe UI Semibold", 9),
         )
         self.canvas.create_text(
-            22, 70, anchor="nw", text=self.last_text, width=292, fill=self.TEXT,
+            22, 67, anchor="nw", text=self.last_text[:78], width=292, fill=self.TEXT,
             font=("Segoe UI", 10),
         )
         self.canvas.create_text(
-            22, 104, anchor="sw", text=self.detail, width=292, fill=self.MUTED,
+            22, 100, anchor="nw", text=self.detail[:70], width=292, fill=self.MUTED,
             font=("Segoe UI", 7),
         )
 
     def _draw_hologram(self, accent: str, label: str) -> None:
         c = self.canvas
+        frames = self.robot_frames.get(self.gesture if time.monotonic() < self.gesture_until else self.state,
+                                       self.robot_frames.get("idle"))
+        if frames:
+            progress = min(1.0, (time.monotonic() - self.portal_started) / 1.0)
+            shift = 0
+            if self.presence in {"departing", "arriving"}:
+                strength = progress if self.presence == "departing" else 1.0-progress
+                shift = strength * 170
+                c.create_oval(115, 290, 245, 430, fill="#04111e", outline="#7c78ff", width=5)
+                c.create_arc(100, 277, 260, 443, start=self.phase*100 % 360, extent=260, outline=accent, width=3, style=tk.ARC)
+            c.create_image(178+math.sin(self.phase*.4)*5, 286+math.sin(self.phase)*4+shift,
+                           image=frames[int(self.phase*5) % len(frames)])
+            if self.state == "speaking":
+                cx = 178+math.sin(self.phase*.4)*5
+                cy = 250+math.sin(self.phase)*4+shift
+                amplitude = 2+5*abs(math.sin(self.phase*9))
+                c.create_oval(cx-10, cy-amplitude, cx+10, cy+amplitude, fill="#052030", outline=accent, width=2)
+            if self.presence == "departing" and progress >= 1:
+                self.presence = "hidden"
+                self.root.withdraw()
+            elif self.presence == "arriving" and progress >= 1:
+                self.presence = "visible"
+            self._glow_oval(108, 432, 248, 452, accent, layers=3)
+            return
         bob = math.sin(self.phase * 0.78) * 3.2
         sway = math.sin(self.phase * 0.41) * 2.4
         cx = 178 + sway
@@ -905,9 +974,29 @@ class AshHologramCompanion:
         self._draw_hologram(accent, label)
         self._draw_telemetry(accent)
         self._draw_footer(accent)
+        if not self.robot_frames and self.presence in {"departing", "arriving"}:
+            progress = min(1.0, (time.monotonic()-self.portal_started)/1.0)
+            self.canvas.create_oval(105, 255, 250, 445, outline="#7c78ff", width=6)
+            if progress >= 1:
+                if self.presence == "departing":
+                    self.presence = "hidden"
+                    self.root.withdraw()
+                else:
+                    self.presence = "visible"
 
     def _tick(self) -> None:
         self._poll_global_hotkey()
+        if self.roaming and self.presence == "visible" and self.state == "idle" and not self.drag_origin:
+            now = time.monotonic()
+            if self.next_stroll <= now < self.next_stroll+3:
+                x, y = self.root.winfo_x(), self.root.winfo_y()
+                direction = -1 if x > self.root.winfo_screenwidth()/2 else 1
+                x = max(8, min(self.root.winfo_screenwidth()-self.width-8, x+direction*2))
+                self.root.geometry(f"+{x}+{max(8,y)}")
+                self.gesture = "walking"
+                self.gesture_until = now + .1
+            elif now >= self.next_stroll+3:
+                self.next_stroll = now+18
         self.phase += 0.055 if self.state in {"idle", "offline"} else 0.09
         if self.worker and self.worker.poll() is not None:
             self.worker_online = False
@@ -943,6 +1032,11 @@ def main() -> int:
         assert "idle" in AshHologramCompanion.STATE
         assert callable(getattr(AshHologramCompanion, "_worker_command", None))
         assert callable(getattr(AshHologramCompanion, "_voice_command", None))
+        import struct
+        for name in ("idle", "speaking", "thinking", "wave", "dance", "walking"):
+            raw = (ROOT / "assets" / "robot" / (name + ".png")).read_bytes()
+            assert raw[:8] == b'\x89PNG\r\n\x1a\n'
+            assert struct.unpack('>II', raw[16:24]) == (3072, 320)
         return 0
     AshHologramCompanion(
         pair_code=args.pair,

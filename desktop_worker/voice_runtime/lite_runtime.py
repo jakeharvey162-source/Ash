@@ -7,6 +7,7 @@ import traceback
 from ash_agent import AshPythonAgent
 from voice_runtime.events import emit
 from voice_runtime.windows_speech import WindowsSystemSpeechListener, speak_windows
+from companion_presence import presence_command, launch_command
 
 
 class AshLiteVoiceRuntime:
@@ -15,9 +16,27 @@ class AshLiteVoiceRuntime:
     def __init__(self) -> None:
         self.agent = AshPythonAgent()
         self.listener = WindowsSystemSpeechListener()
+        self.recent_turns = []
 
     def run_text(self, command: str) -> str:
         emit("command", text=command)
+        gesture = presence_command(command)
+        if gesture:
+            action, reply = gesture
+            emit("narration", text=reply)
+            speak_windows(reply)
+            emit("companion", action=action)
+            emit("done", text=reply)
+            return reply
+        try:
+            launch = launch_command(command)
+        except (OSError, RuntimeError) as exc:
+            launch = f"I couldn't open that app: {exc}"
+        if launch:
+            emit("narration", text=launch)
+            speak_windows(launch)
+            emit("done", text=launch)
+            return launch
         emit("thinking")
         spoken = {"done": False}
 
@@ -29,10 +48,16 @@ class AshLiteVoiceRuntime:
                 spoken["done"] = True
                 speak_windows(text)
 
-        reply = self.agent.think_stream(command, mode="high", on_narration=narrate)
+        context = "\n".join(self.recent_turns[-6:])
+        prompt = f"Recent conversation (context only):\n{context}\nCurrent request: {command}" if context else command
+        reply = self.agent.think_stream(prompt, mode="high", on_narration=narrate)
+        self.recent_turns.extend(["User: " + command[:2000], "Ash: " + reply[:4000]])
+        self.recent_turns = self.recent_turns[-6:]
         emit("done", text=reply)
         if reply and not spoken["done"]:
+            emit("narration", text=reply)
             speak_windows(reply)
+            emit("done", text=reply)
         return reply
 
     def run_forever(self) -> None:
