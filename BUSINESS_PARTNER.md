@@ -13,25 +13,30 @@ Ash is the user-facing coordinator. Specialized AI backends and tool handlers wo
 
 No customer email is sent simply because a build finished. A local preview is not a public deployment. A static source checklist is not a browser test or proof of customer satisfaction.
 
-**Phone call alerts** (opt-in, desktop-only):
-- `desktop_worker/call_alerts.py` can request an outbound owner alert through Twilio Programmable Voice when the local desktop worker reaches a confirmation-required task.
-- Calls use a single validated, owner-configured E.164 phone number. The LLM, customers, and jobs cannot choose the destination.
-- Daily attempts are limited (default 2, maximum 3); repeated alerts for the same job/day are deduplicated and marked before the paid network call.
-- The voice prompt tells the owner to authenticate to Ash and review Activity. The telephone call does **not** approve the job, execute any external action, or ask for secret information.
-- Without explicit carrier configuration it does not dial or incur phone charges.
+**Zero-cost owner phone notifications (ntfy push; opt-in, desktop-only)**:
+- Ash sends brief fixed notifications with the open-source [ntfy](https://docs.ntfy.sh/) push service when a tool needs owner approval, or when a customer's website build is complete or failed.
+- **This is a free internet push notification, not a real cellular telephone call**, and it does not support two-way conversation or give Ash a phone number.
+- The notification opens Ash; sensitive actions still require a properly authenticated in-app approval. No voice response authorizes payments, trade orders, or customer delivery.
+- Ash publishes no client names, balances, job IDs, personal details or secrets. The service is best-effort, not a safety-critical alerting system.
+- Alerts are **off by default**. A long unguessable topic is required, and notifications have a default limit of 12 attempts per UTC day and are deduplicated by job and category.
+- **Privacy warning:** free ntfy.sh topics are not access-controlled. A person who learns the topic can subscribe to the notifications or publish to it. Use a truly random secret topic, never put business details in alerts, and consider a self-hosted authenticated ntfy server if stronger privacy is needed.
 
-To enable on a locally paired Windows desktop, provision a Twilio voice-capable caller number, complete Twilio's verification requirements, then set the following **in your machine's private environment**, not in GitHub or browser configuration:
+One-time setup on your paired Windows desktop:
+1. Install the **ntfy** app on your phone (Android/iPhone) and open it.
+2. Generate a strong topic using `python -c "import secrets; print(secrets.token_urlsafe(32))"` on your own machine.
+3. Subscribe to that exact topic in the ntfy app using the public `ntfy.sh` server. Do **not** use an easily guessed name like `ash-alerts`.
+4. Set private environment variables in the session that launches Ash's desktop worker. Do not commit the topic to a repository or place it in browser Javascript.
 
 ```powershell
-$env:ASH_CALL_ALERTS_ENABLED = "1"
-$env:ASH_OWNER_PHONE = "+27..."
-$env:TWILIO_FROM_NUMBER = "+27..."
-$env:TWILIO_ACCOUNT_SID = "AC..."
-$env:TWILIO_AUTH_TOKEN = "<private value>"
-$env:ASH_CALL_ALERT_MAX_DAILY = "2"
+$env:ASH_PUSH_ENABLED = "1"
+$env:ASH_NTFY_TOPIC = "<your own randomly generated secret topic>"
+$env:ASH_PUSH_MAX_DAILY = "12"
 ```
 
-Restart the Ash desktop worker. The recipient should only be the account owner's own number. Country-specific availability, trial restrictions, regulatory documentation and per-minute charges depend on Twilio. **There is no automatic phone number provisioning in this release.** Make sure the owner consents to receiving automated calls. Use the in-app approval control for all consequential actions.
+5. Restart the Ash desktop worker. When Ash encounters a confirmation-required action or completes a Business Desk build, your phone should receive the notification while connected to the internet. Open Ash's Activity or Business Desk to act.
+6. If you turn it off, set `ASH_PUSH_ENABLED=0`. The old Twilio calling module remains an unused legacy file; **the worker now uses only free push alerts**, so no paid telephone carrier is contacted.
+
+**Known limits:** delivery still requires actual installation, a running paired desktop, internet access, topic subscription and device notification permissions. Do not claim a successful live phone alert until verified on the owner's physical device.
 
 **BROBS read-only review**:
 - Export a CSV trade statement from the actual broker with exactly the columns `symbol,side,status,realized_pnl` and place it inside `ASH_WORKSPACE_ROOT`.
@@ -49,7 +54,8 @@ Restart the Ash desktop worker. The recipient should only be the account owner's
 
 ## Not yet implemented or verified
 
-- A purchased phone number or actual paid outbound call in production.
+- A real mobile-number dialer or two-way phone call: neither is provided by the free ntfy service.
+- Live ntfy end-to-end device notification verified on the owner's handset.
 - Answering Ash on a phone call with a verified voice/PIN and resuming a paused command.
 - Authorized automated customer email, quoting/invoicing, signed contracts, payment-provider webhook verification, and public deployment/handoff.
 - Live BROBS account/trade monitoring via a broker read-only API.
@@ -63,7 +69,7 @@ npm ci
 node --test tests/business-desk.test.mjs
 npm run build
 $env:PYTHONPATH = "desktop_worker"
-python -m unittest desktop_worker/test_call_alerts.py desktop_worker/test_brobs_monitor.py desktop_worker/test_agent_runtime.py
+python -m unittest desktop_worker/test_free_owner_alerts.py desktop_worker/test_brobs_monitor.py desktop_worker/test_agent_runtime.py
 ```
 
 The broader GitHub Actions suites should be green before merging and shipping. Test a real customer's full workflow with their permission before enabling outreach or payment processing.

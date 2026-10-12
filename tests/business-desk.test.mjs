@@ -31,7 +31,7 @@ test("business page never injects client details and never claims payment was ma
  assert.match(html,/&lt;script&gt;boom/);
  assert.doesNotMatch(html,/<script>/);
  assert.match(html,/Payment has not been verified/);
- assert.match(html,/phone number or calling service is active/i);
+ assert.match(html,/Free push alerts are not normal cellular calls/i);
 });
 
 
