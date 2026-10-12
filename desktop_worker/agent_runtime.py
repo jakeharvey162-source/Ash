@@ -6,7 +6,7 @@ import math
 import os
 import pathlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Any, Callable
 
 from local_scheduler import LocalScheduler
@@ -15,6 +15,7 @@ from trusted_sources import catalogue as trusted_plugins_catalogue, earthquakes 
 from visual_planner import flow_diagram
 from brobs_monitor import analyze_statement
 from repo_workspace import import_public_repo
+from media_tools import status as media_status, export_video
 
 
 @dataclass
@@ -84,6 +85,18 @@ class AshAgentRuntime:
         self._register_builtin_tools()
 
     def _register_builtin_tools(self) -> None:
+        self.tools.register(ToolSpec(
+            "media.status", "Check whether free local FFmpeg video editing is installed; not generative video.",
+            lambda args: media_status(),
+        ))
+        self.tools.register(ToolSpec(
+            "media.video.export", "Export a local workspace video: source/output paths, start seconds, duration 0.1-120 seconds, preset vertical/square/landscape. Preserves audio and pads without cropping. Requires FFmpeg.",
+            lambda args: export_video(self.workspace_root, args), confirmation_required=True,
+        ))
+        self.tools.register(ToolSpec(
+            "website.reference", "Inspect a public website URL for title, headings and visual design tokens as evidence for app building or promotional scripts. Does not copy backend functionality or capture a video.",
+            self._tool_website_reference,
+        ))
         self.tools.register(ToolSpec(
             "calculator",
             "Safely evaluate arithmetic using numbers, parentheses and common math operators.",
@@ -280,6 +293,10 @@ class AshAgentRuntime:
         except ValueError as exc:
             raise ValueError("Ash tools can only access the configured workspace.") from exc
         return target
+
+    def _tool_website_reference(self, args: dict[str, Any]) -> Any:
+        from site_reference import capture_site_reference
+        return asdict(capture_site_reference(str(args.get("url") or "")))
 
     def _tool_calculator(self, args: dict[str, Any]) -> Any:
         expression = str(args.get("expression") or "").strip()
