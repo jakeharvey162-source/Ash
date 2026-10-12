@@ -88,5 +88,5 @@ export function renderBusinessDesk({jobs=[],devices=[]}, escapeText) {
     '<p class="quiet">Review its real preview, obtain customer sign-off, confirm funds directly with the payment provider, and approve delivery. Ash will not mark money as received from a screenshot or a message.</p>'+
     '<button type="button" id="businessActivity" class="secondary">View build and approval activity</button></div></div></section>'+
     '<section class="card" style="padding:20px;margin-top:18px"><p class="kicker">OWNER CONTACT</p><h3>Calls when Ash needs you</h3>'+
-    '<p class="quiet">Ash supports in-app activity approvals today. Automatic phone calls need a verified phone number, an outbound voice service, and server-side credentials. No phone number or calling service is active until you explicitly connect one. A call cannot authorize payments or trades by itself.</p></section>';
+    '<p class="quiet">Ash supports in-app activity approvals today. Automatic phone calls need a verified phone number, an outbound voice service, and server-side credentials. No phone number or calling service is active until you explicitly connect one. A call cannot authorize payments or trades by itself.</p><button type="button" id="businessTeam" class="secondary">Open Organization workspace</button></section>';
 }
