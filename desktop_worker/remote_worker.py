@@ -18,7 +18,7 @@ from computer_control import AshComputerController, ComputerControlUnavailable
 from site_reference import capture_site_reference
 from design_systems import design_spec
 from build_quality import assess_build
-from call_alerts import OwnerCallAlerts
+from free_owner_alerts import FreeOwnerAlerts
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
 
@@ -323,10 +323,14 @@ class AshRemoteWorker:
             meta["admin_requested"] = True
         return "\n".join(parts), meta
 
-    def _notify_owner_review(self, job_id: str) -> None:
-        # Never allow a model-supplied destination; only the explicit owner config is used.
-        status = OwnerCallAlerts().alert(job_id=job_id, category="approval_needed")
-        self.emit("owner_review_alert", state=status["reason"])
+    def _notify_owner_review(self, job_id: str, category: str = "approval_needed") -> None:
+        # A free push goes only to the owner's private subscribed topic.
+        # Push delivery is best effort and must never prevent completing a job.
+        try:
+            status = FreeOwnerAlerts().alert(job_id=job_id, category=category)
+            self.emit("owner_review_alert", state=status["reason"], category=category)
+        except Exception:
+            self.emit("owner_review_alert", state="unavailable", category=category)
 
     def process(self, job: dict[str, Any]) -> None:
         job_id = str(job["id"])
@@ -375,6 +379,9 @@ class AshRemoteWorker:
                     "quality_report": quality_report,
                 }
                 self.finish(job_id, ok=built.ok, result=result, error="" if built.ok else built.output)
+                if payload.get("source") == "business_desk":
+                    verified = built.ok and verification.get("build_passed") is True and quality_report.get("verified_build") is True
+                    self._notify_owner_review(job_id, "website_ready" if verified else "job_failed")
             elif kind in {"computer_control", "computer", "desktop_control"} or payload.get("computer_control") is True:
                 controller = AshComputerController(self.agent)
                 outcome = controller.run_goal(prompt)
