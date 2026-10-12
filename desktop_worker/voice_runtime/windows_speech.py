@@ -116,11 +116,12 @@ class WindowsSystemSpeechListener:
             match = self.wake.find(text)
             if not match:
                 continue
-            if on_wake:
-                on_wake()
+            wake_reply = on_wake() if on_wake else None
             command = self.wake.command_after(text, match)
             if command:
                 return command
+            if isinstance(wake_reply, str) and wake_reply:
+                return wake_reply
             pending_wake = True
 
     def close(self) -> None:

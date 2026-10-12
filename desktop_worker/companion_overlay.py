@@ -632,6 +632,8 @@ class AshHologramCompanion:
             return
         if typ == "wake" and self.presence in {"hidden", "departing"}:
             self._summon()
+            self.state = "wake"
+            return
         source = str(event.get("source") or "voice")
         if source == "updater":
             if typ == "update_available":

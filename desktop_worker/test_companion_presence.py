@@ -61,3 +61,17 @@ class PresenceTests(unittest.TestCase):
             runtime.run_text('come back')
             runtime.run_text('What were we doing?')
         self.assertIn('coffee shop', runtime.agent.think_stream.call_args.args[0])
+
+    def test_native_voice_stops_recognizer_before_speaking(self):
+        from voice_runtime.lite_runtime import AshLiteVoiceRuntime
+        runtime = object.__new__(AshLiteVoiceRuntime)
+        calls = []
+        runtime.listener = Mock()
+        runtime.listener.close.side_effect = lambda: calls.append('closed')
+        with patch('voice_runtime.lite_runtime.speak_windows', side_effect=lambda text: calls.append('spoken')):
+            runtime._speak('Hello')
+        self.assertEqual(calls, ['closed', 'spoken'])
+        runtime.dismissed = True
+        with patch('voice_runtime.lite_runtime.emit'):
+            self.assertEqual(runtime._on_wake(), 'come back')
+            self.assertIsNone(runtime._on_wake())
