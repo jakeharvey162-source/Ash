@@ -22,6 +22,7 @@ _MESSAGES = {
     "approval_needed": ("Ash needs your decision", "An Ash action is waiting for your approval. Open your Ash Activity page and sign in."),
     "website_ready": ("Customer website ready to review", "Ash finished a website build. Please review the verified result in your Ash Business Desk before delivery."),
     "job_failed": ("Ash needs attention", "An Ash task needs your attention. Open Ash Activity and review the result."),
+    "test": ("Ash notifications are ready", "This is a test notification from Ash. No approval or action is required."),
 }
 _TOPIC_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{32,80}$")
 _LOCK = threading.Lock()
