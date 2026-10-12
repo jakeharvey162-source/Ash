@@ -18,6 +18,7 @@ from computer_control import AshComputerController, ComputerControlUnavailable
 from site_reference import capture_site_reference
 from design_systems import design_spec
 from build_quality import assess_build
+from call_alerts import OwnerCallAlerts
 
 DEFAULT_LINK_URL = "https://ftsomveafuskrutqzsvs.supabase.co/functions/v1/ash-device-link"
 
@@ -322,6 +323,11 @@ class AshRemoteWorker:
             meta["admin_requested"] = True
         return "\n".join(parts), meta
 
+    def _notify_owner_review(self, job_id: str) -> None:
+        # Never allow a model-supplied destination; only the explicit owner config is used.
+        status = OwnerCallAlerts().alert(job_id=job_id, category="approval_needed")
+        self.emit("owner_review_alert", state=status["reason"])
+
     def process(self, job: dict[str, Any]) -> None:
         job_id = str(job["id"])
         payload = job.get("payload") or {}
@@ -396,6 +402,7 @@ class AshRemoteWorker:
             else:
                 runtime = self.agent.run_agent(prompt, str(job.get("mode") or "high"))
                 if runtime.requires_confirmation:
+                    self._notify_owner_review(job_id)
                     self.finish(
                         job_id,
                         ok=False,
@@ -446,6 +453,7 @@ class AshRemoteWorker:
                         lease_id=lease_id,
                         needs_confirmation=True,
                     )
+                    self._notify_owner_review(task_id)
                 else:
                     self.local_scheduler.complete(
                         task_id,

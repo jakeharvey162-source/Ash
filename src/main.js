@@ -2,6 +2,7 @@ import { BrowserStudio } from './browser-studio.js';
 import { exactRepeatToken } from './exact-reply.js';
 import { renderIntelligenceCatalog, loadPublicEarthquakesView } from './intelligence-view.js';
 import { CONNECTOR_CATALOG } from './connectors.js';
+import {prepareClientBuild, renderBusinessDesk} from './business-desk.js';
 import { nativeAvailable, getDeviceInfo, openUrl, shareText, copyText, notify, haptic, nativeSpeechRecognitionAvailable, requestNativeSpeechRecognitionPermissions, startNativeSpeechRecognition, configureBackgroundWake, pauseBackgroundWake, consumeBackgroundWakeCommand, backgroundWakeStatus, openBackgroundWakeBatterySettings } from './native.js';
 const C=window.JARVIS_CONFIG||{};
 const BASE=(C.SUPABASE_URL||"").replace(/\/$/,""),KEY=C.SUPABASE_PUBLISHABLE_KEY||"",GATEWAY=C.ASH_GATEWAY_URL||"",INTEGRATIONS=BASE+"/functions/v1/ash-integrations",DEVICE_LINK=BASE+"/functions/v1/ash-device-link";
@@ -158,7 +159,7 @@ async function saveProfile(){
 function fmt(t){if(!t)return"—";const d=new Date(t);return d.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}
 function relative(t){if(!t)return"never";const s=Math.round((Date.now()-new Date(t).getTime())/1000);if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";return Math.floor(s/86400)+"d ago"}
 function toast(t){const n=document.createElement("div");n.className="toast";n.textContent=t;document.body.append(n);setTimeout(()=>n.remove(),2200)}
-function icon(name){const m={home:"⌂",chat:"↗",builder:"⌘",automation:"↻",activity:"◌",connections:"◎",settings:"⚙",team:"◇"};return m[name]||"•"}
+function icon(name){const m={business:"◇",home:"⌂",chat:"↗",builder:"⌘",automation:"↻",activity:"◌",connections:"◎",settings:"⚙",team:"◇"};return m[name]||"•"}
 function applyTheme(){document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme==="light"?"light":"dark"}
 function toggleTheme(){theme=theme==="dark"?"light":"dark";localStorage.setItem("ash-theme",theme);applyTheme();render()}
 function voiceEnabled(){return profile.voice_config?.auto_speak!==false}
@@ -453,7 +454,7 @@ async function talkNow(){
 
 
 function nav(){
-  const items=[["home","Overview"],["builder","Builder"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["intelligence","Intelligence"],["team","Organization"],["settings","Preferences"]];
+  const items=[["home","Overview"],["business","Business"],["builder","Builder"],["automation","Automations"],["activity","Activity"],["connections","Connections"],["intelligence","Intelligence"],["team","Organization"],["settings","Preferences"]];
   const liveDevices=devices.filter(d=>d.last_seen_at&&Date.now()-new Date(d.last_seen_at).getTime()<90000).length;
   const cloudOk=healthState.gateway==="online"&&healthState.session==="healthy";
   const cloudLabel=cloudOk?"Cloud connected":healthState.gateway==="degraded"?"Cloud degraded":"Checking cloud";
@@ -466,7 +467,7 @@ function topbar(title,sub=""){
   return `<header class="topbar"><div><p class="kicker">${esc(sub)}</p><h1>${esc(title)}</h1></div><div class="topactions"><div class="modeSwitch">${["instant","medium","high"].map(x=>`<button data-mode="${x}" class="${mode===x?"active":""}">${x}</button>`).join("")}</div><button type="button" class="handsFreeToggle ${wakeOn?"active":""}" data-handsfree-toggle aria-pressed="${wakeOn?"true":"false"}" title="Hands-free wake listening"><span>●</span><em>${wakeOn?"Wake armed":"Wake off"}</em></button><button type="button" class="voiceToggle ${voiceEnabled()?"active":""}" data-voice-toggle aria-pressed="${voiceEnabled()?"true":"false"}" title="Turn spoken responses ${voiceEnabled()?"off":"on"}"><span>${voiceEnabled()?"◖))":"◖×"}</span><em>${voiceEnabled()?"Voice on":"Voice off"}</em></button><button id="themeToggle" class="themeToggle" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button><span class="live ${cloudOk?"ok":""}"><i></i>${label}</span></div></header>`;
 }
 function googleMark(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.24-.2-1.8H12v3.27h5.52c-.11.81-.71 2.03-2.05 2.85l-.02.11 2.98 2.31.21.02c1.95-1.8 3.07-4.45 3.07-7.76Z"/><path fill="#34A853" d="M12 22c2.78 0 5.11-.92 6.81-2.5l-3.24-2.51c-.87.59-2.02 1-3.57 1-2.73 0-5.05-1.8-5.88-4.29l-.1.01-3.1 2.4-.04.1C4.57 19.57 8.03 22 12 22Z"/><path fill="#FBBC05" d="M6.12 13.7A6.02 6.02 0 0 1 5.8 12c0-.59.11-1.16.3-1.7l-.01-.12-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.05 4.46l3.07-2.76Z"/><path fill="#EA4335" d="M12 6.01c1.94 0 3.25.84 4 1.53l2.88-2.81C17.11 3.08 14.78 2 12 2 8.03 2 4.57 4.43 2.88 7.79l3.22 2.51C6.95 7.81 9.27 6.01 12 6.01Z"/></svg>'}
-function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav" aria-label="Ash mobile navigation">${[["home","Home"],["builder","Build"],["automation","Automate"],["activity","Activity"],["connections","Connect"],["intelligence","Intel"],["team","Team"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
+function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav" aria-label="Ash mobile navigation">${[["home","Home"],["business","Clients"],["builder","Build"],["automation","Automate"],["activity","Activity"],["connections","Connect"],["intelligence","Intel"],["team","Team"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
 function authView(){
   const signupMode=authMode==="signup";
   return `<section class="cinematicAuth" id="cinematicAuth">
@@ -791,6 +792,38 @@ async function rescueThroughDesktop(message){
     if(job?.status==="failed")throw new Error(job.error||"Local Ash could not complete the request.");
   }
   throw new Error("Rescue Mode is still running on your desktop. Check Activity for the result.");
+}
+
+function businessView(){return topbar("Business Desk","ASH / CLIENT WORK") + renderBusinessDesk({jobs,devices},esc)}
+
+async function createBusinessBuildJob(){
+  const button=document.querySelector("#businessCreate");
+  if(!session?.user?.id)return toast("Sign in to queue a customer project.");
+  if(button?.disabled)return;
+  let job;
+  try{
+    job=prepareClientBuild({
+      client:document.querySelector("#businessClient")?.value,
+      email:document.querySelector("#businessEmail")?.value,
+      project:document.querySelector("#businessProject")?.value,
+      request:document.querySelector("#businessRequest")?.value,
+      design_preset:document.querySelector("#businessPreset")?.value
+    });
+  }catch(error){toast(error.message||"Check the customer brief.");return;}
+  if(button)button.disabled=true;
+  try{
+    const result=await supa("/rest/v1/jarvis_remote_jobs",{
+      method:"POST",headers:{Prefer:"return=representation"},
+      body:JSON.stringify({...job,user_id:session.user.id,target_device_id:null})
+    });
+    if(!result?.[0]?.id)throw Error("The project could not be queued.");
+    await loadOps(true);
+    render();
+    toast("Client website queued. You will review it before delivery.");
+  }catch(error){
+    if(button)button.disabled=false;
+    toast(error.message||"Could not queue this customer project.");
+  }
 }
 
 function activityView(){return `${topbar("Activity","ASH / OPERATIONS")}${healthPanel()}<section class="card activityPanel"><div class="activityHeader"><div><p class="kicker">EXECUTION LOG</p><h2>What Ash has been doing</h2></div><button id="refreshOps" class="secondary">Refresh</button></div>${jobs.length?jobs.map(j=>`<div class="activityRow"><div class="activityMark ${j.status}">${j.status==="completed"?"✓":j.status==="failed"?"!":j.status==="waiting_for_confirmation"?"?":"→"}</div><div><b>${esc(j.payload?.automation_name||j.payload?.prompt||j.kind)}</b><p>${esc(j.error||j.result?.summary||(j.status==="waiting_for_confirmation"?"Approval required before this job can run.":""))}</p><small>${fmt(j.created_at)} · ${esc(j.status)}</small>${j.status==="waiting_for_confirmation"?`<div class="activityActions"><button class="primary" data-approve-job="${j.id}">Approve & run</button><button class="dangerGhost" data-cancel-job="${j.id}">Cancel</button></div>`:""}</div><span class="badge">${esc(j.mode)}</span></div>`).join(""):`<div class="emptyState"><p>No activity yet.</p><small>Scheduled and remote tasks will appear here.</small></div>`}</section>`}
@@ -1151,7 +1184,7 @@ async function playVoiceBlob(blob){
     await audio.play();
   }catch{setVoiceState(false);URL.revokeObjectURL(url)}
 }
-function render(){browserStudio.syncUser(session?.user?.id||null);browserStudio.detach?.();heroVisualCleanup?.();heroVisualCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="intelligence"?topbar("Intelligence","ASH / RESEARCH")+renderIntelligenceCatalog():view==="team"?teamView():settingsView()):authView();bind();if(session&&view==="builder")browserStudio.mount();if(!session){initCinematicMotion();initHeroRobot()}else{initAshCore();refreshHandsFreeUi()}}
+function render(){browserStudio.syncUser(session?.user?.id||null);browserStudio.detach?.();heroVisualCleanup?.();heroVisualCleanup=null;applyTheme();document.querySelector("#app").innerHTML=session?shell(view==="home"?home():view==="business"?businessView():view==="builder"?builderView():view==="automation"?automationView():view==="activity"?activityView():view==="connections"?connectionsView():view==="intelligence"?topbar("Intelligence","ASH / RESEARCH")+renderIntelligenceCatalog():view==="team"?teamView():settingsView()):authView();bind();if(session&&view==="builder")browserStudio.mount();if(!session){initCinematicMotion();initHeroRobot()}else{initAshCore();refreshHandsFreeUi()}}
 function bind(){
   document.querySelector("#themeToggle")?.addEventListener("click",toggleTheme);
   document.querySelectorAll("[data-voice-toggle]").forEach(b=>b.addEventListener("click",toggleVoiceOutput));
@@ -1200,7 +1233,7 @@ function bind(){
     }
     view=target;
     if(target==="activity")await loadOps(true);
-    else if(["builder","automation","connections","settings","home"].includes(view))await loadOps();
+    else if(["business","builder","automation","connections","settings","home"].includes(view))await loadOps();
     render();
   });
   document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{mode=b.dataset.mode;localStorage.setItem("ash-mode",mode);render()});
@@ -1234,6 +1267,8 @@ function bind(){
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
   document.querySelector("#loadPublicQuakes")?.addEventListener("click",()=>loadPublicEarthquakesView());
   document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
+  document.querySelector("#businessCreate")?.addEventListener("click",createBusinessBuildJob);
+  document.querySelector("#businessActivity")?.addEventListener("click",async()=>{view="activity";await loadOps(true);render()});
   document.querySelector("#createComputerControl")?.addEventListener("click",createComputerControlJob);
   document.querySelectorAll("[data-toggle-auto]").forEach(b=>b.onclick=()=>toggleAutomation(b.dataset.toggleAuto,b.dataset.enabled==="true"));
   document.querySelectorAll("[data-native-test]").forEach(b=>b.onclick=()=>testNativeConnector(b.dataset.nativeTest));
