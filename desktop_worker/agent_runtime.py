@@ -14,6 +14,7 @@ from intelligence_hub import catalog as intelligence_catalog, wazuh_agents, read
 from trusted_sources import catalogue as trusted_plugins_catalogue, earthquakes as usgs_earthquakes, github_project
 from visual_planner import flow_diagram
 from brobs_monitor import analyze_statement
+from repo_workspace import import_public_repo
 
 
 @dataclass
@@ -196,6 +197,12 @@ class AshAgentRuntime:
             "intelligence.report",
             "Read an existing authorized SpiderFoot or Strix JSON export in the Ash workspace.",
             self._tool_intelligence_report,
+        ))
+        self.tools.register(ToolSpec(
+            "repo.public.import",
+            "Import public GitHub repository source into Ash workspace for REVIEW ONLY; never install/run it, and always ask explicit owner confirmation.",
+            self._tool_repo_import,
+            confirmation_required=True,
         ))
         self.tools.register(ToolSpec(
             "brobs.journal.review",
@@ -410,6 +417,9 @@ class AshAgentRuntime:
         if kind not in ("spiderfoot", "strix") or not path.is_file():
             raise ValueError("Select a supported report in your Ash workspace.")
         return read_local_export(kind, str(path))
+
+    def _tool_repo_import(self, args: dict[str, Any]) -> Any:
+        return import_public_repo(str(args.get("url") or ""), self.workspace_root)
 
     def _tool_brobs_journal(self, args: dict[str, Any]) -> Any:
         path = self._safe_path(str(args.get("path") or ""))
