@@ -402,7 +402,7 @@ try{
   report.checks.officialSourceDiscipline=true;
 
   // UI quality / responsive checks across core surfaces.
-  const views=["home","builder","automation","settings","activity","connections","team"];
+  const views=["home","business","builder","automation","settings","activity","connections","team"];
   for(const view of views){
     await page.locator(`[data-view="${view}"]:visible`).first().click();
     await wait(180);
@@ -411,9 +411,17 @@ try{
   await snap("desktop-core");
   await page.setViewportSize({width:390,height:844});
   for(const view of views){
-    await page.locator(`[data-view="${view}"]:visible`).first().click();
+    if(view==="team"){
+      // Organization deliberately lives under Business on narrow screens.
+      await page.locator('.mobileNav [data-view="business"]').click();
+      await page.locator("#businessTeam:visible").click();
+    } else {
+      await page.locator(`[data-view="${view}"]:visible`).first().click();
+    }
     await wait(160);
     if(!(await noOverflow()))throw new Error("Mobile horizontal overflow on "+view);
+    if(view==="team" && !(await bodyText()).includes("Organization"))
+      throw new Error("Organization is not accessible from Business on mobile.");
   }
   await snap("mobile-core");
   report.checks.desktopResponsive=true;
