@@ -87,3 +87,24 @@ The default Windows download is now deliberately a **core installer under 100 MB
 - The optional Windows offline voice pack contains `faster-whisper`/CTranslate2 and can replace the lightweight `AshVoice.exe` for stronger local recognition.
 - OpenJarvis remains optional; normal cloud-assisted Ash, Builder, linking, schedules and the hologram do not require the local OpenJarvis package.
 - CI fails the Windows release if either the installer or portable ZIP grows beyond 100 MB.
+# Expressive robot companion
+
+Ash now displays the CC0 RobotExpressive character by Tomás Laulhé, the same
+model already used by Tor in CodeQuest. The lightweight desktop renderer uses
+six local animation atlases rendered from the bundled GLB: idle, speaking,
+thinking, wave, dance and walking. It needs no browser or GPU at runtime.
+The mouth follows speech lifecycle with rhythmic animation, not phoneme-perfect
+lip synchronization. Source and attribution are in `assets/robot/LICENSE.md`.
+
+Say **Ash, get out** to dismiss it through a portal. The voice process and
+desktop jobs remain running. Say the wake word to summon it again, or use
+**Ctrl+Alt+A**. Say **dance**, **wave**, or **come back** for direct gestures.
+Recent voice conversation context survives the portal transition while the
+voice process is running; it is not a new guarantee of cross-restart memory.
+Right-click **Let Ash stroll around** for optional screen movement.
+
+Voice commands **open calculator**, **open notepad**, **open file explorer**,
+and **open browser** launch only those named apps without arbitrary shell code.
+Missing apps produce an error. Other computer actions use the existing
+permissioned computer controller.
+

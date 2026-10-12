@@ -49,8 +49,8 @@ jobs:
       - name: Build Ash desktop executables
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name Ash --paths desktop_worker desktop_worker/companion_overlay.py
-          pyinstaller --noconfirm --clean --onefile --console --name AshSmoke --paths desktop_worker desktop_worker/companion_overlay.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name Ash --add-data "desktop_worker/assets;assets" --paths desktop_worker desktop_worker/companion_overlay.py
+          pyinstaller --noconfirm --clean --onefile --console --name AshSmoke --add-data "desktop_worker/assets;assets" --paths desktop_worker desktop_worker/companion_overlay.py
           pyinstaller --noconfirm --clean --onefile --console --name AshWorker --paths desktop_worker desktop_worker/worker_entry.py
           pyinstaller --noconfirm --clean --onefile --console --name AshVoice --paths desktop_worker desktop_worker/voice_lite_entry.py
 
