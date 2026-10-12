@@ -124,5 +124,34 @@ class WorkerNotificationIntegrationTests(unittest.TestCase):
             w.process({"id":"job-private","kind":"builder","payload":{"prompt":"Build my own app","builder":True,"source":"user"}})
             self.assertEqual(w.notifications,[])
 
+
+class AlertCliTests(unittest.TestCase):
+    def test_cli_checks_configuration_without_sending(self):
+        from owner_alert_cli import main
+        class Stub:
+            def configured(self): return True
+            def alert(self,**kwargs): raise AssertionError("check must not send")
+        self.assertEqual(main(["check"], notifier=Stub()),0)
+
+    def test_cli_never_claims_actual_phone_delivery(self):
+        from owner_alert_cli import main
+        class Stub:
+            def configured(self): return True
+            def alert(self,**kwargs):
+                self.args=kwargs
+                return {"sent":True,"reason":"notification_accepted"}
+        n=Stub()
+        self.assertEqual(main(["test"], notifier=n),0)
+        self.assertEqual(n.args["category"],"test")
+        self.assertRegex(n.args["job_id"],r"^test-[a-f0-9]{16}$")
+
+    def test_cli_does_not_send_until_configured(self):
+        from owner_alert_cli import main
+        class Stub:
+            def configured(self): return False
+            def alert(self,**kwargs): raise AssertionError("must not send")
+        self.assertEqual(main(["test"], notifier=Stub()),2)
+
+
 if __name__ == "__main__":
     unittest.main()
