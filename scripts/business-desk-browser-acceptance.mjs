@@ -56,7 +56,11 @@ try {
   assert.equal(saved[0].payload.business_client.email,"client@example.com");
   assert.ok(!await page.locator(".autoList img").count(),"Client text must be escaped on the page.");
   assert.match(await page.locator(".autoList").innerText(),/review|waiting|queued/i);
-  console.log("ASH BUSINESS DESK CHROMIUM: PASS mobile client intake, authenticated queue, output rendering, and owner guard.");
+  await page.locator("#businessTeam").click();
+  assert.ok(await page.locator("main").innerText().then(text=>text.includes("Organization")),
+    "The Organization workspace must remain reachable on mobile.");
+  assert.equal(await page.locator(".mobileNav button").count(),8);
+  console.log("ASH BUSINESS DESK CHROMIUM: PASS mobile client intake, authenticated queue, output rendering, eight navigation actions, and Organization access.");
 } finally {
   await browser?.close().catch(()=>{});
   server.kill("SIGTERM");
