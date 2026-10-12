@@ -23,12 +23,12 @@ No customer email is sent simply because a build finished. A local preview is no
 To enable on a locally paired Windows desktop, provision a Twilio voice-capable caller number, complete Twilio's verification requirements, then set the following **in your machine's private environment**, not in GitHub or browser configuration:
 
 ```powershell
-ASH_CALL_ALERTS_ENABLED=1
-ASH_OWNER_PHONE=+27...
-TWILIO_FROM_NUMBER=+27...
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=<private value>
-ASH_CALL_ALERT_MAX_DAILY=2
+$env:ASH_CALL_ALERTS_ENABLED = "1"
+$env:ASH_OWNER_PHONE = "+27..."
+$env:TWILIO_FROM_NUMBER = "+27..."
+$env:TWILIO_ACCOUNT_SID = "AC..."
+$env:TWILIO_AUTH_TOKEN = "<private value>"
+$env:ASH_CALL_ALERT_MAX_DAILY = "2"
 ```
 
 Restart the Ash desktop worker. The recipient should only be the account owner's own number. Country-specific availability, trial restrictions, regulatory documentation and per-minute charges depend on Twilio. **There is no automatic phone number provisioning in this release.** Make sure the owner consents to receiving automated calls. Use the in-app approval control for all consequential actions.
