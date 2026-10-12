@@ -1,5 +1,19 @@
 # Ash
 
+## Local video editing and website evidence
+
+The desktop agent exposes `website.reference` to inspect public website design
+tokens and headings using the existing public-URL validator. This supplies evidence
+for building and scriptwriting; it does not reproduce private backend functionality.
+
+Install FFmpeg separately on the paired computer and place footage in the Ash
+workspace. Ask Ash to export `source.mp4` to `exports/reel.mp4`, starting at 5
+seconds, for 30 seconds, using the vertical preset. `media.video.export` trims,
+resizes with padding, preserves audio, and produces an MP4 after confirmation.
+Square and landscape presets are also supported. `media.status` reports whether
+FFmpeg is available. No paid API is involved; the computer must remain running.
+This is local video editing, not unlimited AI video generation.
+
 Ash is a customizable personal AI organization developed by Jake Harvey.
 
 ## Default identity
