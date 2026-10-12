@@ -20,6 +20,7 @@ let VOICE_CATALOG=[...FALLBACK_VOICE_CATALOG];
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",speech_speed:1.07,hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
+const businessDraft={client:"",email:"",project:"Customer website",request:"",design_preset:"midnight-studio"};
 let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0,premiumVoiceUnavailable=false;
 let handsFreeRunning=false,handsFreePaused=false,handsFreeStarting=false,handsFreeProcessing=false,handsFreeRecognition=null,handsFreeNativeSession=null,handsFreeRestartTimer=null,handsFreeConversationTimer=null,handsFreeConversationUntil=0,handsFreeWakeUntil=0,lastWakeTriggerAt=0,lastFinalTranscript="",lastFinalAt=0,nativePartialTranscript="",micStream=null,micAudioCtx=null,micAnalyser=null,micWaveRaf=0;
 
@@ -32,7 +33,7 @@ const browserStudio=new BrowserStudio({
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token||session?.refresh_token,user:s.user||session?.user};localStorage.setItem("ash-session",JSON.stringify(session))}
-function clearSession(){session=null;localStorage.removeItem("ash-session");opsLoadedAt=0}
+function clearSession(){session=null;localStorage.removeItem("ash-session");opsLoadedAt=0;Object.assign(businessDraft,{client:"",email:"",project:"Customer website",request:"",design_preset:"midnight-studio"})}
 function tokenExpiresSoon(token,skew=60){
   try{
     const part=token.split(".")[1];if(!part)return false;
@@ -794,7 +795,7 @@ async function rescueThroughDesktop(message){
   throw new Error("Rescue Mode is still running on your desktop. Check Activity for the result.");
 }
 
-function businessView(){return topbar("Business Desk","ASH / CLIENT WORK") + renderBusinessDesk({jobs,devices},esc)}
+function businessView(){return topbar("Business Desk","ASH / CLIENT WORK") + renderBusinessDesk({jobs,devices,draft:businessDraft},esc)}
 
 async function createBusinessBuildJob(){
   const button=document.querySelector("#businessCreate");
@@ -802,13 +803,7 @@ async function createBusinessBuildJob(){
   if(button?.disabled)return;
   let job;
   try{
-    job=prepareClientBuild({
-      client:document.querySelector("#businessClient")?.value,
-      email:document.querySelector("#businessEmail")?.value,
-      project:document.querySelector("#businessProject")?.value,
-      request:document.querySelector("#businessRequest")?.value,
-      design_preset:document.querySelector("#businessPreset")?.value
-    });
+    job=prepareClientBuild(businessDraft);
   }catch(error){toast(error.message||"Check the customer brief.");return;}
   if(button)button.disabled=true;
   try{
@@ -1267,6 +1262,11 @@ function bind(){
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
   document.querySelector("#loadPublicQuakes")?.addEventListener("click",()=>loadPublicEarthquakesView());
   document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
+  document.querySelectorAll("[data-business-field]").forEach(field=>{
+    const persist=()=>{const key=field.dataset.businessField;if(Object.hasOwn(businessDraft,key))businessDraft[key]=field.value};
+    field.addEventListener("input",persist);
+    field.addEventListener("change",persist);
+  });
   document.querySelector("#businessCreate")?.addEventListener("click",createBusinessBuildJob);
   document.querySelector("#businessActivity")?.addEventListener("click",async()=>{view="activity";await loadOps(true);render()});
   document.querySelector("#businessTeam")?.addEventListener("click",()=>{view="team";render()});
