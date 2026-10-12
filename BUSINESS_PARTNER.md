@@ -33,8 +33,17 @@ $env:ASH_NTFY_TOPIC = "<your own randomly generated secret topic>"
 $env:ASH_PUSH_MAX_DAILY = "12"
 ```
 
-5. Restart the Ash desktop worker. When Ash encounters a confirmation-required action or completes a Business Desk build, your phone should receive the notification while connected to the internet. Open Ash's Activity or Business Desk to act.
-6. If you turn it off, set `ASH_PUSH_ENABLED=0`. The old Twilio calling module remains an unused legacy file; **the worker now uses only free push alerts**, so no paid telephone carrier is contacted.
+5. Verify the setup and request a harmless end-to-end test using the **same terminal environment** as the desktop worker:
+
+```powershell
+python desktop_worker/owner_alert_cli.py check
+python desktop_worker/owner_alert_cli.py test
+```
+
+The `check` command verifies local configuration only. The `test` command sends a fixed, non-sensitive push. **Only checking your actual phone confirms that delivery worked.** Do not put real client data or passwords into your ntfy topic.
+
+6. Restart the Ash desktop worker. When Ash encounters a confirmation-required action or completes a Business Desk build, your phone should receive a notification while connected to the internet. Open Ash's Activity or Business Desk to act.
+7. If you turn it off, set `ASH_PUSH_ENABLED=0`. The old Twilio calling module remains an unused legacy file; **the worker now uses only free push alerts**, so no paid telephone carrier is contacted.
 
 **Known limits:** delivery still requires actual installation, a running paired desktop, internet access, topic subscription and device notification permissions. Do not claim a successful live phone alert until verified on the owner's physical device.
 
