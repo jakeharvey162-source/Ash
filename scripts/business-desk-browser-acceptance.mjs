@@ -42,7 +42,7 @@ try {
   await page.route("**/auth/v1/**",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({id:"11111111-1111-4111-8111-111111111111"})}));
   await page.route("**/functions/v1/**",route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({ok:false})}));
   await page.goto(host,{waitUntil:"domcontentloaded"});
-  await page.locator('[data-view="business"]').first().click();
+  await page.locator('.mobileNav [data-view="business"]').click();
   await page.locator("#businessClient").fill("<img src=x onerror=alert(1)>");
   await page.locator("#businessEmail").fill("client@example.com");
   await page.locator("#businessProject").fill("Coffee Shop Website");
