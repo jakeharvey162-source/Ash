@@ -55,7 +55,7 @@ try {
   assert.equal(saved[0].payload.external_delivery_authorized,false);
   assert.equal(saved[0].payload.business_client.email,"client@example.com");
   assert.ok(!await page.locator(".autoList img").count(),"Client text must be escaped on the page.");
-  assert.match(await page.locator(".autoList").innerText(),/review|waiting|queued/i);
+  assert.match(await page.locator(".autoList").textContent(),/review|waiting|queued/i);
   await page.locator("#businessTeam").click();
   assert.ok(await page.locator("main").innerText().then(text=>text.includes("Organization")),
     "The Organization workspace must remain reachable on mobile.");
