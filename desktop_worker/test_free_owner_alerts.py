@@ -71,5 +71,58 @@ class FreePushAlertsTests(unittest.TestCase):
             self.assertEqual(n[0],2)
 
 
+
+class WorkerNotificationIntegrationTests(unittest.TestCase):
+    def _worker(self, folder, *, build_ok=True, verified=True):
+        from remote_worker import AshRemoteWorker
+        from types import SimpleNamespace
+
+        class BuilderAgent:
+            def build_fullstack(self, _prompt, workspace):
+                path=pathlib.Path(workspace)
+                path.mkdir(parents=True,exist_ok=True)
+                (path/"index.html").write_text("<main>Client demo</main>",encoding="utf-8")
+                return SimpleNamespace(
+                    ok=build_ok,
+                    output="Built" if build_ok else "Build failed",
+                    details={
+                        "verification":{"build_passed":verified},
+                        "generation_mode":"test",
+                        "degraded":False,
+                        "generated_files":["index.html"],
+                    },
+                )
+        worker=AshRemoteWorker.__new__(AshRemoteWorker)
+        worker.workspace_root=pathlib.Path(folder)
+        worker.device_name="Test Computer"
+        worker.agent=BuilderAgent()
+        worker._builder_prompt=lambda prompt,payload:(prompt,{"preset":"test"})
+        worker._start_local_preview=lambda *args:""
+        worker.finished=[]
+        worker.notifications=[]
+        worker.finish=lambda job_id,**kwargs:worker.finished.append((job_id,kwargs))
+        worker._notify_owner_review=lambda job_id,category="approval_needed":worker.notifications.append((job_id,category))
+        worker.emit=lambda *args,**kwargs:None
+        return worker
+
+    def test_verified_client_build_sends_owner_only_review_notice(self):
+        with tempfile.TemporaryDirectory() as folder:
+            w=self._worker(folder)
+            w.process({"id":"job-verified","kind":"builder","payload":{"prompt":"Build a client site","builder":True,"source":"business_desk"}})
+            self.assertTrue(w.finished[0][1]["ok"])
+            self.assertEqual(w.notifications,[("job-verified","website_ready")])
+
+    def test_failed_or_unverified_client_build_sends_attention_not_success(self):
+        with tempfile.TemporaryDirectory() as folder:
+            w=self._worker(folder,build_ok=True,verified=False)
+            w.process({"id":"job-no-proof","kind":"builder","payload":{"prompt":"Build a client site","builder":True,"source":"business_desk"}})
+            self.assertEqual(w.notifications,[("job-no-proof","job_failed")])
+
+    def test_non_client_build_never_spams_owner(self):
+        with tempfile.TemporaryDirectory() as folder:
+            w=self._worker(folder)
+            w.process({"id":"job-private","kind":"builder","payload":{"prompt":"Build my own app","builder":True,"source":"user"}})
+            self.assertEqual(w.notifications,[])
+
 if __name__ == "__main__":
     unittest.main()
