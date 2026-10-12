@@ -17,14 +17,31 @@ class AshLiteVoiceRuntime:
         self.agent = AshPythonAgent()
         self.listener = WindowsSystemSpeechListener()
         self.recent_turns = []
+        self.dismissed = False
+
+    def _speak(self, text: str) -> None:
+        # Stop native recognition before TTS so Ash cannot hear its own reply.
+        listener = getattr(self, "listener", None)
+        if listener:
+            listener.close()
+        speak_windows(text)
+
+    def _on_wake(self):
+        emit("wake")
+        if getattr(self, "dismissed", False):
+            self.dismissed = False
+            return "come back"
+        return None
 
     def run_text(self, command: str) -> str:
         emit("command", text=command)
         gesture = presence_command(command)
         if gesture:
             action, reply = gesture
+            if action in {"dismiss", "summon"}:
+                self.dismissed = action == "dismiss"
             emit("narration", text=reply)
-            speak_windows(reply)
+            self._speak(reply)
             emit("companion", action=action)
             emit("done", text=reply)
             return reply
@@ -34,7 +51,7 @@ class AshLiteVoiceRuntime:
             launch = f"I couldn't open that app: {exc}"
         if launch:
             emit("narration", text=launch)
-            speak_windows(launch)
+            self._speak(launch)
             emit("done", text=launch)
             return launch
         emit("thinking")
@@ -46,7 +63,7 @@ class AshLiteVoiceRuntime:
             emit("narration", text=text)
             if not spoken["done"]:
                 spoken["done"] = True
-                speak_windows(text)
+                self._speak(text)
 
         context = "\n".join(self.recent_turns[-6:])
         prompt = f"Recent conversation (context only):\n{context}\nCurrent request: {command}" if context else command
@@ -56,7 +73,7 @@ class AshLiteVoiceRuntime:
         emit("done", text=reply)
         if reply and not spoken["done"]:
             emit("narration", text=reply)
-            speak_windows(reply)
+            self._speak(reply)
             emit("done", text=reply)
         return reply
 
@@ -77,7 +94,7 @@ class AshLiteVoiceRuntime:
                 emit("listening")
                 try:
                     command = self.listener.listen_for_command(
-                        on_wake=lambda: emit("wake"),
+                        on_wake=self._on_wake,
                         on_heard=lambda text: emit("heard", text=text),
                     )
                     self.run_text(command)
