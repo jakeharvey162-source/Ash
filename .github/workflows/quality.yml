@@ -23,7 +23,7 @@ jobs:
       - name: Install web dependencies
         run: npm install --no-audit --no-fund
       - name: Test browser builder
-        run: npm run test:builder
+        run: npm run test:builder && node --test tests/business-desk.test.mjs
       - name: Build web app
         run: npm run build
       - name: Install desktop worker dependencies
