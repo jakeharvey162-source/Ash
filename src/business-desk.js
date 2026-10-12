@@ -55,7 +55,7 @@ export function businessBuildState(job) {
   return {label:status==="queued"?"Waiting for your desktop":status==="running"||status==="claimed"?"Ash is building":"Check activity",ready:false};
 }
 
-export function renderBusinessDesk({jobs=[],devices=[]}, escapeText) {
+export function renderBusinessDesk({jobs=[],devices=[],draft={}}, escapeText) {
   const safe=(s)=>escapeText(String(s??""));
   const entries=jobs.filter(j=>j?.kind==="builder" && j?.payload?.source==="business_desk");
   const live=devices.some(d=>d?.last_seen_at && Date.now()-new Date(d.last_seen_at).getTime()<120000);
@@ -75,11 +75,11 @@ export function renderBusinessDesk({jobs=[],devices=[]}, escapeText) {
   return '<section class="automationGrid">'+
     '<div class="card createAuto"><p class="kicker">ASH / BUSINESS DESK</p><h2>Give Ash a customer project.</h2>'+
     '<p class="quiet">Ash will send your brief to the linked desktop builder. You review the result before it reaches anyone else.</p>'+
-    '<label>Customer name<input id="businessClient" maxlength="100" autocomplete="off" placeholder="e.g. Artisan Brew Hub" required></label>'+
-    '<label>Customer email<input id="businessEmail" type="email" maxlength="254" autocomplete="off" placeholder="client@example.com" required></label>'+
-    '<label>Project name<input id="businessProject" maxlength="100" value="Customer website" required></label>'+
-    '<label>What should Ash build?<textarea id="businessRequest" rows="6" maxlength="3500" placeholder="Describe the pages, colours, forms and features the customer wants." required></textarea></label>'+
-    '<label>Design style<select id="businessPreset"><option value="midnight-studio">Midnight Studio</option><option value="editorial-luxe">Editorial Luxe</option><option value="warm-commerce">Warm Commerce</option><option value="clean-enterprise">Clean Enterprise</option></select></label>'+
+    '<label>Customer name<input id="businessClient" data-business-field="client" maxlength="100" autocomplete="off" placeholder="e.g. Artisan Brew Hub" value="'+safe(draft.client)+'" required></label>'+
+    '<label>Customer email<input id="businessEmail" data-business-field="email" type="email" maxlength="254" autocomplete="off" placeholder="client@example.com" value="'+safe(draft.email)+'" required></label>'+
+    '<label>Project name<input id="businessProject" data-business-field="project" maxlength="100" value="'+safe(draft.project??"Customer website")+'" required></label>'+
+    '<label>What should Ash build?<textarea id="businessRequest" data-business-field="request" rows="6" maxlength="3500" placeholder="Describe the pages, colours, forms and features the customer wants." required>'+safe(draft.request)+'</textarea></label>'+
+    '<label>Design style<select id="businessPreset" data-business-field="design_preset">'+[["midnight-studio","Midnight Studio"],["editorial-luxe","Editorial Luxe"],["warm-commerce","Warm Commerce"],["clean-enterprise","Clean Enterprise"]].map(([value,label])=>'<option value="'+value+'"'+((draft.design_preset||"midnight-studio")===value?' selected':'')+'>'+label+'</option>').join('')+'</select></label>'+
     '<button type="button" id="businessCreate" class="primary wide">Create client website</button>'+
     '<p class="quiet">'+(live?"Desktop online · ready to accept build jobs.":"Desktop offline · the job will remain queued until your linked worker is online.")+'</p></div>'+
     '<div class="card autoList"><div class="panelTitle"><div><p class="kicker">CUSTOMER PROJECTS</p><h3>Builds and handoffs</h3></div><span class="count">'+entries.length+'</span></div>'+
@@ -88,5 +88,5 @@ export function renderBusinessDesk({jobs=[],devices=[]}, escapeText) {
     '<p class="quiet">Review its real preview, obtain customer sign-off, confirm funds directly with the payment provider, and approve delivery. Ash will not mark money as received from a screenshot or a message.</p>'+
     '<button type="button" id="businessActivity" class="secondary">View build and approval activity</button></div></div></section>'+
     '<section class="card" style="padding:20px;margin-top:18px"><p class="kicker">OWNER CONTACT</p><h3>Calls when Ash needs you</h3>'+
-    '<p class="quiet">Ash supports in-app activity approvals today. Automatic phone calls need a verified phone number, an outbound voice service, and server-side credentials. No phone number or calling service is active until you explicitly connect one. A call cannot authorize payments or trades by itself.</p></section>';
+    '<p class="quiet">Ash supports in-app activity approvals today. Automatic phone calls need a verified phone number, an outbound voice service, and server-side credentials. No phone number or calling service is active until you explicitly connect one. A call cannot authorize payments or trades by itself.</p><button type="button" id="businessTeam" class="secondary">Open Organization workspace</button></section>';
 }

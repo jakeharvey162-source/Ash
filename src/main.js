@@ -20,6 +20,7 @@ let VOICE_CATALOG=[...FALLBACK_VOICE_CATALOG];
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",speech_speed:1.07,hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
+const businessDraft={client:"",email:"",project:"Customer website",request:"",design_preset:"midnight-studio"};
 let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0,premiumVoiceUnavailable=false;
 let handsFreeRunning=false,handsFreePaused=false,handsFreeStarting=false,handsFreeProcessing=false,handsFreeRecognition=null,handsFreeNativeSession=null,handsFreeRestartTimer=null,handsFreeConversationTimer=null,handsFreeConversationUntil=0,handsFreeWakeUntil=0,lastWakeTriggerAt=0,lastFinalTranscript="",lastFinalAt=0,nativePartialTranscript="",micStream=null,micAudioCtx=null,micAnalyser=null,micWaveRaf=0;
 
@@ -32,7 +33,7 @@ const browserStudio=new BrowserStudio({
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const headers=()=>({apikey:KEY,"Content-Type":"application/json",...(session?.access_token?{Authorization:"Bearer "+session.access_token}:{})});
 function saveSession(s){session={access_token:s.access_token,refresh_token:s.refresh_token||session?.refresh_token,user:s.user||session?.user};localStorage.setItem("ash-session",JSON.stringify(session))}
-function clearSession(){session=null;localStorage.removeItem("ash-session");opsLoadedAt=0}
+function clearSession(){session=null;localStorage.removeItem("ash-session");opsLoadedAt=0;Object.assign(businessDraft,{client:"",email:"",project:"Customer website",request:"",design_preset:"midnight-studio"})}
 function tokenExpiresSoon(token,skew=60){
   try{
     const part=token.split(".")[1];if(!part)return false;
@@ -467,7 +468,7 @@ function topbar(title,sub=""){
   return `<header class="topbar"><div><p class="kicker">${esc(sub)}</p><h1>${esc(title)}</h1></div><div class="topactions"><div class="modeSwitch">${["instant","medium","high"].map(x=>`<button data-mode="${x}" class="${mode===x?"active":""}">${x}</button>`).join("")}</div><button type="button" class="handsFreeToggle ${wakeOn?"active":""}" data-handsfree-toggle aria-pressed="${wakeOn?"true":"false"}" title="Hands-free wake listening"><span>●</span><em>${wakeOn?"Wake armed":"Wake off"}</em></button><button type="button" class="voiceToggle ${voiceEnabled()?"active":""}" data-voice-toggle aria-pressed="${voiceEnabled()?"true":"false"}" title="Turn spoken responses ${voiceEnabled()?"off":"on"}"><span>${voiceEnabled()?"◖))":"◖×"}</span><em>${voiceEnabled()?"Voice on":"Voice off"}</em></button><button id="themeToggle" class="themeToggle" aria-label="Switch color theme"><span>${theme==="dark"?"☀":"☾"}</span><em>${theme==="dark"?"Light":"Dark"}</em></button><span class="live ${cloudOk?"ok":""}"><i></i>${label}</span></div></header>`;
 }
 function googleMark(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.24-.2-1.8H12v3.27h5.52c-.11.81-.71 2.03-2.05 2.85l-.02.11 2.98 2.31.21.02c1.95-1.8 3.07-4.45 3.07-7.76Z"/><path fill="#34A853" d="M12 22c2.78 0 5.11-.92 6.81-2.5l-3.24-2.51c-.87.59-2.02 1-3.57 1-2.73 0-5.05-1.8-5.88-4.29l-.1.01-3.1 2.4-.04.1C4.57 19.57 8.03 22 12 22Z"/><path fill="#FBBC05" d="M6.12 13.7A6.02 6.02 0 0 1 5.8 12c0-.59.11-1.16.3-1.7l-.01-.12-3.14-2.44-.1.05A10 10 0 0 0 2 12c0 1.6.38 3.12 1.05 4.46l3.07-2.76Z"/><path fill="#EA4335" d="M12 6.01c1.94 0 3.25.84 4 1.53l2.88-2.81C17.11 3.08 14.78 2 12 2 8.03 2 4.57 4.43 2.88 7.79l3.22 2.51C6.95 7.81 9.27 6.01 12 6.01Z"/></svg>'}
-function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav" aria-label="Ash mobile navigation">${[["home","Home"],["business","Clients"],["builder","Build"],["automation","Automate"],["activity","Activity"],["connections","Connect"],["intelligence","Intel"],["team","Team"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
+function shell(content){return session?`<div class="shell">${nav()}<main class="workspace">${content}</main><nav class="mobileNav" aria-label="Ash mobile navigation">${[["home","Home"],["business","Clients"],["builder","Build"],["automation","Automate"],["activity","Activity"],["connections","Connect"],["intelligence","Intel"],["settings","You"]].map(([k,l])=>`<button data-view="${k}" class="${view===k?"selected":""}"><span>${icon(k)}</span><small>${l}</small></button>`).join("")}</nav></div>`:`<main class="authShell">${content}</main>`}
 function authView(){
   const signupMode=authMode==="signup";
   return `<section class="cinematicAuth" id="cinematicAuth">
@@ -794,7 +795,7 @@ async function rescueThroughDesktop(message){
   throw new Error("Rescue Mode is still running on your desktop. Check Activity for the result.");
 }
 
-function businessView(){return topbar("Business Desk","ASH / CLIENT WORK") + renderBusinessDesk({jobs,devices},esc)}
+function businessView(){return topbar("Business Desk","ASH / CLIENT WORK") + renderBusinessDesk({jobs,devices,draft:businessDraft},esc)}
 
 async function createBusinessBuildJob(){
   const button=document.querySelector("#businessCreate");
@@ -802,13 +803,7 @@ async function createBusinessBuildJob(){
   if(button?.disabled)return;
   let job;
   try{
-    job=prepareClientBuild({
-      client:document.querySelector("#businessClient")?.value,
-      email:document.querySelector("#businessEmail")?.value,
-      project:document.querySelector("#businessProject")?.value,
-      request:document.querySelector("#businessRequest")?.value,
-      design_preset:document.querySelector("#businessPreset")?.value
-    });
+    job=prepareClientBuild(businessDraft);
   }catch(error){toast(error.message||"Check the customer brief.");return;}
   if(button)button.disabled=true;
   try{
@@ -1267,8 +1262,14 @@ function bind(){
   document.querySelector("#createAuto")?.addEventListener("click",createAutomation);
   document.querySelector("#loadPublicQuakes")?.addEventListener("click",()=>loadPublicEarthquakesView());
   document.querySelector("#createBuild")?.addEventListener("click",createBuildJob);
+  document.querySelectorAll("[data-business-field]").forEach(field=>{
+    const persist=()=>{const key=field.dataset.businessField;if(Object.hasOwn(businessDraft,key))businessDraft[key]=field.value};
+    field.addEventListener("input",persist);
+    field.addEventListener("change",persist);
+  });
   document.querySelector("#businessCreate")?.addEventListener("click",createBusinessBuildJob);
   document.querySelector("#businessActivity")?.addEventListener("click",async()=>{view="activity";await loadOps(true);render()});
+  document.querySelector("#businessTeam")?.addEventListener("click",()=>{view="team";render()});
   document.querySelector("#createComputerControl")?.addEventListener("click",createComputerControlJob);
   document.querySelectorAll("[data-toggle-auto]").forEach(b=>b.onclick=()=>toggleAutomation(b.dataset.toggleAuto,b.dataset.enabled==="true"));
   document.querySelectorAll("[data-native-test]").forEach(b=>b.onclick=()=>testNativeConnector(b.dataset.nativeTest));

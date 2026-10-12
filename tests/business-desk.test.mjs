@@ -33,3 +33,14 @@ test("business page never injects client details and never claims payment was ma
  assert.match(html,/Payment has not been verified/);
  assert.match(html,/phone number or calling service is active/i);
 });
+
+
+test("customer brief survives a UI rerender with escaped attributes and textarea",()=>{
+ const escape=s=>String(s).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+ const html=renderBusinessDesk({draft:{client:'<img src=x>',email:"client@example.com",project:"Coffee & Tea",request:"Build <script>alert(1)</script> with a menu",design_preset:"warm-commerce"}},escape);
+ assert.match(html,/value="&lt;img src=x&gt;"/);
+ assert.match(html,/value="Coffee &amp; Tea"/);
+ assert.match(html,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+ assert.match(html,/value="warm-commerce" selected/);
+ assert.doesNotMatch(html,/<script>/);
+});
