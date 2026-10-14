@@ -59,7 +59,9 @@ def import_public_repo(url: str, workspace_root, *, runner: Callable | None = No
         count=0
         bytes_seen=0
         for current, dirs, files in os.walk(stage,followlinks=False):
-            dirs[:]=[d for d in dirs if not (pathlib.Path(current)/d).is_symlink()]
+            for directory in dirs:
+                if (pathlib.Path(current) / directory).is_symlink():
+                    raise ValueError("Repository contains a directory symlink; import refused.")
             for file in files:
                 p=pathlib.Path(current)/file
                 if p.is_symlink():
