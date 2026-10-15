@@ -50,6 +50,46 @@ class RepositoryImportTests(unittest.TestCase):
                 import_public_repo("https://github.com/example/demo",directory,runner=runner)
             self.assertFalse((pathlib.Path(directory)/"repositories/example--demo").exists())
 
+    def test_directory_symlink_import_is_rejected_and_cleaned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            outside = pathlib.Path(directory) / "outside"
+            outside.mkdir()
+            (outside / "secret.txt").write_text("outside workspace")
+            def runner(cmd, **kwargs):
+                if "clone" in cmd:
+                    dest = pathlib.Path(cmd[-1])
+                    (dest / ".git").mkdir()
+                    try:
+                        (dest / "linked_directory").symlink_to(outside, target_is_directory=True)
+                    except (OSError, NotImplementedError) as exc:
+                        self.skipTest(f"Directory symlinks unavailable: {exc}")
+                return Result()
+            with self.assertRaisesRegex(ValueError, "directory symlink"):
+                import_public_repo("https://github.com/example/demo", directory, runner=runner)
+            self.assertFalse((pathlib.Path(directory) / "repositories/example--demo").exists())
+            self.assertEqual((outside / "secret.txt").read_text(), "outside workspace")
+            self.assertEqual(list((pathlib.Path(directory) / "repositories").iterdir()), [])
+
+    def test_nested_directory_symlink_import_is_rejected_and_cleaned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            outside = pathlib.Path(directory) / "outside"
+            outside.mkdir()
+            def runner(cmd, **kwargs):
+                if "clone" in cmd:
+                    dest = pathlib.Path(cmd[-1])
+                    (dest / ".git").mkdir()
+                    nested = dest / "src" / "nested"
+                    nested.mkdir(parents=True)
+                    try:
+                        (nested / "linked_directory").symlink_to(outside, target_is_directory=True)
+                    except (OSError, NotImplementedError) as exc:
+                        self.skipTest(f"Directory symlinks unavailable: {exc}")
+                return Result()
+            with self.assertRaisesRegex(ValueError, "directory symlink"):
+                import_public_repo("https://github.com/example/demo", directory, runner=runner)
+            self.assertFalse((pathlib.Path(directory) / "repositories/example--demo").exists())
+            self.assertEqual(list((pathlib.Path(directory) / "repositories").iterdir()), [])
+
     def test_import_is_confirmation_gated_for_agent(self):
         with tempfile.TemporaryDirectory() as directory:
             agent=FakeAgent()
