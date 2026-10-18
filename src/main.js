@@ -112,7 +112,17 @@ async function loadChatHistory(){
     if(latest?.id){
       const rows=await supa("/rest/v1/jarvis_messages?conversation_id=eq."+encodeURIComponent(latest.id)+"&user_id=eq."+encodeURIComponent(userId)+"&select=role,content,metadata,created_at&order=created_at.asc&limit=100");
       currentConversationId=latest.id;
-      messages=(Array.isArray(rows)?rows:[]).filter(row=>["user","assistant"].includes(row.role)&&typeof row.content==="string").map(row=>({role:row.role,content:row.content,...(row.metadata&&typeof row.metadata==="object"?row.metadata:{})}));
+      const cloudTurns=(Array.isArray(rows)?rows:[]).filter(row=>["user","assistant"].includes(row.role)&&typeof row.content==="string").map(row=>({role:row.role,content:row.content,...(row.metadata&&typeof row.metadata==="object"?row.metadata:{})}));
+      messages=cloudTurns.length?cloudTurns:local;
+      if(!cloudTurns.length&&local.length){
+        for(const old of local.slice(-100)){
+          await supa("/rest/v1/jarvis_messages",{
+            method:"POST",
+            headers:{Prefer:"return=minimal"},
+            body:JSON.stringify({conversation_id:currentConversationId,user_id:userId,role:old.role==="assistant"?"assistant":"user",content:String(old.content||"").slice(0,12000),metadata:{grounded:Boolean(old.grounded),sources:Array.isArray(old.sources)?old.sources:[],researched_at:old.researched_at||null}})
+          });
+        }
+      }
       saveChatLocally();
       return;
     }
