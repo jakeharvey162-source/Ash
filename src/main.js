@@ -1,5 +1,6 @@
 import { BrowserStudio } from './browser-studio.js';
 import { exactRepeatToken } from './exact-reply.js';
+import { loadLocalChatHistory, saveLocalChatHistory } from './chat-history.js';
 import { renderIntelligenceCatalog, loadPublicEarthquakesView } from './intelligence-view.js';
 import { CONNECTOR_CATALOG } from './connectors.js';
 import {prepareClientBuild, renderBusinessDesk} from './business-desk.js';
@@ -19,6 +20,7 @@ const FALLBACK_VOICE_CATALOG=[
 let VOICE_CATALOG=[...FALLBACK_VOICE_CATALOG];
 let session=JSON.parse(localStorage.getItem("ash-session")||"null");
 let profile={assistant_name:"Ash",personality_preset:"adaptive",preferred_mode:"medium",wake_word:"Ash",custom_instructions:"",behavior_config:{verbosity:"balanced",proactivity:"balanced",humor:20},voice_config:{auto_speak:true,voice_id:"cjVigY5qzO86Huf0OWal",speech_speed:1.07,hands_free:false,wake_aliases:["hey ash","okay ash","ok ash","arise"]}};
+let currentConversationId=null,chatCloudWarningShown=false;
 let mode=localStorage.getItem("ash-mode")||"medium",view="home",authMode="signin",theme=localStorage.getItem("ash-theme")||"dark",messages=[],automations=[],jobs=[],devices=[],integrations=[],nativeState={available:false,device:null},sending=false,speaking=false,coreState="idle",coreDetail="Systems ready",opsLoadedAt=0,refreshPromise=null,healthState={gateway:"unknown",session:"unknown",desktop:"offline",local:"unavailable",pwa:"unknown",voice:"unknown",checkedAt:null};
 const businessDraft={client:"",email:"",project:"Customer website",request:"",design_preset:"midnight-studio"};
 let heroVisualCleanup=null,pairing=null,pairingTimer=null,syntheticWaveRaf=0,activeAudio=null,activeAudioUrl="",activeAudioCleanup=null,voiceQueue=[],voiceQueueRunning=false,voiceGeneration=0,typeGeneration=0,premiumVoiceUnavailable=false;
@@ -95,6 +97,73 @@ async function signup(email,password,name){
   };
 }
 async function recoverPassword(email){return supa("/auth/v1/recover",{method:"POST",body:JSON.stringify({email})})}
+function saveChatLocally(){
+  if(!session?.user?.id)return;
+  saveLocalChatHistory(session.user.id,messages);
+}
+async function loadChatHistory(){
+  currentConversationId=null;
+  if(!session?.user?.id){messages=[];return}
+  const userId=session.user.id;
+  const local=loadLocalChatHistory(userId);
+  try{
+    const conversations=await supa("/rest/v1/jarvis_conversations?user_id=eq."+encodeURIComponent(userId)+"&select=id,title,mode,updated_at&order=updated_at.desc&limit=1");
+    const latest=conversations?.[0];
+    if(latest?.id){
+      const rows=await supa("/rest/v1/jarvis_messages?conversation_id=eq."+encodeURIComponent(latest.id)+"&user_id=eq."+encodeURIComponent(userId)+"&select=role,content,metadata,created_at&order=created_at.asc&limit=100");
+      currentConversationId=latest.id;
+      messages=(Array.isArray(rows)?rows:[]).filter(row=>["user","assistant"].includes(row.role)&&typeof row.content==="string").map(row=>({role:row.role,content:row.content,...(row.metadata&&typeof row.metadata==="object"?row.metadata:{})}));
+      saveChatLocally();
+      return;
+    }
+  }catch{
+    // Cloud history is best-effort; retain this account's local history when offline.
+  }
+  messages=local;
+}
+async function ensureChatConversation(firstMessage){
+  if(!session?.user?.id||currentConversationId)return;
+  try{
+    const created=await supa("/rest/v1/jarvis_conversations",{
+      method:"POST",
+      headers:{Prefer:"return=representation"},
+      body:JSON.stringify({user_id:session.user.id,title:String(firstMessage||"New conversation").trim().slice(0,100)||"New conversation",mode,updated_at:new Date().toISOString()})
+    });
+    currentConversationId=created?.[0]?.id||null;
+    if(currentConversationId){
+      // Migrate locally saved turns once when creating the first cloud conversation.
+      for(const old of messages.slice(-100)){
+        await supa("/rest/v1/jarvis_messages",{
+          method:"POST",
+          headers:{Prefer:"return=minimal"},
+          body:JSON.stringify({conversation_id:currentConversationId,user_id:session.user.id,role:old.role==="assistant"?"assistant":"user",content:String(old.content||"").slice(0,12000),metadata:{grounded:Boolean(old.grounded),sources:Array.isArray(old.sources)?old.sources:[],researched_at:old.researched_at||null}})
+        });
+      }
+    }
+  }catch{
+    currentConversationId=null;
+    if(!chatCloudWarningShown){chatCloudWarningShown=true;toast("Chat is saved on this device, but cloud history could not sync.");}
+  }
+}
+async function persistChatTurn(message){
+  saveChatLocally();
+  if(!session?.user?.id||!currentConversationId)return;
+  try{
+    await supa("/rest/v1/jarvis_messages",{
+      method:"POST",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({conversation_id:currentConversationId,user_id:session.user.id,role:message.role==="assistant"?"assistant":"user",content:String(message.content||"").slice(0,12000),metadata:{grounded:Boolean(message.grounded),sources:Array.isArray(message.sources)?message.sources:[],researched_at:message.researched_at||null,action:message.action||null}})
+    });
+    await supa("/rest/v1/jarvis_conversations?id=eq."+encodeURIComponent(currentConversationId)+"&user_id=eq."+encodeURIComponent(session.user.id),{
+      method:"PATCH",
+      headers:{Prefer:"return=minimal"},
+      body:JSON.stringify({updated_at:new Date().toISOString(),mode})
+    });
+  }catch{
+    saveChatLocally();
+    if(!chatCloudWarningShown){chatCloudWarningShown=true;toast("This reply is on this device; cloud history could not sync.");}
+  }
+}
 async function loadProfile(){if(!session)return;const r=await supa("/rest/v1/jarvis_profiles?user_id=eq."+encodeURIComponent(session.user.id)+"&select=*");if(r?.[0])profile={...profile,...r[0],behavior_config:{...profile.behavior_config,...(r[0].behavior_config||{})},voice_config:{...profile.voice_config,...(r[0].voice_config||{})}};const localVoice=localStorage.getItem("ash-voice-enabled");if(localVoice!==null)profile.voice_config={...profile.voice_config,auto_speak:localVoice==="1"};const localHands=localStorage.getItem("ash-hands-free-enabled");if(localHands!==null)profile.voice_config={...profile.voice_config,hands_free:localHands==="1"};mode=profile.preferred_mode||mode}
 async function browserVoiceCatalog(){
   if(!("speechSynthesis" in window))return [];
@@ -1216,7 +1285,7 @@ function bind(){
       }else{
         await login(email,password);
       }
-      await Promise.all([loadProfile(),loadOps()]);
+      await Promise.all([loadProfile(),loadOps(),loadChatHistory()]);
       render();
     }catch(e){const msg=String(e?.message||"");if(authMode==="signup"&&/already registered|already exists|user_already_exists/i.test(msg)){authMode="signin";m.textContent="This email already has an Ash account. Create account does not change its password. Sign in or use Forgot password.";setTimeout(render,1300);return}m.textContent=msg||"Authentication failed."}
   });
@@ -1255,7 +1324,7 @@ function bind(){
   document.querySelector("#refreshDevices")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Device status refreshed.")});
   document.querySelectorAll("[data-test-device]").forEach(b=>b.onclick=()=>testDesktop(b.dataset.testDevice));
   document.querySelectorAll("[data-disconnect-device]").forEach(b=>b.onclick=()=>disconnectDevice(b.dataset.disconnectDevice));
-  document.querySelector("#signout")?.addEventListener("click",async()=>{stopPairingWatch();pairing=null;await stopHandsFreeListening(true);clearSession();authMode="signin";render()});
+  document.querySelector("#signout")?.addEventListener("click",async()=>{stopPairingWatch();pairing=null;await stopHandsFreeListening(true);clearSession();messages=[];currentConversationId=null;authMode="signin";render()});
   document.querySelector("#refreshOps")?.addEventListener("click",async()=>{await loadOps(true);render();toast("Activity refreshed")});
   document.querySelector("#runHealth")?.addEventListener("click",()=>probeHealth(true));
   document.querySelector("#autoType")?.addEventListener("change",e=>document.querySelector("#intervalWrap").classList.toggle("hidden",e.target.value!=="interval"));
@@ -1518,7 +1587,9 @@ async function send(){
   stopVoicePlayback();typeGeneration++;
   if(handsFreeEnabled())await pauseHandsFreeForResponse();
   if(voiceTurn)handsFreeProcessing=true;
-  const userMsg={role:"user",content:message};messages.push(userMsg);appendChatMessage(userMsg,messages.length-1);
+  await ensureChatConversation(message);
+  const userMsg={role:"user",content:message};messages.push(userMsg);saveChatLocally();appendChatMessage(userMsg,messages.length-1);
+  await persistChatTurn(userMsg);
   const replyIndex=messages.length;
   sending=true;setSendBusy(true);setCoreState("thinking",fresh?"Researching the live web and checking sources.":"Working the request across Ash intelligence.");
 
@@ -1529,13 +1600,14 @@ async function send(){
       d={answer:exactToken};
     }else{
       const action=fresh?"research":"chat";
-      const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(-10)})});
+      const r=await authedFetch(GATEWAY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,message,mode,history:messages.slice(0,-1).slice(-10)})});
       d=await r.json();
       if(!r.ok)throw new Error(r.status===401?"Your Ash session expired. Sign in again.":d.error||"Ash cloud is unavailable.");
     }
 
     const reply={role:"assistant",content:d.answer||"Done.",action:d.pending_action||null,grounded:Boolean(d.grounded),sources:Array.isArray(d.sources)?d.sources:[],researched_at:d.researched_at||null};
     messages.push(reply);
+    await persistChatTurn(reply);
 
     if(voiceEnabled()){
       // No answer text is rendered until the first spoken audio actually starts.
@@ -1554,7 +1626,7 @@ async function send(){
     }catch(rescueError){
       if(!/session expired/i.test(text))text+=" Local rescue is unavailable too: "+(rescueError.message||"desktop offline.")
     }
-    const reply={role:"assistant",content:text};messages.push(reply);
+    const reply={role:"assistant",content:text};messages.push(reply);await persistChatTurn(reply);
     appendAssistantPlaceholder(replyIndex,false);
     await typeAssistantReply(replyIndex,text,reply);
   }finally{
@@ -1605,7 +1677,7 @@ render();
   }
 
   if(session){
-    try{await Promise.all([loadProfile(),loadOps()]);await Promise.all([loadVoiceCatalog(),probeHealth(false)])}catch{}
+    try{await Promise.all([loadProfile(),loadOps(),loadChatHistory()]);await Promise.all([loadVoiceCatalog(),probeHealth(false)])}catch{}
   }
 
   render();
